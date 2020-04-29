@@ -71,15 +71,15 @@ def line_intersect(line_a_point_a_long, line_a_point_a_lat, line_a_point_b_long,
             return 0
 
 class Point(object):
-    __slots__ = ('long', 'lat', 'polygon_id')
+    __slots__ = ('x', 'y', 'polygon_id')
 
     def __init__(self, x, y, polygon_id=-1):
-        self.long = float(x)
-        self.lat = float(y)
+        self.x = float(x)
+        self.y = float(y)
         self.polygon_id = polygon_id
 
     def __eq__(self, point):
-        return point and self.long == point.x and self.lat == point.y
+        return point and self.x == point.x and self.y == point.y
 
     def __ne__(self, point):
         return not self.__eq__(point)
@@ -92,23 +92,23 @@ class Point(object):
         return hash(self) < hash(point)
 
     def __str__(self):
-        return "(%.2f, %.2f)" % (self.long, self.lat)
+        return "(%.2f, %.2f)" % (self.x, self.y)
 
     def __hash__(self):
-        return self.long.__hash__() ^ self.lat.__hash__()
+        return self.x.__hash__() ^ self.y.__hash__()
 
     def __repr__(self):
-        return "Point(%.2f, %.2f)" % (self.long, self.lat)
+        return "Point(%.2f, %.2f)" % (self.x, self.y)
 
     def in_seca(self, seca_areas):
         count = 0
-        if self.lat < seca_areas[['latitude']].idxmin():
+        if self.y < seca_areas[['latitude']].min():
             return False
-        elif self.lat > seca_areas[['latitude']].idxmax():
+        elif self.y > seca_areas[['latitude']].max():
             return False
-        elif self.long < seca_areas[['longitude']].idxmin():
+        elif self.x < seca_areas[['longitude']].min():
             return False
-        elif self.long > seca_areas[['longitude']].idxmax():
+        elif self.x > seca_areas[['longitude']].max():
             return False
         else:
             first_index = min(seca_areas.index)
@@ -117,11 +117,11 @@ class Point(object):
 
             for seca_index, seca_area in seca_areas.iterrows():
 
-                count += line_intersect(self.long, self.lat, 0, 90, seca_areas.iloc[seca_index][['longitude']], seca_areas.iloc[seca_index][['latitude']]
+                count += line_intersect(self.x, self.y, 0, 90, seca_areas.iloc[seca_index][['longitude']], seca_areas.iloc[seca_index][['latitude']]
                                         , seca_areas.iloc[previous_index][['longitude']], seca_areas.iloc[previous_index][['latitude']])
                 previous_index = seca_index
 
-            count += line_intersect(self.long, self.lat, 0, 90, seca_areas.iloc[last_index][['longitude']], seca_areas.iloc[last_index][['latitude']]
+            count += line_intersect(self.x, self.y, 0, 90, seca_areas.iloc[last_index][['longitude']], seca_areas.iloc[last_index][['latitude']]
                                     , seca_areas.iloc[first_index][['longitude']], seca_areas.iloc[first_index][['latitude']])
 
             if count % 2 == 1:

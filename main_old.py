@@ -63,7 +63,6 @@ polys = [[vg.Point(0.0,1.0), vg.Point(3.0,1.0), vg.Point(1.5,4.0)],
 # g = vg.VisGraph()
 # g.build(polys)
 # shortest = g.shortest_path(startPort, endPort)
-print(GSHHS_gdf.iloc[0,6])
 
 # Plot
 fig, ax = plt.subplots()

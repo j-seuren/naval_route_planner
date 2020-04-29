@@ -1,5 +1,4 @@
 import pyvisgraph as vg
-import solution
 import folium
 from haversine import haversine
 import pickle
@@ -15,13 +14,13 @@ end_point = vg.Point(endLong, endLat)
 
 # Load the visibility graph file
 graph = vg.VisGraph()
-graph.load('output/GSHHS_c_L1.graph')
+graph.load('output\GSHHS_c_L1.graph')
 
 # Calculate the shortest path
 shortest_path = graph.shortest_path(start_point, end_point)
 
 # Save shortest path
-with open('shortest_path', 'wb') as file:
+with open('output\shortest_path', 'wb') as file:
     pickle.dump(shortest_path, file)
 
 # Calculate the total distance of the shortest path in km
@@ -46,7 +45,7 @@ folium.Marker(geopath[0], popup=str(start_point), icon=folium.Icon(color='red'))
 folium.Marker(geopath[-1], popup=str(end_point), icon=folium.Icon(color='red')).add_to(geomap)
 
 # Save the interactive plot as a map
-output_name = 'example_shortest_path_plot.html'
+output_name = 'output\example_shortest_path_plot.html'
 geomap.save(output_name)
 print('Output saved to: {}'.format(output_name))
 print(shortest_path)
