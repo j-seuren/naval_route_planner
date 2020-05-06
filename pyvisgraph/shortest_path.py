@@ -1,5 +1,6 @@
 from heapq import heapify, heappush, heappop
 from pyvisgraph.visible_vertices import edge_distance
+import shapefile as shp
 
 
 def iteritems(d):
@@ -33,14 +34,26 @@ def dijkstra(graph, origin, destination, add_to_visgraph):
 
 def shortest_path(graph, origin, destination, add_to_visgraph=None):
     distances, previous = dijkstra(graph, origin, destination, add_to_visgraph)
-    path = []
+    path_list = []
     while 1:
-        path.append(destination)
+        path_list.append(destination)
         if destination == origin:
             break
         destination = previous[destination]
-    path.reverse()
-    return path
+    path_list.reverse()
+
+    # Set up shapefile writer and write path to shapefile
+    path_shape = shp.Writer('output/shapefiles/path_shape', shp.POINT)
+    path_shape.autoBalance = 1  # ensures geometry and attributes match
+    path_shape.field("longitude", "F", 10, 8)
+    path_shape.field("latitude", "F", 10, 8)
+    for point in path_list:
+        path_shape.point(point.x, point.y)
+        path_shape.record(point.x, point.y)
+
+    path_shape.close()
+
+    return path_list
 
 
 class PriorityDict(dict):

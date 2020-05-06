@@ -4,6 +4,8 @@
       <w>graphfile</w>
       <w>seca</w>
       <w>shapefile</w>
+      <w>waypoint</w>
+      <w>waypoints</w>
     </words>
   </dictionary>
 </component>

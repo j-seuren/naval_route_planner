@@ -1,14 +1,13 @@
 import pyvisgraph as vg
 import get_data as get
 
-output_graphfile = 'GSHHS_c_L1.graph'
+output_graphfile = 'GSHHS_l_L1.graph'
 
 # Number of CPU cores on host computer
 workers = 1
 
 # Get the shoreline shapes from the shape file
-input_shapefile = get.shorelines(resolution='crude')
-shapes = input_shapefile.shapes()
+shapes = get.shoreline_shapes(resolution='low')
 print('The shapefile contains {} shapes.'.format(len(shapes)))
 
 # Create a list of polygons, where each polygon corresponds to a shape

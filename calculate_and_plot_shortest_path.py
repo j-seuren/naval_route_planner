@@ -2,6 +2,7 @@ import pyvisgraph as vg
 import folium
 from haversine import haversine
 import pickle
+import shapefile
 
 # Example points
 startLat = 52.1             # Scheveningen
@@ -14,27 +15,27 @@ end_point = vg.Point(endLong, endLat)
 
 # Load the visibility graph file
 graph = vg.VisGraph()
-graph.load('output\GSHHS_c_L1.graph')
+graph.load('output\GSHHS_l_L1.graph')
 
 # Calculate the shortest path
-shortest_path = graph.shortest_path(start_point, end_point)
+path_list = graph.shortest_path(start_point, end_point)
 
-# Save shortest path
-with open('output\shortest_path', 'wb') as file:
-    pickle.dump(shortest_path, file)
+# Save path_list
+with open('output\path_list_l', 'wb') as file:
+    pickle.dump(path_list, file)
 
 # Calculate the total distance of the shortest path in km
 path_distance = 0
-prev_point = shortest_path[0]
-for point in shortest_path[1:]:
+prev_point = path_list[0]
+for point in path_list[1:]:
     path_distance += haversine((prev_point.y, prev_point.x), (point.y, point.x))
     prev_point = point
 path_distance = path_distance*0.539957  # km to nautical miles
 
-print('Shortest path distance: {}'.format(path_distance))
+print('Path distance: {}'.format(path_distance))
 
 # Plot of the path using folium
-geopath = [[point.y, point.x] for point in shortest_path]
+geopath = [[point.y, point.x] for point in path_list]
 geomap  = folium.Map([0, 0], zoom_start=2)
 for point in geopath:
     folium.Marker(point, popup=str(point)).add_to(geomap)
@@ -45,7 +46,7 @@ folium.Marker(geopath[0], popup=str(start_point), icon=folium.Icon(color='red'))
 folium.Marker(geopath[-1], popup=str(end_point), icon=folium.Icon(color='red')).add_to(geomap)
 
 # Save the interactive plot as a map
-output_name = 'output\example_shortest_path_plot.html'
+output_name = 'output\example_shortest_path_plot_l.html'
 geomap.save(output_name)
 print('Output saved to: {}'.format(output_name))
-print(shortest_path)
+print(path_list)

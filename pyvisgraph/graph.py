@@ -1,6 +1,7 @@
 from collections import defaultdict
 from math import sqrt
 
+
 def line_intersect(line_a_point_a_long, line_a_point_a_lat, line_a_point_b_long, line_a_point_b_lat,
                   line_b_point_a_long, line_b_point_a_lat, line_b_point_b_long, line_b_point_b_lat):
     """
@@ -70,7 +71,8 @@ def line_intersect(line_a_point_a_long, line_a_point_a_lat, line_a_point_b_long,
         else:
             return 0
 
-class Point(object):
+
+class Point:
     __slots__ = ('x', 'y', 'polygon_id')
 
     def __init__(self, x, y, polygon_id=-1):
@@ -102,13 +104,13 @@ class Point(object):
 
     def in_seca(self, seca_areas):
         count = 0
-        if self.y < seca_areas[['latitude']].min():
+        if self.y < float(seca_areas[['latitude']].min()):
             return False
-        elif self.y > seca_areas[['latitude']].max():
+        elif self.y > float(seca_areas[['latitude']].max()):
             return False
-        elif self.x < seca_areas[['longitude']].min():
+        elif self.x < float(seca_areas[['longitude']].min()):
             return False
-        elif self.x > seca_areas[['longitude']].max():
+        elif self.x > float(seca_areas[['longitude']].max()):
             return False
         else:
             first_index = min(seca_areas.index)
@@ -117,12 +119,12 @@ class Point(object):
 
             for seca_index, seca_area in seca_areas.iterrows():
 
-                count += line_intersect(self.x, self.y, 0, 90, seca_areas.iloc[seca_index][['longitude']], seca_areas.iloc[seca_index][['latitude']]
-                                        , seca_areas.iloc[previous_index][['longitude']], seca_areas.iloc[previous_index][['latitude']])
+                count += line_intersect(self.x, self.y, 0, 90, float(seca_areas.iloc[seca_index][['longitude']]), float(seca_areas.iloc[seca_index][['latitude']])
+                                        , float(seca_areas.iloc[previous_index][['longitude']]), float(seca_areas.iloc[previous_index][['latitude']]))
                 previous_index = seca_index
 
-            count += line_intersect(self.x, self.y, 0, 90, seca_areas.iloc[last_index][['longitude']], seca_areas.iloc[last_index][['latitude']]
-                                    , seca_areas.iloc[first_index][['longitude']], seca_areas.iloc[first_index][['latitude']])
+            count += line_intersect(self.x, self.y, 0, 90, float(seca_areas.iloc[last_index][['longitude']]), float(seca_areas.iloc[last_index][['latitude']])
+                                    , float(seca_areas.iloc[first_index][['longitude']]), float(seca_areas.iloc[first_index][['latitude']]))
 
             if count % 2 == 1:
                 return True
@@ -130,7 +132,7 @@ class Point(object):
                 return False
 
 
-class Edge(object):
+class Edge:
     __slots__ = ('p1', 'p2')
 
     def __init__(self, point1, point2):
@@ -165,7 +167,7 @@ class Edge(object):
         return self.p1.__hash__() ^ self.p2.__hash__()
 
 
-class Graph(object):
+class Graph:
     """
     A Graph is represented by a dict where the keys are Points in the Graph
     and the dict values are sets containing Edges incident on each Point.
