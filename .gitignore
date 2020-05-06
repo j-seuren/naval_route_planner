@@ -1,3 +1,6 @@
+output/
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -23,7 +26,6 @@ wheels/
 pip-wheel-metadata/
 share/python-wheels/
 *.egg-info/
-output/
 .installed.cfg
 *.egg
 MANIFEST
