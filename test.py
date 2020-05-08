@@ -1,11 +1,4 @@
-import shapefile
-import utm
-r = shapefile.Reader("NYC_MUSEUMS_GEO")
-w = shapefile.Writer('shapefiles/test/testfile.shp'r.shapeType)
-w.fields = list(r.fields)
-w.records.extend(r.records())
-for s in r.iterShapes():
-    lon,lat = s.points[0]
-    y,x,zone,band = utm.from_latlon(lat,lon)
-    w.point(x,y)
-w.save("NYC_MUSEUMS_UTM")
+from route import Waypoint
+shorelines_shp_fp = 'C:/dev/data/gshhg-shp-2.3.7/GSHHS_shp/f/GSHHS_f_L1.shp'
+wp = Waypoint(113.54307238928701, 1.655213702150351)
+print(wp.in_polygon(shorelines_shp_fp))

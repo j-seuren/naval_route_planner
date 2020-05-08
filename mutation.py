@@ -4,9 +4,8 @@ from shapely.geometry import Polygon, Point
 from route import Waypoint, Edge, Route
 
 
-def insertion(route, probability, d_factor):
+def insertion(route, probability, d_factor, shore_polygons):
     if random.uniform(0, 1) < probability:
-        random.seed(1)
         # Pick random edge and adjacent waypoints
         edge = route.edges[random.randint(0, len(route.edges) - 1)]
         wp1 = edge.v
@@ -33,17 +32,27 @@ def insertion(route, probability, d_factor):
 
         # Create point within polygon bounds and check if polygon contains point
         min_x, min_y, max_x, max_y = polygon.bounds
+        count = 0
         while True:
             point = Point(random.uniform(min_x, max_x), random. uniform(min_y, max_y))
+            new_waypoint = Waypoint(point.x, point.y)
+            count += 1
+            if new_waypoint.in_polygon(shore_polygons):
+                continue
             if polygon.contains(point):
                 break
 
+        # Insert new waypoint in Route
         new_waypoint = Waypoint(point.x, point.y)
-        i = route.edges.index(edge)
+        waypoint_idx = route.waypoints.index(edge.v)
+        route.waypoints[waypoint_idx+1:waypoint_idx+1] = [new_waypoint]
+
+        # Remove old edge and insert two new edges
+        edge_idx = route.edges.index(edge)
+        del route.edges[edge_idx]
         new_edge_1 = Edge(edge.v, new_waypoint, edge.speed)
         new_edge_2 = Edge(new_waypoint, edge.w, edge.speed)
-        route.edges[i:i] = [new_edge_1, new_edge_2]
-        del route.edges[i]
+        route.edges[edge_idx:edge_idx] = [new_edge_1, new_edge_2]
         return route
     else:
         return route

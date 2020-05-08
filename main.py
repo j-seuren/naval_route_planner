@@ -1,9 +1,13 @@
 import get_data as get
+from random import seed
 import pyvisgraph as vg
 import fiona
 from shapely.geometry import shape, mapping, Point, Polygon, MultiPolygon
 import route
 import pickle
+from mutation import insertion
+
+seed(1)
 
 from haversine import haversine
 
@@ -36,8 +40,8 @@ for w in waypoints[1:]:
     v = w
     edges.append(edge)
 
-for edge in edges:
-    print(edge.intersect_polygon(shorelines_shp_fp))
+# for edge in edges:
+#     print(edge.intersect_polygon(shorelines_shp_fp))
 
 # Create Route object
 route = route.Route(edges)
@@ -46,6 +50,19 @@ print('Travel time is {} hours.'.format(round(r_travel_time, 1)))
 r_fuel_consumption = route.fuel(fuel_rate)
 print('Total fuel consumption is {} tons'.format(round(r_fuel_consumption, 1)))
 
+with open('output/route1', 'wb') as file:
+    pickle.dump(route, file)
+
+route2 = route
+for i in range(10):
+    route2 = insertion(route2, 1, 0.1, shorelines_shp_fp)
+r_travel_time2 = route2.travel_time()
+print('Travel time is {} hours.'.format(round(r_travel_time2, 1)))
+r_fuel_consumption2 = route2.fuel(fuel_rate)
+print('Total fuel consumption is {} tons'.format(round(r_fuel_consumption2, 1)))
+
+with open('output/route2', 'wb') as file:
+    pickle.dump(route2, file)
 
 def pts_shp_in_polygon(points, polygons_shp):  # Check if Fiona list of points lie within polygons shapefile
     multi_pol = fiona.open(polygons_shp)

@@ -55,6 +55,7 @@ class Edge:
 class Route:
     def __init__(self, edges):
         self.edges = edges
+        self.waypoints = [edge.v for edge in edges]
         self.distance = sum(edge.distance for edge in edges)
 
     def travel_time(self):  # Hours
