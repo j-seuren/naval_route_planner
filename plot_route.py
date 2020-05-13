@@ -1,12 +1,10 @@
 import folium
 import pickle
 
-# Open shortest path
+# Open solution.route file
 directory = 'output/'
-file = 'route2'
-
-
-with open(directory + file, 'rb') as openfile:
+file_name = 'test_route'
+with open(directory + file_name, 'rb') as openfile:
     route = pickle.load(openfile)
 
 # Plot of the path using folium
@@ -21,6 +19,6 @@ folium.Marker(path_points[0], popup=str(route.waypoints[0]), icon=folium.Icon(co
 folium.Marker(path_points[-1], popup=str(route.waypoints[-1]), icon=folium.Icon(color='red')).add_to(geomap)
 
 # Save the interactive plot as a map
-output_name = directory + 'route2.html'
+output_name = directory + file_name + '.html'
 geomap.save(output_name)
 print('Output saved to: {}'.format(output_name))

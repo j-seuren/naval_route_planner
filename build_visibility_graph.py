@@ -1,5 +1,5 @@
 import pyvisgraph as vg
-import get_data as get
+import preprocess_shapefiles as get
 
 output_graphfile = 'GSHHS_l_L1.graph'
 
