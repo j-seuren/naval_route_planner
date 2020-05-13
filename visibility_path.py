@@ -5,9 +5,9 @@ import pickle
 import shapefile
 
 # Example points
-startLat = 52.1             # Scheveningen
+startLat = 52.1
 startLong = 2.266667
-endLat = 3.9985             # Kingston upon Hull
+endLat = 3.9985
 endLong = 122.5130
 
 start_point = vg.Point(startLong, startLat)
@@ -15,13 +15,13 @@ end_point = vg.Point(endLong, endLat)
 
 # Load the visibility graph file
 graph = vg.VisGraph()
-graph.load('output\GSHHS_l_L1.graph')
+graph.load('output\GSHHS_c_L1.graph')
 
 # Calculate the shortest path
 path_list = graph.shortest_path(start_point, end_point)
 
 # Save path_list
-with open('output\path_list_l', 'wb') as file:
+with open('output\path_list_c', 'wb') as file:
     pickle.dump(path_list, file)
 
 # Calculate the total distance of the initial path
