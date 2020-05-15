@@ -22,12 +22,16 @@ for waypoint in path_list:
     wp = solution.Waypoint(waypoint.x, waypoint.y)
     waypoints.append(wp)
 
-route = solution.Route(waypoints, vessel_speed)
+route1 = solution.Route(waypoints, vessel_speed)
+route2 = route1
+# Move waypoints from shore (polygon) lines
+for waypoint in route1.waypoints:
+    route2 = route2.move_waypoint(waypoint, shorelines_polygons, radius=0.05, check_polygon_crossing=False)
 
 # Check polygon crossings
 polygon_crossings = []
 count = 0
-for edge in route.edges:
+for edge in route2.edges:
     count += 1
     print(count)
     polygon = edge.crosses_polygon(shorelines_polygons, return_polygon=True)  # 3.1 - 3.8 seconds
@@ -67,5 +71,5 @@ for i in polygon_crossings:
 # # print("--- %s seconds ---" % (time.time() - start_time))
 #
 with open('output/test_route', 'wb') as file:
-    pickle.dump(route, file)
+    pickle.dump(route2, file)
 

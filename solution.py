@@ -15,6 +15,12 @@ class Waypoint:
     def __repr__(self):
         return "wp(%.2f, %.2f)" % (self.x, self.y)
 
+    def __eq__(self, wp):
+        return wp and self.x == wp.x and self.y == wp.y
+
+    def __ne__(self, wp):
+        return not self.__eq__(wp)
+
     def in_polygon(self, polygons, return_polygon=False):
         for polygon in iter(polygons):
             shapely_point = Point(self.x, self.y)
@@ -54,29 +60,16 @@ class Edge:
         return fuel_rate * self.travel_time() / 24
 
     def crosses_polygon(self, polygons, return_polygon=False):
+        shapely_line = LineString([(self.v.x, self.v.y), (self.w.x, self.w.y)])
         for polygon in iter(polygons):
-            shapely_line = LineString([(self.v.x, self.v.y), (self.w.x, self.w.y)])
             intersect = shapely_line.intersection(shape(polygon['geometry']))
-            if intersect and intersect.geom_type == 'LineString':
+            if intersect:
                 print('{} intersects polygon.'.format(self))
                 if return_polygon:
                     return polygon
                 else:
                     return True
         return False
-    # TEMPORARY !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    def intersec_polygons(self, polygons, return_polygon=False):
-        for polygon in iter(polygons):
-            shapely_line = LineString([(self.v.x, self.v.y), (self.w.x, self.w.y)])
-            intersect = shapely_line.intersection(polygon)
-            if intersect and intersect.geom_type == 'LineString':
-                print('{} intersects polygon.'.format(self))
-                if return_polygon:
-                    return polygon
-                else:
-                    return True
-        return False
-    # TEMPORARY !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 def create_edges(waypoints, initial_speed):
     edges = []
@@ -100,43 +93,50 @@ class Route:
     def fuel(self, fuel_rate):  # Fuel tons
         return sum(edge.fuel(fuel_rate) for edge in self.edges)
 
-    def move_waypoint(self, waypoint, shoreline_polygons, radius=0.01):
+    def move_waypoint(self, wp, polygons, radius=0.01, check_polygon_crossing=True):
         # Draw random variable to pick a random location within a radius from the current waypoint
         while True:
             u = random.uniform(0, 1)
             # Calculate x,y coordinates of new waypoint
-            new_x = waypoint.x + radius * cos(u * 2 * pi)
-            new_y = waypoint.y + radius * sin(u * 2 * pi)
-            waypoint_idx = self.waypoints.index(waypoint)
-            new_waypoint = Waypoint(new_x, new_y)
-            if new_waypoint.in_polygon(shoreline_polygons):
-                print('Wp in polygon')
+            new_x = wp.x + radius * cos(u * 2 * pi)
+            new_y = wp.y + radius * sin(u * 2 * pi)
+            wp_idx = self.waypoints.index(wp)
+            new_wp = Waypoint(new_x, new_y)
+            if new_wp.in_polygon(polygons):
+                print('New waypoint {} is in polygon'.format(wp_idx))
                 continue
-            self.waypoints[waypoint_idx] = new_waypoint
-            if waypoint == self.waypoints[0]:
-                self.edges[0] = Edge(new_waypoint, self.waypoints[1], self.edges[0].speed)
-                if self.edges[0].crosses_polygon(shoreline_polygons):
+            if wp == self.waypoints[0]:
+                new_edge = Edge(new_wp, self.waypoints[1], self.edges[0].speed)
+                if check_polygon_crossing and self.edges[0].crosses_polygon(polygons):
                     print('New edge intersects polygon')
                     continue
-                print('Waypoint {} location changed.'.format(waypoint_idx))
+                self.edges[0] = new_edge
+                self.waypoints[wp_idx] = new_wp
+                print('Waypoint {} location changed.'.format(wp_idx))
                 break
-            elif waypoint == self.waypoints[-1]:
-                self.edges[-1] = Edge(self.waypoints[-2], new_waypoint, self.edges[-1].speed)
-                if self.edges[-1].crosses_polygon(shoreline_polygons):
+            elif wp == self.waypoints[-1]:
+                new_edge = Edge(self.waypoints[-2], new_wp, self.edges[-1].speed)
+                if check_polygon_crossing and self.edges[-1].crosses_polygon(polygons):
                     print('New edge intersects polygon')
                     continue
-                print('Waypoint {} location changed.'.format(waypoint_idx))
+                self.edges[-1] = new_edge
+                self.waypoints[wp_idx] = new_wp
+                print('Waypoint {} location changed.'.format(wp_idx))
                 break
             else:
-                self.edges[waypoint_idx - 1] = Edge(self.waypoints[waypoint_idx - 1], new_waypoint,
-                                                   self.edges[waypoint_idx - 1].speed)
-                self.edges[waypoint_idx] = Edge(new_waypoint, self.waypoints[waypoint_idx + 1],
-                                               self.edges[waypoint_idx].speed)
-                if self.edges[waypoint_idx - 1].crosses_polygon(shoreline_polygons) or \
-                        self.edges[waypoint_idx].crosses_polygon(shoreline_polygons):
+                new_edge_1 = Edge(self.waypoints[wp_idx - 1], new_wp,
+                                              self.edges[wp_idx - 1].speed)
+                new_edge_2 = Edge(new_wp, self.waypoints[wp_idx + 1],
+                                          self.edges[wp_idx].speed)
+
+                if check_polygon_crossing and (new_edge_1.crosses_polygon(polygons) or
+                    new_edge_2.crosses_polygon(polygons)):
                     print('New edge intersects polygon')
                     continue
-                print('Waypoint {} location changed.'.format(waypoint_idx))
+                self.edges[wp_idx - 1] = new_edge_1
+                self.edges[wp_idx] = new_edge_2
+                self.waypoints[wp_idx] = new_wp
+                print('Waypoint {} location changed.'.format(wp_idx))
                 break
         return self
 
