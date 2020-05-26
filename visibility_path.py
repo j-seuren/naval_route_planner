@@ -5,10 +5,10 @@ import pickle
 import shapefile
 
 # Example points
-startLat = 52.1
-startLong = 2.266667
-endLat = 3.9985
-endLong = 122.5130
+startLat = 48.021295
+startLong = -5.352121
+endLat = 46.403404
+endLong = -52.865297
 
 start_point = vg.Point(startLong, startLat)
 end_point = vg.Point(endLong, endLat)
@@ -21,7 +21,7 @@ graph.load('output\GSHHS_c_L1.graph')
 path_list = graph.shortest_path(start_point, end_point)
 
 # Save path_list
-with open('output\path_list_c', 'wb') as file:
+with open('output\path_list_c_ocean', 'wb') as file:
     pickle.dump(path_list, file)
 
 # Calculate the total distance of the initial path

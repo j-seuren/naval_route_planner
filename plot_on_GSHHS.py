@@ -15,7 +15,7 @@ def make_map(projection=ccrs.PlateCarree()):
     return fig, ax
 
 
-extent = [-11.5, 125, -6, 44]  # [left, right, bottom, top)
+extent = [-60, 0, 45, 50]  # [left, right, bottom, top)
 
 fig, ax = make_map(projection=ccrs.PlateCarree())
 ax.set_extent(extent)
@@ -26,7 +26,7 @@ for record, geometry in zip(shp.records(), shp.geometries()):
                       edgecolor='black')
 
 # Open solution.route file
-with open('output/test_route', 'rb') as file:
+with open('output/route_ocean', 'rb') as file:
     route = pickle.load(file)
 route_waypoint_list = [[point.y, point.x] for point in route.waypoints]
 prev_point = route_waypoint_list[0]
