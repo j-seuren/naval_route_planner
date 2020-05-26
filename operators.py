@@ -59,9 +59,6 @@ def crossover(route_a, route_b, polygons, max_distance=100):
                         if loops_exist:
                             break
             new_route = Route(edges)
-            new_route.history.extend(route_a.history)
-            new_route.history.extend('-')
-            new_route.history.extend(route_b.history)
             new_route.history.append('Crossover waypoints {0}, {1}'.format(edge_a_idx-1, edge_a_idx))
 
             # Check edges
