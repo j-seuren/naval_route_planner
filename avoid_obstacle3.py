@@ -1,4 +1,5 @@
 from shapely.geometry import Polygon, LineString, Point
+from shapely.ops import split
 from math import sqrt
 import random
 from solution import Route, Edge, Waypoint
@@ -13,26 +14,158 @@ polygon11 = [(2, 1), (2.3, 1.3), (2, 3), (2.4, 3.3), (3, 2), (4, 3), (5, 2), (6,
 polygon2 = [(7, 7), (8, 4), (9, 5), (10, 3), (11, 9), (8, 8), (6, 8)]
 polygon22 = [(7, 7), (8, 4), (8, -5), (10, -1), (12, -5), (12, 7), (11, 9), (8, 8), (6, 8)]
 polygon3 = [(1,0), (-2, -1), (-1, -2), (2, 0), (-2, 4), (-3, 2), (-2, 3)]
-polygon4 = [(11, 10), (12, 12), (13, 11), (12, 8), (15, 0)]
-IN_polygon = [Polygon(polygon11), Polygon(polygon22), Polygon(polygon4)]
-# polygons = [Polygon(polygon1)]
+polygon4 = [(11, 10), (12, 12), (13, 11), (12, 8)]
+IN_polygon = [Polygon(polygon1), Polygon(polygon2), Polygon(polygon4)]
 
 waypoint_1 = Waypoint(-1, 1)
 waypoint_2 = Waypoint(15, 10.5)
 
 IN_route = Route([waypoint_1, waypoint_2], 16.7)
 IN_edge = IN_route.edges[0]
+IN_line = LineString([(IN_edge.v.x, IN_edge.v.y), (IN_edge.w.x, IN_edge.w.y)])
+
+# # PLOT
+plt.plot()
+fig = plt.figure()
+ax = fig.add_subplot()
+for p in IN_polygon:
+    x_p, y_p = p.exterior.xy
+    ax.plot(x_p, y_p, color='darkgrey')
+x_l, y_l = IN_line.coords.xy
+ax.plot(x_l, y_l)
+
+area_radius = 0.5 * IN_line.length
+area_input = IN_line.centroid.buffer(area_radius)
+x_area, y_area = area_input.exterior.coords.xy
+ax.plot(x_area, y_area)
+
+plt.grid()
 
 
+
+
+def avoid_obstacle2(edge, polygons_input):
+    def intersect_polygon(line, polygon_list):
+        for a_polygon in iter(polygon_list):
+            intersect = line.intersection(a_polygon)
+            if intersect:
+                return a_polygon
+        return False
+
+    line_vw = LineString([(edge.v.x, edge.v.y), (edge.w.x, edge.w.y)])
+    intersection_list = []
+    for polygon in iter(polygons_input):
+        intersection = line_vw.intersection(polygon)  # Add Shape(..['geometry'])
+        if intersection:
+            # Create iterator
+            if intersection.geom_type == 'MultiLineString':
+                intersection_iterator = iter(intersection)
+
+            split_polygons = split(polygon, line_vw)
+
+            # Group polygons laying left and right side of line_vw
+            left, right = [], []
+            area_left, area_right = 0, 0
+            for split_polygon in split_polygons:
+                x_split, y_split = split_polygon.exterior.coords.xy
+                ax.plot(x_split, y_split)
+                plt.pause(0.5)
+
+                x_split_c, y_split_c = split_polygon.convex_hull.exterior.coords.xy
+                ax.plot(x_split_c, y_split_c)
+                plt.pause(0.5)
+
+                x_c, y_c = split_polygon.centroid.coords.xy
+                side = np.sign((edge.w.x - edge.v.x) * (y_c[0] - edge.v.y) - (edge.w.y - edge.v.y) * (x_c[0] - edge.v.x))
+                if side == 1:
+                    left.append(split_polygon.convex_hull)
+                    area_left += split_polygon.convex_hull.area  # Add area of convex hull
+                elif side == -1:
+                    right.append(split_polygon.convex_hull)
+                    area_right += split_polygon.convex_hull.area
+                else:
+                    print('ERROR?!?!?')
+
+            # Route along the side with smallest area
+            if area_left < area_right:
+                left_segments =[]
+                for left_polygon in left:
+                    if intersection.geom_type == 'MultiLineString':
+                        next_intersection = next(intersection_iterator)
+                        [start, end] = next_intersection.coords
+                    else:
+                        [start, end] = intersection.coords
+                    points = []
+                    # Convert to list of points
+                    for point_idx, point in enumerate(left_polygon.exterior.coords):
+                        points.append(point)
+                    del points[-1]
+                    left_segments.append(LineString(points))
+                    if start != LineString(points).coords[0] or end != LineString(points).coords[-1]:
+                        print('ERROR')
+            else:
+                right_segments = []
+                for right_polygon in right:
+                    if intersection.geom_type == 'MultiLineString':
+                        next_intersection = next(intersection_iterator)
+                        [start, end] = next_intersection.coords
+                    else:
+                        [start, end] = intersection.coords
+
+                    points = []
+                    # Convert to list of points
+                    for point_idx, point in enumerate(right_polygon.exterior.coords):
+                        points.append(point)
+                    del points[-1]
+                    right_segments.append(LineString(reversed(points)))
+                    if start != LineString(reversed(points)).coords[0] or end != LineString(reversed(points)).coords[-1]:
+                        print('ERROR')
+
+
+
+
+
+
+
+            if intersection.geom_type == 'MultiLineString':
+                for intersection_linestring in intersection:
+                    print(intersection_linestring)
+
+                    # Functie?
+
+                    split_polygons = split(polygon, line_vw)
+                    print('{} split polygons'.format(len(split_polygons)))
+                    # Initialize variables
+                    min_area = float("inf")
+                    split_poly_min = split_polygons[0]
+
+                    # Get split_polygon with minimum area
+                    for split_polygon in split_polygons:
+                        if split_polygon.area < min_area:
+                            split_poly_min = split_polygon
+                    #
+                    # split_linearring = split_poly_min.exterior
+                    points = []
+                    # points_order = [None] * len(split_poly_min))
+                    add = False
+                    # Convert to list of points
+                    for point in enumerate(split_poly_min.exterior.coords):
+                        points.append(point[1])
+                    del points[-1]
+                    new_line = LineString(points)
+                    print(new_line)
+
+avoid_obstacle2(IN_edge, IN_polygon)
+
+plt.show()
+
+'''
 def avoid_obstacle(edge, polygons_input):
     def get_route_segment(line_vw, polygons, end_point, area, extend, segments=[], checked_polygons=dict(),
                           direction=None):
-        def intersect_polygon(line, polygon_list):
-            for a_polygon in iter(polygon_list):
-                intersect = line.intersection(a_polygon)
-                if intersect:
-                    return a_polygon
-            return False
+
+
+
 
         v, w = line_vw.coords
         v, w = Point(v), Point(w)
@@ -242,6 +375,4 @@ def avoid_obstacle(edge, polygons_input):
                     continue
 
     return routes_dict
-
-
-routes_value = avoid_obstacle(IN_edge, IN_polygon)
+'''
