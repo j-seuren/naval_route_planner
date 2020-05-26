@@ -1,44 +1,28 @@
-from preprocess_shapefiles import split_large_polygon
-from random import seed
-import pandas as pd
-import pyvisgraph as vg
 import fiona
-from shapely.geometry import shape, mapping, Point, Polygon, MultiPolygon
-import solution
 import pickle
-# from mutation import insertion, init_wp_deviation
-
+import solution
+import pandas as pd
+from random import seed
+from operators import insert_waypoint, get_one_crossover_from_routes
+from copy import deepcopy
 
 seed(2)
 
-# # Load data
-data_fp = 'C:/dev/data'
-# seca_areas = pd.read_csv(data_fp + '/seca_areas.csv').drop('index', axis=1)
-speeds_FM = pd.read_excel(data_fp + '/speed_table.xlsx', sheet_name='Fairmaster')
+shorelines_shp_fp = 'C:/dev/data/gshhg-shp-2.3.7/GSHHS_shp/c/GSHHS_c_L1.shp'
+shorelines_polygons = fiona.open(shorelines_shp_fp)
+speeds_FM = pd.read_excel('C:/dev/data/speed_table.xlsx', sheet_name='Fairmaster')
 vessel_speed = speeds_FM['Speed'][0]
-fuel_rate = speeds_FM['Fuel'][0]
-print('Vessel speed {} knots.'.format(vessel_speed))
-print('Fuel rate {} tons/day.'.format(fuel_rate))
 
-# Get shorelines shapefile
-res = 'f'
-
-shorelines_shp_fp = 'C:/dev/data/gshhg-shp-2.3.7/GSHHS_shp/' + res + '/GSHHS_' + res + '_L1.shp'
-shoreline_polygons = fiona.open(shorelines_shp_fp)
-
-# Get path shapefile and list, created by visibility_path.py`
 path_shp = ([pt for pt in fiona.open('output/shapefiles/path_shape.shp')])
-with open('output\path_list_c', 'rb') as file:
+with open('output\path_list_c_ocean', 'rb') as file:
     path_list = pickle.load(file)
-    print('Path contains {} points.'.format(len(path_list)))
 
-# Create list of Waypoints
+# Create route class
 waypoints = []
-for point in path_list:
-    wp = solution.Waypoint(point.x, point.y, )
+for waypoint in path_list:
+    wp = solution.Waypoint(waypoint.x, waypoint.y)
     waypoints.append(wp)
 
-# Create list of Edges
 edges = []
 v = waypoints[0]
 for w in waypoints[1:]:
@@ -46,44 +30,69 @@ for w in waypoints[1:]:
     v = w
     edges.append(edge)
 
-# for edge in edges:
-#     print(edge.intersect_polygon(shorelines_shp_fp))
+route1 = solution.Route(edges)
 
-# Create Route object
-route = solution.Route(edges)
-r_travel_time = route.travel_time()
-print('Travel time is {} hours.'.format(round(r_travel_time, 1)))
-r_fuel_consumption = route.fuel(fuel_rate)
-print('Total fuel consumption is {} tons'.format(round(r_fuel_consumption, 1)))
+# with open('output/route_ocean', 'wb') as file:
+#     pickle.dump(route1, file)
 
-# # Check waypoint location feasibility
-# points_in_polygon = []
-# for waypoint in route.waypoints:
-#     polygon = waypoint.in_polygon(shorelines_shp_fp, return_polygon=True)
+# initial_routes = []
+# count = 0
+# for i in range(5):
+#     init_route = deepcopy(route1)
+#     count += 1
+#     print(count)
+#     for j in range(10):
+#         init_route = insert_waypoint(init_route, bisector_length_ratio=0.5, polygons=shorelines_polygons)
+#     initial_routes.append(init_route)
+
+with open('output/initial_routes', 'rb') as file:
+    initial_routes = pickle.load(file)
+
+crossover_route = get_one_crossover_from_routes(initial_routes, shorelines_polygons)
+
+# with open('output/crossover_routes', 'wb') as file:
+#     pickle.dump(crossover_routes, file)
+
+
+
+
+
+# # Move waypoints from shore (polygon) lines
+# for waypoint in route1.waypoints:
+#     route2 = route2.waypoint_feasible(waypoint, shorelines_polygons, radius=0.1, check_polygon_crossing=True)
+
+# # Check polygon crossings
+# polygon_crossings = []
+# count = 0
+# for edge in route1.edges:
+#     count += 1
+#     print(count)
+#     polygon = edge.crosses_polygon(shorelines_polygons, return_polygon=True)  # 3.1 - 3.8 seconds
 #     if polygon:
-#         points_in_polygon.append([waypoint, polygon])
+#         polygon_crossings.append([edge, polygon])
+#
+# for i in polygon_crossings:
+#     print(i[0])
 
-# Check polygon crossings
-polygon_crossings = []
-count = 0
-for edge in route.edges:
-    count += 1
-    print(count)
-    start_time = time.time()
-    polygon = edge.crosses_polygon(shorelines_shp_fp, return_polygon=True)  # 3.1 - 3.8 seconds
-    print("--- %s seconds ---" % (time.time() - start_time))
-    if polygon:
-        polygon_crossings.append([edge, polygon])
+# Fix polygon crossings
 
-# with open('output/route_c', 'wb') as file:
-#     pickle.dump(route, file)
+# # Move waypoint outside polygon
+# if route is not route_inf:
+#     for waypoint in route.waypoints:
+#         if waypoint.in_polygon(shorelines_polygons):
+#             print('Error: waypoint still in polygon')
+#
+# # Insert waypoint
+# test_route = route
+#
 
+#
+# # # Delete waypoint
+# # start_time = time.time()
+# #
+# # test_route = test_route.delete_waypoint(shorelines_polygons)
+# #
+# # print("--- %s seconds ---" % (time.time() - start_time))
+#
 
-# with open('output/route2', 'wb') as file:
-#     pickle.dump(route2, file)
-
-
-# Check if points in path lie in polygon
-# for point in waypoints:
-#     print(point, point.in_polygon(shorelines_shp_fp))
 
