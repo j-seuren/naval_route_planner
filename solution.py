@@ -28,6 +28,7 @@ class Waypoint:
         return not self.__eq__(wp)
 
     def in_polygon(self, polygons, return_polygon=False):
+        return False
         for polygon in iter(polygons):
             shapely_point = Point(self.x, self.y)
             if shapely_point.within(shape(polygon['geometry'])):
@@ -51,7 +52,7 @@ class Edge:
         self.v = v  # Waypoint 1
         self.w = w  # Waypoint 2
         self.speed = float(speed)  # Knots
-        self.distance = 0.539957 * haversine((v.y, v.x), (w.y, w.x))  # Nautical miles
+        self.distance = self.miles()
         self.bearing = (degrees(
             atan2(cos(v.y) * sin(w.y) - sin(v.y) * cos(w.y) * cos(w.x - v.x), sin(w.x - v.x) * cos(w.y)))
                         + 360) % 360
@@ -59,13 +60,19 @@ class Edge:
     def __repr__(self):
         return "e({!r}, {!r})".format(self.v, self.w)
 
+    def miles(self):
+        distance = 0.539957 * haversine((self.v.y, self.v.x), (self.w.y, self.w.x))  # Nautical miles
+        return distance
+
     def travel_time(self):  # Hours
         return self.distance / self.speed
 
-    def fuel(self, fuel_rate):  # Fuel tons
+    def fuel(self, vessel):  # Fuel tons
+        fuel_rate = vessel.fuel_rates[self.speed]
         return fuel_rate * self.travel_time() / 24
 
     def crosses_polygon(self, polygons, return_polygon=False):
+        return False
         shapely_line = LineString([(self.v.x, self.v.y), (self.w.x, self.w.y)])
         for polygon in iter(polygons):
             intersect = shapely_line.intersection(shape(polygon['geometry']))
@@ -329,12 +336,12 @@ class Route:
     def travel_time(self):  # Hours
         return sum(edge.travel_time() for edge in self.edges)
 
-    def fuel(self, fuel_rate):  # Fuel tons
-        return sum(edge.fuel(fuel_rate) for edge in self.edges)
+    def fuel(self, vessel):  # Fuel tons
+        return sum(edge.fuel(vessel) for edge in self.edges)
 
-    def insert_waypoint(self, bisector_length_ratio, polygons, printing=True):
-        # Pick random edge and adjacent waypoints
-        edge = self.edges[random.randint(0, len(self.edges) - 1)]
+    def insert_waypoint(self, bisector_length_ratio, polygons, edge=False):
+        if not edge:  # Pick random edge and adjacent waypoints
+            edge = random.choice(self.edges)
         x_v, y_v = edge.v.x, edge.v.y
         x_w, y_w = edge.w.x, edge.w.y
 
@@ -373,7 +380,7 @@ class Route:
 
         # Insert new waypoint in route
         waypoint_idx = self.waypoints.index(edge.w)
-        self.waypoints[waypoint_idx:waypoint_idx] = [new_waypoint]
+        self.waypoints.insert(waypoint_idx, new_waypoint)
 
         # Remove old edge and insert two new edges
         edge_idx = self.edges.index(edge)
@@ -381,16 +388,19 @@ class Route:
         self.edges[edge_idx:edge_idx] = [new_edge_1, new_edge_2]
         self.distance = sum(edge.distance for edge in self.edges)
         self.history.append('Insertion {0}, idx {1}'.format(new_waypoint, waypoint_idx))
-        for e, edge in enumerate(self.edges[:-1]):
-            if edge.w != self.edges[e + 1].v:
-                print('Error: edges are not linked')
+        # for e, edge in enumerate(self.edges[:-1]):
+        #     if edge.w != self.edges[e + 1].v:
+        #         print('Error: edges are not linked')
 
-    def delete_random_waypoint(self, polygons):
+    def delete_random_waypoint(self, polygons, max_wp_distance_f):
         count = 0
         delete = False
         while count < 2 * len(self.waypoints) and len(self.waypoints) > 2:  # Why 2x nr. waypoints in route?
-            wp_idx = random.randint(1, len(self.waypoints) - 2)
+            count += 1
+            wp_idx = random.randrange(1, len(self.waypoints) - 1)
             new_edge = Edge(self.edges[wp_idx - 1].v, self.edges[wp_idx].w, self.edges[wp_idx - 1].speed)
+            if new_edge.distance > max_wp_distance_f:
+                continue
 
             # Check if new edge crosses polygon
             if not new_edge.crosses_polygon(polygons):
@@ -399,64 +409,115 @@ class Route:
                 del self.edges[wp_idx]
                 delete = True
                 break
-            count += 1
         if delete:
-            self.history.append('Deletion idx {}'.format(wp_idx))
-        else:
-            print('No waypoint deleted.')
-
-        # Check edges
-        for e, edge in enumerate(self.edges[:-1]):
-            if edge.w != self.edges[e + 1].v:
-                print('Error: edges are not linked')
-
-    def move_random_waypoint(self, polygons, radius=0.1, check_polygon_crossing=True):
-        while True:
-            wp_idx = random.randint(1, len(self.waypoints) - 2)
-            wp = self.waypoints[wp_idx]
-
-            # Calculate x,y coordinates of new waypoint within a radius from the current waypoint
-            u1 = random.uniform(0, 1)
-            u2 = random.uniform(0, 1)
-
-            # !!! sqrt(u2), since the average distance between points should be the same regardless of how far from the
-            # !!! center we look
-            r = radius * sqrt(u2)
-            a = u1 * 2 * pi
-            new_x = wp.x + r * cos(a)
-            new_y = wp.y + r * sin(a)
-
-            new_wp = Waypoint(new_x, new_y)
-            wp_idx = self.waypoints.index(wp)
-            if new_wp.in_polygon(polygons):
-                continue
-            new_edge_1 = Edge(self.waypoints[wp_idx - 1], new_wp, self.edges[wp_idx - 1].speed)
-            new_edge_2 = Edge(new_wp, self.waypoints[wp_idx + 1], self.edges[wp_idx].speed)
-
-            if check_polygon_crossing and (
-                    new_edge_1.crosses_polygon(polygons) or new_edge_2.crosses_polygon(polygons)):
-                continue
-
-            self.edges[wp_idx - 1] = new_edge_1
-            self.edges[wp_idx] = new_edge_2
-            self.waypoints[wp_idx] = new_wp
             self.distance = sum(edge.distance for edge in self.edges)
-            self.history.append('Move {0}, idx {1}'.format(new_wp, wp_idx))
-            break
-        # Check edges
-        for e, edge in enumerate(self.edges[:-1]):
-            if edge.w != self.edges[e + 1].v:
-                print('Error: edges are not linked')
+            self.history.append('Deletion idx {}'.format(wp_idx))
+        # else:
+        #     print('No waypoint deleted.')
 
-    # Function to carry out the mutation operator
-    def mutation(self, shorelines_f):
-        mutation_prob = random.random()
-        if mutation_prob < 0.33:
-            self.insert_waypoint(bisector_length_ratio=0.9, polygons=shorelines_f)
-        elif mutation_prob < 0.667:
-            self.move_random_waypoint(shorelines_f, radius=0.1)
+        # Check edges
+        # for e, edge in enumerate(self.edges[:-1]):
+        #     if edge.w != self.edges[e + 1].v:
+        #         print('Error: edges are not linked')
+
+        return delete
+
+    def mutation(self, shorelines_f, weights_f, vessel, no_improvement_count_f, max_wp_distance_f, labda=0.9):
+        # Check if a waypoint can be deleted
+        if len(self.edges) <= 2:
+            weights_without_delete = {i:weights_f[i] for i in weights_f if i!='delete'}
+            total = sum(weights_without_delete.values())
+            prob = [v / total for v in weights_without_delete.values()]
+            swap = np.random.choice(list(weights_without_delete.keys()))  #, p=prob)
         else:
-            self.delete_random_waypoint(shorelines_f)
+            total = sum(weights_f.values())
+            prob = [v / total for v in weights_f.values()]
+            swap = np.random.choice(list(weights_f.keys()))  #, p=prob)
+        distance_prev = self.distance
+        fuel_prev = self.fuel(vessel)
+
+        if swap == 'insert':
+            self.insert_waypoint(bisector_length_ratio=2, polygons=shorelines_f)
+        elif swap == 'move':
+            radius = 0.1
+
+            while True:
+                wp_idx = random.randint(1, len(self.waypoints) - 2)
+                wp = self.waypoints[wp_idx]
+
+                # Calculate x,y coordinates of new waypoint within a radius from the current waypoint
+                u1 = random.uniform(0, 1)
+                u2 = random.uniform(0, 1)
+
+                # !!! sqrt(u2), since the average distance between points should be the same regardless of how far from the
+                # !!! center we look
+                r = radius * sqrt(u2)
+                a = u1 * 2 * pi
+                new_x = wp.x + r * cos(a)
+                new_y = wp.y + r * sin(a)
+
+                new_wp = Waypoint(new_x, new_y)
+                wp_idx = self.waypoints.index(wp)
+                if new_wp.in_polygon(shorelines_f):
+                    continue
+                new_edge_1 = Edge(self.waypoints[wp_idx - 1], new_wp, self.edges[wp_idx - 1].speed)
+                new_edge_2 = Edge(new_wp, self.waypoints[wp_idx + 1], self.edges[wp_idx].speed)
+
+                if new_edge_1.crosses_polygon(shorelines_f) or new_edge_2.crosses_polygon(shorelines_f):
+                    continue
+
+                self.edges[wp_idx - 1] = new_edge_1
+                self.edges[wp_idx] = new_edge_2
+                self.waypoints[wp_idx] = new_wp
+                self.distance = sum(edge.distance for edge in self.edges)
+                self.history.append('Move {0}, idx {1}'.format(new_wp, wp_idx))
+                break
+            # # Check edges
+            # for e, edge in enumerate(self.edges[:-1]):
+            #     if edge.w != self.edges[e + 1].v:
+            #         print('Error: edges are not linked')
+        elif swap == 'delete':
+            count = 0
+            delete = False
+            while count < 2 * len(self.waypoints) and len(self.waypoints) > 2:  # Why 2x nr. waypoints in route?
+                count += 1
+                wp_idx = random.randrange(1, len(self.waypoints) - 1)
+                new_edge = Edge(self.edges[wp_idx - 1].v, self.edges[wp_idx].w, self.edges[wp_idx - 1].speed)
+                if new_edge.distance > max_wp_distance_f:
+                    continue
+
+                # Check if new edge crosses polygon
+                if not new_edge.crosses_polygon(shorelines_f):
+                    self.edges[wp_idx - 1] = new_edge
+                    del self.waypoints[wp_idx]
+                    del self.edges[wp_idx]
+                    delete = True
+                    break
+            if delete:
+                self.distance = sum(edge.distance for edge in self.edges)
+                self.history.append('Deletion idx {}'.format(wp_idx))
+            else:
+                swap = 'insert'
+                self.insert_waypoint(bisector_length_ratio=2, polygons=shorelines_f)
+        elif swap == 'speed':
+            edge = random.choice(self.edges)
+            current_speed = edge.speed
+            new_speed = random.choice([speed for speed in vessel.speeds if speed != current_speed])
+
+            # Change edge speed
+            edge.speed = float(new_speed)
+
+        distance_nb = self.distance
+        fuel_nb = self.fuel(vessel)
+        score = max(0, (distance_prev - distance_nb) / distance_prev + (fuel_prev - fuel_nb) / fuel_prev)
+        if score == 0:
+            no_improvement_count_f += 1
+        else:
+            no_improvement_count_f = 0
+        weights_f[swap] = labda * weights_f[swap] + (1 - labda) * 1000 * score
+
+        weight_rounded = ['%.1f' % elem for elem in weights_f.values()]
+        return weights_f, no_improvement_count_f
 
     def waypoint_feasible(self, wp, polygons, radius=0.01, check_polygon_crossing=True):
         count = 0
