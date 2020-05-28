@@ -6,15 +6,19 @@ from haversine import haversine
 from copy import deepcopy
 
 
-def crossover(route_a, route_b, polygons, max_distance=100):
+def crossover(route_a, route_b, polygons, max_distance):
     iteration_limit = 100
     count_limit = 200
     iteration = 0
     while iteration < iteration_limit:
         iteration += 1
         # Pick random edge and adjacent waypoints
-        edge_a_idx = random.randint(1, len(route_a.edges) - 2)
-        edge_b_idx = random.randint(1, len(route_b.edges) - 2)
+        try:
+            edge_a_idx = random.randint(1, len(route_a.edges) - 2)
+            edge_b_idx = random.randint(1, len(route_b.edges) - 2)
+        except ValueError:
+            print(print('Too few edges to perform crossover'))
+            return False
         edge_a = route_a.edges[edge_a_idx]
         edge_b = route_b.edges[edge_b_idx]
 
@@ -110,4 +114,5 @@ def get_one_crossover_from_routes(routes, polygons):
                 crossover_route = crossover(route_a, route_b, polygons)
                 if crossover_route:
                     return crossover_route
+    print('No crossover')
     return False
