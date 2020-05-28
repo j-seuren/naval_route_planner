@@ -6,16 +6,17 @@ import matplotlib.pyplot as plt
 import pickle
 import pyvisgraph as vg
 import solution
-import pandas as pd
 import fiona
 from copy import deepcopy
+from operator import attrgetter
 import operators
+from classes import Vessel
 
 random.seed(1)
 
 
 # Generate as set of initial solutions
-def get_initial_solutions(start_point_f, end_point_f, vessel_speed_f, shorelines_f, pop_size_f):
+def initialization(start_point_f, end_point_f, vessel_f, pop_size_f, shorelines_f, max_edge_length_f):
     print('Loading files')
     # Load the visibility graph file
     graph = vg.VisGraph()
@@ -34,11 +35,14 @@ def get_initial_solutions(start_point_f, end_point_f, vessel_speed_f, shorelines
     edges = []
     v = waypoints[0]
     for w in waypoints[1:]:
-        edge = solution.Edge(v, w, vessel_speed_f)
+        edge = solution.Edge(v, w, vessel_f.speeds[0])
         v = w
         edges.append(edge)
 
     visibility_route = solution.Route(edges)
+
+    with open('output/visibility_route', 'wb') as file:
+        pickle.dump(visibility_route, file)
 
     # Insert code to make visibility_route feasible.
     # With respect to waypoint locations, edge intersections and vessel speed
@@ -48,24 +52,18 @@ def get_initial_solutions(start_point_f, end_point_f, vessel_speed_f, shorelines
         sys.stdout.write('\rGenerating initial routes {0}/{1}'.format(i+1, pop_size_f))
         sys.stdout.flush()
         init_route = deepcopy(visibility_route)
-        for j in range(10):
-            init_route.insert_waypoint(bisector_length_ratio=0.5, polygons=shorelines_f, printing=False)
+        long_edge_exists = True
+        count = 0
+        while count < 10 or long_edge_exists:
+            count += 1
+            longest_edge = max(init_route.edges, key=attrgetter('distance'))
+            if longest_edge.distance < max_edge_length_f:
+                long_edge_exists = False
+            init_route.insert_waypoint(bisector_length_ratio=0.5, polygons=shorelines_f, edge=longest_edge)
         initial_routes.append(init_route)
 
     print('\n')
     return initial_routes
-
-
-# First function to optimize
-def travel_time(solution_f):
-    # return -solution_f ** 2
-    return solution_f.travel_time()
-
-
-# Second function to optimize
-def fuel_consumption(solution_f, fuel_rate_f):
-    # return -(solution_f - 2) ** 2
-    return solution_f.fuel(fuel_rate_f)
 
 
 # Sort list of indices by their corresponding values
@@ -88,11 +86,13 @@ def non_dominated_sort(v1, v2):
         S[p] = []
         n[p] = 0
         for q in range(len(v1)):
-            if (v1[p] > v1[q] and v2[p] > v2[q]) or (v1[p] >= v1[q] and v2[p] > v2[q]) or (v1[p] > v1[q] and v2[p] >= v2[q]):
+            # If p dominates q
+            if (v1[p] < v1[q] and v2[p] < v2[q]) or (v1[p] <= v1[q] and v2[p] < v2[q]) or (v1[p] < v1[q] and v2[p] <= v2[q]):
                 if q not in S[p]:
-                    S[p].append(q)
-            elif (v1[q] > v1[p] and v2[q] > v2[p]) or (v1[q] >= v1[p] and v2[q] > v2[p]) or (v1[q] > v1[p] and v2[q] >= v2[p]):
-                n[p] += 1
+                    S[p].append(q)  # Add q to the set of solutions dominated by p
+            # Else if q dominates p
+            elif (v1[q] < v1[p] and v2[q] < v2[p]) or (v1[q] <= v1[p] and v2[q] < v2[p]) or (v1[q] < v1[p] and v2[q] <= v2[p]):
+                n[p] += 1  # Increment the domination counter of p
         if n[p] == 0:
             rank[p] = 0
             if p not in F[0]:
@@ -100,18 +100,18 @@ def non_dominated_sort(v1, v2):
 
     i = 0
     while F[i]:
-        Q = []
+        Q = []  # Used to store the members of the next front
         for p in F[i]:
-            for q in S[p]:
-                n[q] = n[q] - 1
-                if n[q] == 0:
+            for q in S[p]:  # For each solution q, dominated by p:
+                n[q] = n[q] - 1  # decrement the domination counter
+                if n[q] == 0:  # If domination counter is zero, put solution q in next front
                     rank[q] = i + 1
                     if q not in Q:
                         Q.append(q)
         i += 1
         F.append(Q)
 
-    del F[len(F) - 1]
+    del F[i]  # Delete last empty front
     return F
 
 
@@ -130,7 +130,7 @@ def crowding_distance(v1, v2, front_f):
     return distance
 
 
-def generate_offspring(population_f, shorelines_f, offspring_size_f):
+def recombination(population_f, shorelines_f, offspring_size_f, max_wp_distance_f):
     offspring_f = []
     while len(offspring_f) < offspring_size_f:
         crossover_route = False
@@ -138,7 +138,7 @@ def generate_offspring(population_f, shorelines_f, offspring_size_f):
         for route_a in population_f:
             for route_b in population_f:
                 if route_a is not route_b:
-                    crossover_route = operators.crossover(route_a, route_b, shorelines_f)
+                    crossover_route = operators.crossover(route_a, route_b, shorelines_f, max_wp_distance_f)
                     if crossover_route:
                         offspring_f.append(crossover_route)
                         break
@@ -148,36 +148,50 @@ def generate_offspring(population_f, shorelines_f, offspring_size_f):
 
 
 # Main program starts here
-pop_size = 30
+# Algorithm parameters
+pop_size = 40
 offspring_size = pop_size
-max_gen = 500
+max_gen = 1000
+swaps = ['insert', 'move', 'delete', 'speed']
+start_weight = 40
+weights = {s: start_weight for s in swaps}
+no_improvement_count = 0
+no_improvement_limit = 5
+max_edge_length = 200  # nautical miles
 
 # Initialization
-# Example points
+reinitialize = True
+
+# Vessel characteristics
+vessel = Vessel('Fairmaster')
+
+# Route characteristics and navigation area
 startLat = 48.021295
 startLong = -5.352121
 endLat = 46.403404
 endLong = -52.865297
-
-# Vessel speed
-vessel_name = 'Fairmaster'
-speeds_FM = pd.read_excel('C:/dev/data/speed_table.xlsx', sheet_name=vessel_name)
-vessel_speed = speeds_FM['Speed'][0]
-fuel_rate = speeds_FM['Fuel'][0]
 start_point = vg.Point(startLong, startLat)
 end_point = vg.Point(endLong, endLat)
 shorelines_shp_fp = 'C:/dev/data/gshhg-shp-2.3.7/GSHHS_shp/c/GSHHS_c_L1.shp'
 shorelines = fiona.open(shorelines_shp_fp)
 
 # Initialize population
-parents = get_initial_solutions(start_point, end_point, vessel_speed, shorelines, pop_size)
+if reinitialize:
+    parents = initialization(start_point, end_point, vessel, pop_size, shorelines, max_edge_length)
+    with open('output\parents', 'wb') as file:
+        pickle.dump(parents, file)
+else:
+    with open('output\parents', 'rb') as file:
+        parents = pickle.load(file)
+
 gen_no = 0
 while gen_no < max_gen:
     print('Generation nr. {}'.format(gen_no))
 
     # Evaluate objective values
-    travel_times = [travel_time(solution) for solution in parents]
-    fuels = [fuel_consumption(solution, fuel_rate) for solution in parents]
+    travel_times = [solution.travel_time() for solution in parents]
+    print('Value: ', sum(travel_times) / len(travel_times))
+    fuels = [solution.fuel(vessel) for solution in parents]
 
     # Non dominated sorting of solutions.
     # Returns list of fronts, which are lists of solution indices corresponding to non dominated solutions
@@ -190,20 +204,21 @@ while gen_no < max_gen:
         crowding_distances.append(crowding_distance(travel_times[:], fuels[:], front[:]))
 
     # Generating offsprings with crossover
-    offspring = generate_offspring(parents[:], shorelines, offspring_size)
+    offspring = recombination(parents[:], shorelines, offspring_size, max_edge_length)
 
     # Mutate offspring
+    if no_improvement_count > no_improvement_limit:
+        weights = {s: start_weight for s in swaps}
+        no_improvement_count = 0
     for child in offspring:
-        # Mutate half
-        if random.random() < 0.5:
-            child.mutation(shorelines)
+        weights, no_improvement_count = child.mutation(shorelines, weights, vessel, no_improvement_count, max_edge_length)
 
     # Combine parents and offspring
     combined_population = parents[:] + offspring[:]
 
     # Evaluate combined population objective values
-    travel_times2 = [travel_time(solution) for solution in combined_population]
-    fuels2 = [fuel_consumption(solution, fuel_rate) for solution in combined_population]
+    travel_times2 = [solution.travel_time() for solution in combined_population]
+    fuels2 = [solution.fuel(vessel) for solution in combined_population]
 
     # Non dominated sorting of solutions.
     # Returns list of fronts, which are lists of solution indices corresponding to non dominated solutions
@@ -234,6 +249,23 @@ while gen_no < max_gen:
     parents = [combined_population[i] for i in new_solutions]
     gen_no += 1
 
+# Get solutions from pareto front
+pareto_front = fronts2[0]
+pareto_solutions = []
+for solution_index in pareto_front:
+    pareto_solutions.append(combined_population[solution_index])
+
+# Save solutions
+output_file_name = 'pareto_solutions01'
+with open('output/' + output_file_name, 'wb') as file:
+    pickle.dump(pareto_solutions, file)
+
+print('Save to: ' + output_file_name)
+
+# Evaluate pareto objective values
+travel_times = [solution.travel_time() for solution in pareto_solutions]
+fuels = [solution.fuel(vessel) for solution in pareto_solutions]
+
 # Plot the final front
 print('Plotting')
 function1 = [travel_time for travel_time in travel_times]
@@ -242,7 +274,3 @@ plt.xlabel('Travel time [hours]', fontsize=15)
 plt.ylabel('Fuel consumption [tons]', fontsize=15)
 plt.scatter(function1, function2)
 plt.show()
-
-# Save solutions
-with open('output/population01', 'wb') as file:
-    pickle.dump(parents, file)
