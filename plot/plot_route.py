@@ -8,7 +8,7 @@ output_file_name = 'population_plot_03'
 with open(directory + file_name, 'rb') as openfile:
     population = pickle.load(openfile)
 
-route = population[-3]
+route = population[1]
 
 # Plot of the path using folium
 path_points = [[waypoint.y, waypoint.x] for waypoint in route.waypoints]

@@ -39,7 +39,7 @@ for record, geometry in zip(shp.records(), shp.geometries()):
 #     prev_point = point
 
 # Parents plotting
-with open('output/pareto_solutions01', 'rb') as file:
+with open('../output/pareto_solutions01', 'rb') as file:
     parents = pickle.load(file)
 parent = parents[0]
 colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan',
@@ -55,7 +55,7 @@ for c, parent in enumerate(parents[:10]):
 
 
 # Plot visibility route
-with open('output/visibility_route', 'rb') as file:
+with open('../output/visibility_route', 'rb') as file:
     visibility_route = pickle.load(file)
 vis_route_wps = [[point.y, point.x] for point in visibility_route.waypoints]
 prev_point = vis_route_wps[0]
