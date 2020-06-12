@@ -10,8 +10,8 @@ count = 0
 segs = []
 
 for edge in graph.visgraph.edges:
-    x = [edge.p1.x, edge.p2.x]
-    y = [edge.p1.y, edge.p2.y]
+    x = [edge.p1.lon, edge.p2.lon]
+    y = [edge.p1.lat, edge.p2.lat]
     segs.append(((x[0], y[0]), (x[1], y[1])))
 
 ln_coll = LineCollection(segs, linewidths=0.1)

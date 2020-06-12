@@ -10,7 +10,7 @@ with open(directory + file, 'rb') as openfile:
     path = pickle.load(openfile)
 
 # Plot of the path using folium
-geopath = [[point.y, point.x] for point in path]
+geopath = [[point.lat, point.lon] for point in path]
 geomap  = folium.Map([0, 0], zoom_start=2)
 for point in geopath:
     folium.Marker(point, popup=str(point)).add_to(geomap)

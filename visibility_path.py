@@ -28,7 +28,7 @@ with open('output\path_list_c_ocean', 'wb') as file:
 path_distance = 0
 prev_point = path_list[0]
 for point in path_list[1:]:
-    path_distance += haversine((prev_point.y, prev_point.x), (point.y, point.x))
+    path_distance += haversine((prev_point.lat, prev_point.lon), (point.lat, point.lon))
     prev_point = point
 path_distance = path_distance*0.539957  # km to nautical miles
 

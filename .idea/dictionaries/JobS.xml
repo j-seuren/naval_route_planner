@@ -2,7 +2,9 @@
   <dictionary name="JobS">
     <words>
       <w>graphfile</w>
+      <w>gshhs</w>
       <w>haversine</w>
+      <w>nsga</w>
       <w>seca</w>
       <w>shapefile</w>
       <w>slerp</w>

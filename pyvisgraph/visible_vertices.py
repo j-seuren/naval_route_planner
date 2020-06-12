@@ -29,7 +29,7 @@ def visible_vertices(point, graph, origin=None, destination=None, scan='full'):
     # Initialize open_edges with any intersecting edges on the half line from
     # point along the positive x-axis
     open_edges = OpenEdges()
-    point_inf = Point(INF, point.y)
+    point_inf = Point(INF, point.lat)
     for edge in edges:
         if point in edge: continue
         if edge_intersect(point, point_inf, edge):
@@ -92,19 +92,19 @@ def polygon_crossing(p1, poly_edges):
     """Returns True if Point p1 is internal to the polygon. The polygon is
     defined by the Edges in poly_edges. Uses crossings algorithm and takes into
     account edges that are collinear to p1."""
-    p2 = Point(INF, p1.y)
+    p2 = Point(INF, p1.lat)
     intersect_count = 0
     for edge in poly_edges:
-        if p1.y < edge.p1.y and p1.y < edge.p2.y: continue
-        if p1.y > edge.p1.y and p1.y > edge.p2.y: continue
-        if p1.x > edge.p1.x and p1.x > edge.p2.x: continue
+        if p1.lat < edge.p1.lat and p1.lat < edge.p2.lat: continue
+        if p1.lat > edge.p1.lat and p1.lat > edge.p2.lat: continue
+        if p1.lon > edge.p1.lon and p1.lon > edge.p2.lon: continue
         # Deal with points collinear to p1
         edge_p1_collinear = (ccw(p1, edge.p1, p2) == COLLINEAR)
         edge_p2_collinear = (ccw(p1, edge.p2, p2) == COLLINEAR)
         if edge_p1_collinear and edge_p2_collinear: continue
         if edge_p1_collinear or edge_p2_collinear:
             collinear_point = edge.p1 if edge_p1_collinear else edge.p2
-            if edge.get_adjacent(collinear_point).y > p1.y:
+            if edge.get_adjacent(collinear_point).lat > p1.lat:
                 intersect_count += 1
         elif edge_intersect(p1, p2, edge):
             intersect_count += 1
@@ -120,7 +120,7 @@ def edge_in_polygon(p1, p2, graph):
         return False
     if p1.polygon_id == -1 or p2.polygon_id == -1:
         return False
-    mid_point = Point((p1.x + p2.x) / 2, (p1.y + p2.y) / 2)
+    mid_point = Point((p1.lon + p2.lon) / 2, (p1.lat + p2.lat) / 2)
     return polygon_crossing(mid_point, graph.polygons[p1.polygon_id])
 
 
@@ -134,7 +134,7 @@ def point_in_polygon(p, graph):
 
 def unit_vector(c, p):
     magnitude = edge_distance(c, p)
-    return Point((p.x - c.x) / magnitude, (p.y - c.y) / magnitude)
+    return Point((p.lon - c.lon) / magnitude, (p.lat - c.lat) / magnitude)
 
 
 def closest_point(p, graph, polygon_id, length=0.001):
@@ -148,10 +148,10 @@ def closest_point(p, graph, polygon_id, length=0.001):
     # Finds point closest to p, but on a edge of the polygon.
     # Solution from http://stackoverflow.com/a/6177788/4896361
     for i, e in enumerate(polygon_edges):
-        num = ((p.x-e.p1.x)*(e.p2.x-e.p1.x) + (p.y-e.p1.y)*(e.p2.y-e.p1.y))
-        denom = ((e.p2.x - e.p1.x)**2 + (e.p2.y - e.p1.y)**2)
+        num = ((p.lon - e.p1.lon) * (e.p2.lon - e.p1.lon) + (p.lat - e.p1.lat) * (e.p2.lat - e.p1.lat))
+        denom = ((e.p2.lon - e.p1.lon) ** 2 + (e.p2.lat - e.p1.lat) ** 2)
         u = num/denom
-        pu = Point(e.p1.x + u*(e.p2.x - e.p1.x), e.p1.y + u*(e.p2.y- e.p1.y))
+        pu = Point(e.p1.lon + u * (e.p2.lon - e.p1.lon), e.p1.lat + u * (e.p2.lat - e.p1.lat))
         pc = pu
         if u < 0:
             pc = e.p1
@@ -170,8 +170,8 @@ def closest_point(p, graph, polygon_id, length=0.001):
         v1 = unit_vector(c, edges[0].get_adjacent(c))
         v2 = unit_vector(c, edges[1].get_adjacent(c))
         vsum = unit_vector(Point(0, 0), Point(v1.x + v2.x, v1.y + v2.y))
-        close1 = Point(c.x + (vsum.x * length), c.y + (vsum.y * length))
-        close2 = Point(c.x - (vsum.x * length), c.y - (vsum.y * length))
+        close1 = Point(c.lon + (vsum.x * length), c.lat + (vsum.y * length))
+        close2 = Point(c.lon - (vsum.x * length), c.lat - (vsum.y * length))
         if point_in_polygon(close1, graph) == -1:
             return close1
         return close2
@@ -182,33 +182,33 @@ def closest_point(p, graph, polygon_id, length=0.001):
 
 def edge_distance(p1, p2):
     """Return the Euclidean distance between two Points."""
-    return sqrt((p2.x - p1.x)**2 + (p2.y - p1.y)**2)
+    return sqrt((p2.lon - p1.lon) ** 2 + (p2.lat - p1.lat) ** 2)
 
 
 def intersect_point(p1, p2, edge):
     """Return intersect Point where the edge from p1, p2 intersects edge"""
     if p1 in edge: return p1
     if p2 in edge: return p2
-    if edge.p1.x == edge.p2.x:
-        if p1.x == p2.x:
+    if edge.p1.lon == edge.p2.lon:
+        if p1.lon == p2.lon:
             return None
-        pslope = (p1.y - p2.y) / (p1.x - p2.x)
-        intersect_x = edge.p1.x
-        intersect_y = pslope * (intersect_x - p1.x) + p1.y
+        pslope = (p1.lat - p2.lat) / (p1.lon - p2.lon)
+        intersect_x = edge.p1.lon
+        intersect_y = pslope * (intersect_x - p1.lon) + p1.lat
         return Point(intersect_x, intersect_y)
 
-    if p1.x == p2.x:
-        eslope = (edge.p1.y - edge.p2.y) / (edge.p1.x - edge.p2.x)
-        intersect_x = p1.x
-        intersect_y = eslope * (intersect_x - edge.p1.x) + edge.p1.y
+    if p1.lon == p2.lon:
+        eslope = (edge.p1.lat - edge.p2.lat) / (edge.p1.lon - edge.p2.lon)
+        intersect_x = p1.lon
+        intersect_y = eslope * (intersect_x - edge.p1.lon) + edge.p1.lat
         return Point(intersect_x, intersect_y)
 
-    pslope = (p1.y - p2.y) / (p1.x - p2.x)
-    eslope = (edge.p1.y - edge.p2.y) / (edge.p1.x - edge.p2.x)
+    pslope = (p1.lat - p2.lat) / (p1.lon - p2.lon)
+    eslope = (edge.p1.lat - edge.p2.lat) / (edge.p1.lon - edge.p2.lon)
     if eslope == pslope:
         return None
-    intersect_x = (eslope * edge.p1.x - pslope * p1.x + p1.y - edge.p1.y) / (eslope - pslope)
-    intersect_y = eslope * (intersect_x - edge.p1.x) + edge.p1.y
+    intersect_x = (eslope * edge.p1.lon - pslope * p1.lon + p1.lat - edge.p1.lat) / (eslope - pslope)
+    intersect_y = eslope * (intersect_x - edge.p1.lon) + edge.p1.lat
     return Point(intersect_x, intersect_y)
 
 
@@ -228,8 +228,8 @@ def angle(center, point):
      |  /
     c|a/
     """
-    dx = point.x - center.x
-    dy = point.y - center.y
+    dx = point.lon - center.lon
+    dy = point.lat - center.lat
     if dx == 0:
         if dy < 0:
             return pi * 3 / 2
@@ -252,9 +252,9 @@ def angle2(point_a, point_b, point_c):
        /    B\
       a-------b
     """
-    a = (point_c.x - point_b.x)**2 + (point_c.y - point_b.y)**2
-    b = (point_c.x - point_a.x)**2 + (point_c.y - point_a.y)**2
-    c = (point_b.x - point_a.x)**2 + (point_b.y - point_a.y)**2
+    a = (point_c.lon - point_b.lon) ** 2 + (point_c.lat - point_b.lat) ** 2
+    b = (point_c.lon - point_a.lon) ** 2 + (point_c.lat - point_a.lat) ** 2
+    c = (point_b.lon - point_a.lon) ** 2 + (point_b.lat - point_a.lat) ** 2
     cos_value = (a + c - b) / (2 * sqrt(a) * sqrt(c))
     return acos(int(cos_value*T)/T2)
 
@@ -262,7 +262,7 @@ def angle2(point_a, point_b, point_c):
 def ccw(A, B, C):
     """Return 1 if counter clockwise, -1 if clock wise, 0 if collinear """
     #  Rounding this way is faster than calling round()
-    area = int(((B.x - A.x) * (C.y - A.y) - (B.y - A.y) * (C.x - A.x))*T)/T2
+    area = int(((B.lon - A.lon) * (C.lat - A.lat) - (B.lat - A.lat) * (C.lon - A.lon)) * T) / T2
     if area > 0: return 1
     if area < 0: return -1
     return 0
@@ -271,8 +271,8 @@ def ccw(A, B, C):
 def on_segment(p, q, r):
     """Given three colinear points p, q, r, the function checks if point q
     lies on line segment 'pr'."""
-    if (q.x <= max(p.x, r.x)) and (q.x >= min(p.x, r.x)):
-        if (q.y <= max(p.y, r.y)) and (q.y >= min(p.y, r.y)):
+    if (q.lon <= max(p.lon, r.lon)) and (q.lon >= min(p.lon, r.lon)):
+        if (q.lat <= max(p.lat, r.lat)) and (q.lat >= min(p.lat, r.lat)):
             return True
     return False
 

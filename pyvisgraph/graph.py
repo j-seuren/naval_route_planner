@@ -81,7 +81,7 @@ class Point:
         self.polygon_id = polygon_id
 
     def __eq__(self, point):
-        return point and self.x == point.x and self.y == point.y
+        return point and self.x == point.lon and self.y == point.lat
 
     def __ne__(self, point):
         return not self.__eq__(point)

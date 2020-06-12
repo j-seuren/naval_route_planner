@@ -11,7 +11,7 @@ with open(directory + file_name, 'rb') as openfile:
 route = population[1]
 
 # Plot of the path using folium
-path_points = [[waypoint.y, waypoint.x] for waypoint in route.waypoints]
+path_points = [[waypoint.lat, waypoint.lon] for waypoint in route.waypoints]
 geomap = folium.Map([0, 0], zoom_start=2)
 for point in path_points:
     folium.Marker(point, popup=str(point)).add_to(geomap)

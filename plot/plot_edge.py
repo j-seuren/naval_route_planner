@@ -16,7 +16,7 @@ def plot_edge(edge):
         gl.yformatter = LATITUDE_FORMATTER
         return fig_f, ax_f
 
-    extent = [min(edge.v.x, edge.w.x) - 1, max(edge.v.x, edge.w.x) + 1, min(edge.v.y, edge.w.y) - 1, max(edge.v.y, edge.w.y) + 1]  # [left, right, bottom, top)
+    extent = [min(edge.v.lon, edge.w.lon) - 1, max(edge.v.lon, edge.w.lon) + 1, min(edge.v.lat, edge.w.lat) - 1, max(edge.v.lat, edge.w.lat) + 1]  # [left, right, bottom, top)
 
     fig, ax = make_map(projection=ccrs.PlateCarree())
     ax.set_extent(extent)
@@ -26,12 +26,12 @@ def plot_edge(edge):
     for record, geometry in zip(polygons.records(), polygons.geometries()):
         ax.add_geometries([geometry], ccrs.PlateCarree(), facecolor='lightgray', edgecolor='black')
 
-    point1 = [edge.v.y, edge.v.x]
-    point2 = [edge.w.y, edge.w.x]
+    point1 = [edge.v.lat, edge.v.lon]
+    point2 = [edge.w.lat, edge.w.lon]
 
     plt.plot([point1[1], point2[1]], [point1[0], point2[0]], color='blue', linewidth=1, marker='o', markersize=3, transform=ccrs.PlateCarree())
 
-    edge_line = LineString([(edge.v.x, edge.v.y), (edge.w.x, edge.w.y)])
+    edge_line = LineString([(edge.v.lon, edge.v.lat), (edge.w.lon, edge.w.lat)])
     area_radius = 0.5*edge_line.length
     print(area_radius)
     area_input = edge_line.centroid.buffer(area_radius)
