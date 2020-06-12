@@ -13,7 +13,7 @@ def Average(lst):
 
 vessel = Vessel('Fairmaster')
 travel_times = [solution.travel_time() for solution in solutions]
-fuel_consumptions = [solution.fuel(vessel) for solution in solutions]
+fuel_consumptions = [solution.fuel_consumption(vessel) for solution in solutions]
 distances = [solution.miles for solution in solutions]
 
 min_distance_route = solutions[distances.index(min(distances))]

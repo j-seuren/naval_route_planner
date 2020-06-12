@@ -1,9 +1,8 @@
 # Importing required modules
-import matplotlib.pyplot as plt
-import pickle
+import pandas as pd
+import numpy as np
 import random
 import fiona
-import numpy as np
 from initialization import initialization
 from shapely.geometry import shape
 from shapely.prepared import prep
@@ -24,7 +23,11 @@ max_no_impr = 5
 max_edge_length = 200  # nautical miles
 
 # Vessel characteristics
-vessel = Vessel('Fairmaster')
+vessel_name = 'Fairmaster'
+table = pd.read_excel('C:/dev/data/speed_table.xlsx', sheet_name=vessel_name)
+speeds = [round(speed, 1) for speed in table['Speed']]
+fuel_rates = {speed: round(table['Fuel'][i], 1) for i, speed in enumerate(speeds)}
+vessel = Vessel(vessel_name, speeds, fuel_rates)
 
 # Route characteristics and navigation area
 lon_s, lat_s = -5.352121, 48.021295
@@ -62,8 +65,8 @@ population, fronts = nsga_ii(initial_pop, vessel, rtree_idx, prepared_polygons, 
 # print('Save to: ' + output_file_name)
 #
 # # Evaluate pareto objective values
-# travel_times = [solution.travel_time() for solution in pareto_solutions]
-# fuels = [solution.fuel(vessel) for solution in pareto_solutions]
+# travel_times = [solution.travel_time for solution in pareto_solutions]
+# fuels = [solution.fuel for solution in pareto_solutions]
 #
 # # Plot the final front
 # print('Plotting')

@@ -73,7 +73,7 @@ def crowding_distance(v1, v2, front):
     return distance
 
 
-def recombination(population, rtree_idx, polygons, offspring_size, max_edge_length):
+def recombination(population, rtree_idx, polygons, offspring_size, max_distance, vessel):
     offspring = []
     while len(offspring) < offspring_size:
         pop_copy = population[:]
@@ -82,13 +82,13 @@ def recombination(population, rtree_idx, polygons, offspring_size, max_edge_leng
             route_a = pop_copy.pop()
             route_b = pop_copy.pop()
             assert len(route_a.edges) > 2 and len(route_b.edges) > 2, 'One or both routes have too few edges'
-            crossover_route = crossover(route_a, route_b, rtree_idx, polygons, max_edge_length)
+            crossover_route = crossover(route_a, route_b, rtree_idx, polygons, max_distance, vessel)
             if crossover_route:
                 offspring.append(crossover_route)
     return offspring
 
 
-def nsga_ii(parents, vessel, rtree_idx, polygons, offspring_size, max_gen, max_edge_length):
+def nsga_ii(parents, vessel, rtree_idx, polygons, offspring_size, max_gen, max_distance):
     gen_no = 0
     swaps = ['insert', 'move', 'delete', 'speed']
     pop_size = len(parents)
@@ -97,9 +97,9 @@ def nsga_ii(parents, vessel, rtree_idx, polygons, offspring_size, max_gen, max_e
         print('Generation nr. {}'.format(gen_no))
 
         # Evaluate objective values
-        travel_times = [solution.travel_time() for solution in parents]
+        travel_times = [solution.travel_time for solution in parents]
         print('Value: ', sum(travel_times) / len(travel_times))
-        fuels = [solution.fuel(vessel) for solution in parents]
+        fuels = [solution.fuel_consumption for solution in parents]
 
         # Non dominated sorting of solutions.
         # Returns list of fronts, which are lists of solution indices corresponding to non dominated solutions
@@ -113,18 +113,18 @@ def nsga_ii(parents, vessel, rtree_idx, polygons, offspring_size, max_gen, max_e
             crowding_distances.append(crowding_distance(travel_times[:], fuels[:], front[:]))
 
         # Generating offsprings with crossover
-        offspring = recombination(parents[:], rtree_idx, polygons, offspring_size, max_edge_length)
+        offspring = recombination(parents[:], rtree_idx, polygons, offspring_size, max_distance, vessel)
 
         # Mutate offspring
         for child in offspring:
-            child.mutate(rtree_idx, polygons, swaps, vessel, max_edge_length)
+            child.mutate(rtree_idx, polygons, swaps, vessel, max_distance)
 
         # Combine parents and offspring
         combined_population = parents[:] + offspring[:]
 
         # Evaluate combined population objective values
-        travel_times2 = [solution.travel_time() for solution in combined_population]
-        fuels2 = [solution.fuel(vessel) for solution in combined_population]
+        travel_times2 = [solution.travel_time for solution in combined_population]
+        fuels2 = [solution.fuel_consumption for solution in combined_population]
 
         # Non dominated sorting of solutions.
         # Returns list of fronts, which are lists of solution indices corresponding to non dominated solutions

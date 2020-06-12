@@ -16,7 +16,7 @@ def arc_length(xyz1, xyz2):
 
 
 # Generate as set of initial solutions
-def initialization(start, end, vessel_f, population_size, rtree_idx, polygons, max_edge_length_f):
+def initialization(start, end, vessel, population_size, rtree_idx, polygons, max_distance):
     # Load the graph file
     G = nx.read_gpickle("output/final_d6_vd0.gpickle")
 
@@ -53,7 +53,7 @@ def initialization(start, end, vessel_f, population_size, rtree_idx, polygons, m
 
     # Create edges from waypoints
     edge_list = zip(waypoints[:-1], waypoints[1:])
-    edges = [classes.Edge(e[0], e[1], vessel_f.speeds[0]) for e in edge_list]
+    edges = [classes.Edge(e[0], e[1], vessel.speeds[0], vessel) for e in edge_list]
 
     # Create and save graph route from edges
     graph_route = classes.Route(edges)
@@ -73,10 +73,9 @@ def initialization(start, end, vessel_f, population_size, rtree_idx, polygons, m
             longest_edge = max(init_route.edges, key=attrgetter('miles'))
 
             # At least add 10 waypoints and make sure there exist no long edges
-            if longest_edge.miles < max_edge_length_f and waypoints_inserted > 10:
+            if longest_edge.miles < max_distance and waypoints_inserted > 10:
                 break
-            init_route.insert_waypoint(width_ratio=0.5, rtree_idx=rtree_idx, polygons=polygons,
-                                       edge=longest_edge)
+            init_route.insert_waypoint(0.5, rtree_idx, polygons, vessel, longest_edge)
             waypoints_inserted += 1
         initial_routes.append(init_route)
 

@@ -3,7 +3,7 @@ from classes import Edge, Route
 from haversine import haversine
 
 
-def crossover(route_a, route_b, rtree_idx, polygons, max_distance):  # Shuffle is almost half of comp. time
+def crossover(route_a, route_b, rtree_idx, polygons, max_distance, vessel):  # Shuffle is almost half of comp. time
     edges_a = [[i, edge] for i, edge in enumerate(route_a.edges) if i != 0]
     random.shuffle(edges_a)
     edges_b = [[i, edge] for i, edge in enumerate(route_b.edges) if i != len(route_b.edges) - 1]
@@ -14,7 +14,7 @@ def crossover(route_a, route_b, rtree_idx, polygons, max_distance):  # Shuffle i
         while shuffled_b:
             edge_b_idx, edge_b = shuffled_b.pop()
             if haversine((edge_a.v.lon, edge_a.v.lat), (edge_b.w.lon, edge_b.w.lat)) < max_distance:
-                new_edge = Edge(edge_a.v, edge_b.w, edge_a.speed)
+                new_edge = Edge(edge_a.v, edge_b.w, edge_a.speed, vessel)
                 if not new_edge.x_geometry(rtree_idx, polygons):
                     edges = route_a.edges[0:edge_a_idx] + [new_edge] + route_b.edges[edge_b_idx + 1:]
                     new_route = Route(edges)

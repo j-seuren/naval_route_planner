@@ -1,17 +1,15 @@
 from haversine import haversine
-from shapely.geometry import Polygon, Point, LineString
+from shapely.geometry import Point, LineString
 from math import cos, sin, pi, sqrt
-import pandas as pd
 import numpy as np
 import random
 
 
 class Vessel:
-    def __init__(self, name):
-        table = pd.read_excel('C:/dev/data/speed_table.xlsx', sheet_name=name)
+    def __init__(self, name, speeds, fuel_rates):
         self.name = name
-        self.speeds = table['Speed']
-        self.fuel_rates = {speed: table['Fuel'][idx] for idx, speed in enumerate(table['Speed'])}
+        self.speeds = speeds
+        self.fuel_rates = fuel_rates
 
 
 class Waypoint:
@@ -46,12 +44,13 @@ class Waypoint:
 
 
 class Edge:
-    def __init__(self, v, w, speed):
+    def __init__(self, v, w, speed, vessel):
         self.v = v  # Waypoint 1
         self.w = w  # Waypoint 2
         self.speed = float(speed)  # Knots
         self.miles = haversine((self.v.lat, self.v.lon), (self.w.lat, self.w.lon), unit='nmi')  # Nautical miles
         self.travel_time = self.miles / self.speed  # Hours
+        self.fuel_consumption = self.fuel_consumption(vessel)
 
     def __repr__(self):
         return "e({!r}, {!r})".format(self.v, self.w)
@@ -85,6 +84,8 @@ class Route:
         self.edges = edges
         self.waypoints = [edge.v for edge in edges] + [edges[-1].w]
         self.distance = sum(edge.miles for edge in self.edges)
+        self.travel_time = sum(edge.travel_time for edge in self.edges)
+        self.fuel_consumption = sum(edge.fuel_consumption for edge in self.edges)
 
     def __eq__(self, route):  # Gevaarlijke check?
         return route and self.distance == route.miles and len(self.waypoints) == len(route.waypoints)
@@ -92,28 +93,22 @@ class Route:
     def __ne__(self, route):  # Gevaarlijke check?
         return not self.__eq__(route)
 
-    def travel_time(self):  # Hours
-        return sum(edge.travel_time() for edge in self.edges)
-
-    def fuel(self, vessel):  # Fuel tons
-        return sum(edge.fuel(vessel) for edge in self.edges)
-
     def mutate(self, rtree_idx, polygons, swaps, vessel, max_distance):
         # total = sum(weights.values())
         # prob = [v / total for v in weights.values()]
-        swap = np.random.choice(swaps)  # , p=prob)
+        swap = random.choice(swaps)  # , p=prob)
 
         if swap == 'insert':
-            self.insert_waypoint(1, rtree_idx, polygons)
+            self.insert_waypoint(1, rtree_idx, polygons, vessel)
         elif swap == 'move':
             wp = random.choice(self.waypoints[1:-1])
-            self.move_waypoint(wp, rtree_idx, polygons)
+            self.move_waypoint(wp, rtree_idx, polygons, vessel)
         elif swap == 'delete':
-            self.delete_random_waypoint(rtree_idx, polygons, max_distance)
+            self.delete_random_waypoint(rtree_idx, polygons, max_distance, vessel)
         elif swap == 'speed':
             self.change_speed(vessel)
 
-    def insert_waypoint(self, width_ratio, rtree_idx, polygons, edge=False):
+    def insert_waypoint(self, width_ratio, rtree_idx, polygons, vessel, edge=False):
         if not edge:
             edge = random.choice(self.edges)
         x_v, y_v = edge.v.lon, edge.v.lat
@@ -156,8 +151,8 @@ class Route:
             quad_pt = np.add(quad_pt, origin)
 
             new_waypoint = Waypoint(quad_pt[0], quad_pt[1])
-            new_edge_1 = Edge(edge.v, new_waypoint, edge.speed)
-            new_edge_2 = Edge(new_waypoint, edge.w, edge.speed)
+            new_edge_1 = Edge(edge.v, new_waypoint, edge.speed, vessel)
+            new_edge_2 = Edge(new_waypoint, edge.w, edge.speed, vessel)
             if new_edge_1.x_geometry(rtree_idx, polygons) or new_edge_2.x_geometry(rtree_idx, polygons):
                 continue
 
@@ -171,11 +166,13 @@ class Route:
             del self.edges[edge_idx]
             self.edges[edge_idx:edge_idx] = [new_edge_1, new_edge_2]
 
-            # Recompute distance
+            # Update distance, travel time and fuel consumption
             self.distance = sum(edge.miles for edge in self.edges)
+            self.travel_time = sum(edge.travel_time for edge in self.edges)
+            self.fuel_consumption = sum(edge.fuel_consumption for edge in self.edges)
             return
 
-    def delete_random_waypoint(self, rtree_idx, polygons, max_distance):
+    def delete_random_waypoint(self, rtree_idx, polygons, max_distance, vessel):
         waypoints = self.waypoints[1:-1]
         random.shuffle(waypoints)
         while waypoints:
@@ -184,7 +181,7 @@ class Route:
             wp_idx = self.waypoints.index(wp)
 
             # Create new edge
-            new_edge = Edge(self.edges[wp_idx - 1].v, self.edges[wp_idx].w, self.edges[wp_idx - 1].speed)
+            new_edge = Edge(self.edges[wp_idx - 1].v, self.edges[wp_idx].w, self.edges[wp_idx - 1].speed, vessel)
 
             # Check if edge is greater than max distance or intersects a polygon
             if new_edge.miles > max_distance or new_edge.x_geometry(rtree_idx, polygons):
@@ -198,8 +195,10 @@ class Route:
             self.edges[wp_idx - 1] = new_edge
             del self.edges[wp_idx]
 
-            # Recompute distance
+            # Update distance, travel time and fuel consumption
             self.distance = sum(edge.miles for edge in self.edges)
+            self.travel_time = sum(edge.travel_time for edge in self.edges)
+            self.fuel_consumption = sum(edge.fuel_consumption for edge in self.edges)
             return
         print("No waypoint deleted")
 
@@ -210,7 +209,7 @@ class Route:
         for edge in self.edges[first:first + n_edges]:
             edge.speed = float(new_speed)
 
-    def move_waypoint(self, wp, rtree_idx, polygons, radius=0.01):
+    def move_waypoint(self, wp, rtree_idx, polygons, vessel, radius=0.01):
         assert wp != self.waypoints[0] and wp != self.waypoints[-1], 'First or last waypoint cannot be moved'
         wp_idx = self.waypoints.index(wp)
         while True:
@@ -223,8 +222,8 @@ class Route:
 
             # Create new waypoint and adjacent edges
             new_wp = Waypoint(x, y)
-            new_edge_1 = Edge(self.waypoints[wp_idx-1], new_wp, self.edges[wp_idx-1].speed)
-            new_edge_2 = Edge(new_wp, self.waypoints[wp_idx+1], self.edges[wp_idx].speed)
+            new_edge_1 = Edge(self.waypoints[wp_idx-1], new_wp, self.edges[wp_idx-1].speed, vessel)
+            new_edge_2 = Edge(new_wp, self.waypoints[wp_idx+1], self.edges[wp_idx].speed, vessel)
 
             # Check if waypoint and edges do not intersect a polygon
             if new_edge_1.x_geometry(rtree_idx, polygons) or new_edge_2.x_geometry(rtree_idx, polygons):
@@ -238,6 +237,8 @@ class Route:
             self.edges[wp_idx - 1] = new_edge_1
             self.edges[wp_idx] = new_edge_2
 
-            # Recompute distance
+            # Update distance, travel time and fuel consumption
             self.distance = sum(edge.miles for edge in self.edges)
+            self.travel_time = sum(edge.travel_time for edge in self.edges)
+            self.fuel_consumption = sum(edge.fuel_consumption for edge in self.edges)
             return
