@@ -73,45 +73,24 @@ def crowding_distance(v1, v2, front):
     return distance
 
 
-# def recombination(population_f, rtree_idx, shorelines_f, offspring_size_f, max_wp_distance_f):
-#     offspring_f = []
-#     while len(offspring_f) < offspring_size_f:
-#         crossover_route = False
-#         random.shuffle(population_f)
-#         for route_a in population_f:
-#             for route_b in population_f:
-#                 if route_a is not route_b:
-#                     assert len(route_a.edges) > 2 and len(route_b.edges) > 2, 'One or both routes have too few edges'
-#                     crossover_route = crossover(route_a, route_b, rtree_idx, shorelines_f, max_wp_distance_f)
-#                     if crossover_route:
-#                         offspring_f.append(crossover_route)
-#                         break
-#             if crossover_route:
-#                 break
-#     return offspring_f
-
-
 def recombination(population, rtree_idx, polygons, offspring_size, max_edge_length):
     offspring = []
     while len(offspring) < offspring_size:
         pop_copy = population[:]
         random.shuffle(pop_copy)
-        while len(pop_copy) > 1:
+        while len(pop_copy) > 1 and len(offspring) < offspring_size:
             route_a = pop_copy.pop()
             route_b = pop_copy.pop()
             assert len(route_a.edges) > 2 and len(route_b.edges) > 2, 'One or both routes have too few edges'
             crossover_route = crossover(route_a, route_b, rtree_idx, polygons, max_edge_length)
             if crossover_route:
                 offspring.append(crossover_route)
-                break
     return offspring
 
 
-def nsga_ii(parents, vessel, rtree_idx, polygons, offspring_size, start_weight, max_gen, max_edge_length, max_no_impr):
+def nsga_ii(parents, vessel, rtree_idx, polygons, offspring_size, max_gen, max_edge_length):
     gen_no = 0
-    no_improvement_count = 0
     swaps = ['insert', 'move', 'delete', 'speed']
-    weights = {s: start_weight for s in swaps}
     pop_size = len(parents)
 
     while gen_no < max_gen:
@@ -137,11 +116,8 @@ def nsga_ii(parents, vessel, rtree_idx, polygons, offspring_size, start_weight, 
         offspring = recombination(parents[:], rtree_idx, polygons, offspring_size, max_edge_length)
 
         # Mutate offspring
-        if no_improvement_count > max_no_impr:
-            weights = {s: start_weight for s in swaps}
-            no_improvement_count = 0
         for child in offspring:
-            weights, no_improvement_count = child.mutation(rtree_idx, polygons, weights, vessel, no_improvement_count, max_edge_length)
+            child.mutate(rtree_idx, polygons, swaps, vessel, max_edge_length)
 
         # Combine parents and offspring
         combined_population = parents[:] + offspring[:]

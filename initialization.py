@@ -1,6 +1,6 @@
 # Importing required modules
 import networkx as nx
-import solution
+import classes
 import pickle
 import sys
 from math import radians, cos, sin, acos
@@ -49,14 +49,14 @@ def initialization(start, end, vessel_f, population_size, rtree_idx, polygons, m
     # plt.show()
 
     # Create waypoints from path nodes
-    waypoints = [solution.Waypoint(G.nodes[node]['lon_lat'][0], G.nodes[node]['lon_lat'][1]) for node in path]
+    waypoints = [classes.Waypoint(G.nodes[node]['lon_lat'][0], G.nodes[node]['lon_lat'][1]) for node in path]
 
     # Create edges from waypoints
     edge_list = zip(waypoints[:-1], waypoints[1:])
-    edges = [solution.Edge(e[0], e[1], vessel_f.speeds[0]) for e in edge_list]
+    edges = [classes.Edge(e[0], e[1], vessel_f.speeds[0]) for e in edge_list]
 
     # Create and save graph route from edges
-    graph_route = solution.Route(edges)
+    graph_route = classes.Route(edges)
     with open('output/graph_route', 'wb') as f:
         pickle.dump(graph_route, f)
 
@@ -75,7 +75,7 @@ def initialization(start, end, vessel_f, population_size, rtree_idx, polygons, m
             # At least add 10 waypoints and make sure there exist no long edges
             if longest_edge.miles < max_edge_length_f and waypoints_inserted > 10:
                 break
-            init_route.insert_waypoint(bisector_length_ratio=0.5, rtree_idx=rtree_idx, polygons=polygons,
+            init_route.insert_waypoint(width_ratio=0.5, rtree_idx=rtree_idx, polygons=polygons,
                                        edge=longest_edge)
             waypoints_inserted += 1
         initial_routes.append(init_route)
