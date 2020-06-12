@@ -6,9 +6,8 @@ import fiona
 from mpl_toolkits.mplot3d import Axes3D
 from math import atan2, degrees, acos, sqrt
 from shapely.geometry import shape, Point, LineString
-from shapely.strtree import STRtree
 from copy import deepcopy
-from heapq import nsmallest
+from rtree import index
 
 
 class Triangle:
@@ -34,8 +33,8 @@ class IcoSphere:
 
     # Add vertex to mesh, fix position to be on unit sphere, return index
     def add_vertex(self, p):
-        length = sqrt(p.x * p.x + p.y * p.y + p.z * p.z)
-        x, y, z = p.x/length, p.y/length, p.z/length
+        length = sqrt(p.lon * p.lon + p.lat * p.lat + p.z * p.z)
+        x, y, z = p.lon / length, p.lat / length, p.z / length
         point_3d = Point3D(x, y, z)
         self.graph.add_node(self.index, xyz=(x, y, z))
         self.graph.nodes[self.index]['point'] = point_3d
@@ -60,14 +59,14 @@ class IcoSphere:
         # If not in cache: calculate the point
         u = self.graph.nodes[i1]['point']
         v = self.graph.nodes[i2]['point']
-        middle = Point3D((u.x + v.x)/2, (u.y + v.y)/2, (u.z + v.z)/2)
+        middle = Point3D((u.lon + v.lon) / 2, (u.lat + v.lat) / 2, (u.z + v.z) / 2)
 
         # Add vertex makes sure point is on unit sphere. i - 1, since we need the current index
         i = self.add_vertex(middle) - 1
         self.middle_point_cache[key] = i
         return i
 
-    def refine_shoreline_intersections(self, polygons, local_mesh_recursion):
+    def refine_shoreline_intersections(self, idx, polygons, local_mesh_recursion):
         for i in range(local_mesh_recursion):
             cnt = 0
             nr_edges = len(self.graph.edges)
@@ -87,7 +86,7 @@ class IcoSphere:
                     continue
 
                 # If edge crosses a polygon exterior, refine two adjacent triangles
-                if edge_x_geometry(u_pos, v_pos, polygons):
+                if edge_x_geometry(u_pos, v_pos, idx, polygons):
                     # Get adjacent triangles of intersected edge
                     ww = [e1[1] for e1 in self.graph.edges(u) for e2 in self.graph.edges(v) if e1[1] == e2[1]]
                     triangles = [(u, v, w) for w in ww]
@@ -126,7 +125,7 @@ class IcoSphere:
                         self.graph.add_edge(b, c)
                         self.graph.add_edge(c, a)
 
-    def create(self, global_mesh_recursion, local_mesh_recursion, polygons):
+    def create(self, global_mesh_recursion, local_mesh_recursion, idx, polygons):
         # Create 12 vertices of the icosahedron
         t = (1 + sqrt(5)) / 2
 
@@ -174,7 +173,7 @@ class IcoSphere:
             self.graph.add_edge(tri.v3, tri.v1)
 
         # Refine graph near shorelines
-        self.refine_shoreline_intersections(polygons, local_mesh_recursion)
+        self.refine_shoreline_intersections(idx, polygons, local_mesh_recursion)
 
         # Delete 3DPoint attribute since it is not needed anymore
         for node in self.graph.nodes:
@@ -183,29 +182,35 @@ class IcoSphere:
         return self.graph
 
 
-def node_x_polygon(n, geometries):
-    shapely_point = Point(n['lon_lat'][0], n['lon_lat'][1])
-    tree = STRtree(geometries)
-    intersected_exteriors = tree.query(shapely_point)
-    if intersected_exteriors:
-        for exterior in intersected_exteriors:
-            if shapely_point.intersects(exterior):
+def node_x_geometry(n, rtree_idx, geometries):
+    node_bounds = (n['lon_lat'][0], n['lon_lat'][1],
+                   n['lon_lat'][0], n['lon_lat'][1])
+
+    # Returns the geometry indices of the minimum bounding rectangles that intersect the bounding box of node n
+    mbr_intersections = rtree_idx.intersection(node_bounds)
+    if mbr_intersections:  # Create LineString if there is at least one minimum bounding rectangle intersection
+        shapely_point = Point(n['lon_lat'][0], n['lon_lat'][1])
+        for i in mbr_intersections:
+            if shapely_point.intersects(geometries[i]):
                 return True
     return False
 
 
-def edge_x_geometry(u, v, geometries):
-    shapely_line = LineString([u, v])
-    tree = STRtree(geometries)
-    intersected_geometries = tree.query(shapely_line)
-    if intersected_geometries:
-        for geometry in intersected_geometries:
-            if shapely_line.intersects(geometry):
+def edge_x_geometry(u, v, rtree_idx, geometries):
+    line_bounds = (min(u[0], v[0]), min(u[1], v[1]),
+                   max(u[0], v[0]), max(u[1], v[1]))
+
+    # Returns the geometry indices of the minimum bounding rectangles that intersect the bounding box of line u,v
+    mbr_intersections = rtree_idx.intersection(line_bounds)
+    if mbr_intersections:  # Create LineString if there is at least one minimum bounding rectangle intersection
+        shapely_line = LineString([u, v])
+        for i in mbr_intersections:
+            if shapely_line.intersects(geometries[i]):
                 return True
     return False
 
 
-def remove_nodes_x_polygons(graph, polygons):
+def remove_nodes_x_polygons(graph, idx, polygons):
     cnt = 0
     nr_nodes = len(graph.nodes)
     graph2 = deepcopy(graph)
@@ -216,12 +221,12 @@ def remove_nodes_x_polygons(graph, polygons):
             print('removing nodes:', round(cnt/nr_nodes, 2))
 
         # If node is in polygon, remove from graph
-        if node_x_polygon(node_data[1], polygons):
+        if node_x_geometry(node_data[1], idx, polygons):
             graph2.remove_node(node_data[0])
     return graph2
 
 
-def remove_edges_x_polygons(graph, polygons):
+def remove_edges_x_polygons(graph, idx, polygons):
     cnt = 0
     nr_edges = len(graph.edges)
     graph2 = deepcopy(graph)
@@ -240,7 +245,7 @@ def remove_edges_x_polygons(graph, polygons):
             continue
 
         # If edge intersects polygon exterior, remove from graph
-        if edge_x_geometry(u_pos, v_pos, polygons):
+        if edge_x_geometry(u_pos, v_pos, idx, polygons):
             graph2.remove_edge(u, v)
     return graph2
 
@@ -249,8 +254,8 @@ def plot_sphere(sphere):
     # 3D plot of unit sphere nodes
     fig = plt.figure()
     ax = Axes3D(fig)
-    pos = nx.get_node_attributes(sphere, 'xyz')
-    xyz = np.array([value for value in pos.values()])
+    xyz = nx.get_node_attributes(sphere, 'xyz')
+    xyz = np.array([value for value in xyz.values()])
     ax.scatter(xyz[:, 0], xyz[:, 1], xyz[:, 2], s=1, color='black')
     plt.show()
 
@@ -259,12 +264,12 @@ def plot_sphere_edges(sphere):
     # 3D plot of unit sphere edges
     fig = plt.figure()
     ax = Axes3D(fig)
-    pos = nx.get_node_attributes(sphere, 'pt_sphere')  # Plots nodes for which attribute 'pt_sphere' exists
+    xyz = nx.get_node_attributes(sphere, 'xyz')  # Plots nodes for which attribute 'pt_sphere' exists
     cnt = 0
     for edge in sphere.edges:
         cnt += 1
         print('plotting sphere edges', round(cnt/len(sphere.edges), 2))
-        u, v = pos[edge[0]], pos[edge[1]]
+        u, v = xyz[edge[0]], xyz[edge[1]]
         x = np.array([u[0], v[0]])
         y = np.array([u[1], v[1]])
         z = np.array([u[2], v[2]])
@@ -273,9 +278,9 @@ def plot_sphere_edges(sphere):
 
 
 def plot_grid(graph):
-    pos = nx.get_node_attributes(graph, 'lon_lat')
+    lon_lat = nx.get_node_attributes(graph, 'lon_lat')
     fig, ax = plt.subplots()
-    nx.draw(graph, pos=pos, node_size=5, ax=ax)
+    nx.draw(graph, pos=lon_lat, node_size=5, ax=ax)
     ax.tick_params(left=True, bottom=True, labelleft=True, labelbottom=True)
     plt.show()
 
@@ -285,12 +290,22 @@ shorelines = fiona.open(shorelines_shp_fp)
 polygon_list = [shape(polygon['geometry']) for polygon in iter(shorelines)]
 exterior_list = [shape(polygon['geometry']).exterior for polygon in iter(shorelines)]
 
+# Populate R-tree index with bounds of polygon exteriors
+exterior_rtree_idx = index.Index()
+for pos, exterior in enumerate(exterior_list):
+    exterior_rtree_idx.insert(pos, exterior.bounds)
+
+# Populate R-tree index with bounds of polygons
+polygon_rtree_idx = index.Index()
+for pos, polygon in enumerate(polygon_list):
+    polygon_rtree_idx.insert(pos, polygon.bounds)
+
 # G = nx.read_gpickle("final_d6_vd0.gpickle")
-G = IcoSphere().create(4, 0, exterior_list)
+G = IcoSphere().create(6, 0, exterior_rtree_idx, exterior_list)
 
 # Postprocessing graph
-G1 = remove_nodes_x_polygons(G, polygon_list)
-G2 = remove_edges_x_polygons(G1, polygon_list)
+G1 = remove_nodes_x_polygons(G, polygon_rtree_idx, polygon_list)
+G2 = remove_edges_x_polygons(G1, polygon_rtree_idx, polygon_list)
 
 # Remove isolate nodes
 G2_copy = deepcopy(G2)
@@ -310,6 +325,7 @@ for e in G2.edges():
 # # for component in connected_components[1:]:
 # #     grid_import.remove_nodes_from(component)
 
-nx.write_gpickle(G2, "final_d4_vd0.gpickle")
+nx.write_gpickle(G2, "output/final_d6_vd0.gpickle")
+# plot_sphere_edges(G2)
 
 
