@@ -40,7 +40,7 @@ def plot_on_gshhs(route):
                  color='blue', linewidth=1, marker='o', markersize=3, transform=ccrs.PlateCarree())
 
 
-# with open('C:/dev/projects/naval_route_planner/output/graph_route', 'rb') as f:
+# with open('C:/dev/projects/naval_route_planner/output/pareto_solutions01', 'rb') as f:
 #     pareto_solutions = pickle.load(f)
-# plot_on_gshhs(pareto_solutions)
+# plot_on_gshhs(pareto_solutions[0])
 # plt.show()
