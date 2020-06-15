@@ -8,7 +8,7 @@ def arc_length(xyz1, xyz2):
     return 3440 * acos(sum(p * q for p, q in zip(xyz1, xyz2)))
 
 
-def graph_route(start, end, vessel):
+def graph_route(container, start, end, vessel):
     # Load the graph file
     G = nx.read_gpickle("output/final_d6_vd0.gpickle")
 
@@ -32,21 +32,17 @@ def graph_route(start, end, vessel):
     # Calculate shortest path
     path = nx.shortest_path(G, 'start', 'end', weight='miles', method='dijkstra')
 
-    waypoints = np.asarray([[G.nodes[node]['lon_lat'][0], G.nodes[node]['lon_lat'][1]] for node in path])
+    waypoints = [(G.nodes[node]['lon_lat'][0], G.nodes[node]['lon_lat'][1]) for node in path]
     speeds = np.asarray([vessel.speeds[0]] * (len(path) - 1) + [None])
-    individual = np.empty([len(path), 3])
-    individual[:, 0:2] = waypoints
-    individual[:, 2] = speeds
-    return individual
+    individual_list = []
+    for i, waypoint in enumerate(waypoints):
+        individual_list.append([waypoint, speeds[i]])
+    return container(individual_list)
 
 
-def init_individual(container, toolbox, graph_ind):
+def init_individual(toolbox, graph_ind):
     # Mutate graph route to obtain a population of initial routes
     init_ind = toolbox.clone(graph_ind)
-    mutations = 0
-    while True:
-        if mutations > max(10, len(init_ind) // 20):
-            break
-        init_ind = toolbox.mutate(init_ind)
-        mutations += 1
-    return container(init_ind)
+    for i in range(max(10, len(init_ind) // 10)):
+        toolbox.mutate(init_ind)
+    return init_ind
