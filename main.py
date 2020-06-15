@@ -131,7 +131,7 @@ def main(seed=None):
 
 
 if __name__ == "__main__":
-    population, statistics = main()
+    population, statistics = main(1)
     population.sort(key=lambda x: x.fitness.values)
 
     output_file_name = 'sorted_population1'
