@@ -20,7 +20,7 @@ from shapely.prepared import prep
 max_distance = 200  # nautical miles
 width_ratio = 0.5
 # swaps = ['insert', 'move', 'delete', 'speed']
-swaps = ['delete']
+swaps = ['insert', 'move', 'delete']
 
 # Vessel characteristics
 vessel_name = 'Fairmaster'
@@ -44,24 +44,24 @@ creator.create("FitnessMin", base.Fitness, weights=(-1.0, -1.0))
 creator.create("Individual", np.ndarray, fitness=creator.FitnessMin)
 
 toolbox = base.Toolbox()
-toolbox.register("edge_feasible", solution.edge_x_geometry, rtree_idx, polygons)
+toolbox.register("edge_feasible", solution.edge_feasible, rtree_idx, polygons, max_distance)
 toolbox.register("insert", mutation.insert_waypoint, toolbox)
-toolbox.register("evaluate", solution.evaluate)
-toolbox.register("individual", init.init_individual, creator.Individual, toolbox, init.graph_route(start, end, vessel), max_distance)
-toolbox.register("population", tools.initRepeat, list, toolbox.individual)
-toolbox.register("mate", recombination.crossover, toolbox, max_distance)
-toolbox.register("select", tools.selNSGA2)
-toolbox.register("delete", mutation.delete_random_waypoint, toolbox, max_distance)
+toolbox.register("delete", mutation.delete_random_waypoint, toolbox)
 toolbox.register("speed", mutation.change_speed, vessel)
 toolbox.register("move", mutation.move_waypoint, toolbox)
+toolbox.register("evaluate", solution.evaluate, vessel)
+toolbox.register("mate", recombination.crossover, toolbox,)
+toolbox.register("select", tools.selNSGA2)
 toolbox.register("mutate", mutation.mutate, toolbox, swaps)
+toolbox.register("individual", init.init_individual, creator.Individual, toolbox, init.graph_route(start, end, vessel))
+toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
 
 def main(seed=None):
     random.seed(seed)
 
-    NGEN = 50
-    MU = 40
+    NGEN = 500
+    MU = 16
     CXPB = 0.9
 
     stats = tools.Statistics(lambda ind: ind.fitness.values)
@@ -87,7 +87,7 @@ def main(seed=None):
 
     record = stats.compile(pop)
     logbook.record(gen=0, evals=len(invalid_ind), **record)
-    print(logbook.stream)
+    # print(logbook.stream)
 
     # Begin the generational process
     for gen in range(1, NGEN):
@@ -98,11 +98,9 @@ def main(seed=None):
         for ind1, ind2 in zip(offspring[::2], offspring[1::2]):
             if random.random() <= CXPB:
                 toolbox.mate(ind1, ind2)
-
-            ind1 = toolbox.mutate(ind1)
-            ind2 = toolbox.mutate(ind2)
+            toolbox.mutate(ind1)
+            toolbox.mutate(ind2)
             del ind1.fitness.values, ind2.fitness.values
-
         # Evaluate the individuals with an invalid fitness
         invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
         fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
@@ -128,16 +126,14 @@ if __name__ == "__main__":
     with open('output/' + output_file_name, 'wb') as file:
         pickle.dump(population, file)
 
-    print(statistics)
-
-    import matplotlib.pyplot as plt
-    import numpy
-
-    front = numpy.array([ind.fitness.values for ind in population])
-    plt.scatter(front[:, 0], front[:, 1], c="b")
-    plt.axis("tight")
+    # print(statistics)
 
     # Plot first individual of population
     print(population[0].fitness.values)
-    plot_on_gshhs(population[0])
+    plot_on_gshhs(population[-1])
     plt.show()
+
+    front = np.array([ind.fitness.values for ind in population])
+    plt.scatter(front[:, 0], front[:, 1], c="b")
+    plt.axis("tight")
+

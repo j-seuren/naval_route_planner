@@ -48,7 +48,7 @@ def insert_waypoint(toolbox, individual, width_ratio=0.5, e=False):
         return individual
 
 
-def delete_random_waypoint(toolbox, max_distance, individual):
+def delete_random_waypoint(toolbox, individual):
     waypoints = [[i, wp] for i, wp in enumerate(individual[:, 0:2])][1:-1]
     random.shuffle(waypoints)
     while waypoints:
@@ -59,12 +59,14 @@ def delete_random_waypoint(toolbox, max_distance, individual):
         pre, nex = individual[wp_idx-1, 0:2], individual[wp_idx+1, 0:2]
 
         # Check if edge is greater than max distance or intersects a polygon
-        if haversine((pre[0], pre[1]), (nex[0], nex[1])) > max_distance or not toolbox.edge_feasible(pre, nex):
+        if haversine((pre[0], pre[1]), (nex[0], nex[1]), unit='nmi') > 9999 \
+                or not toolbox.edge_feasible(pre, nex):
             continue
 
-        np.delete(individual, wp_idx, axis=0)
+        individual = np.delete(individual, wp_idx, axis=0)
         return individual
-    print("No waypoint deleted")
+    # print('No wp deleted')
+    return individual
 
 
 def change_speed(vessel, individual):
@@ -100,8 +102,8 @@ def move_waypoint(toolbox, individual, wp=False, radius=0.01):
 
 def mutate(toolbox, swaps, individual):
     mutations = random.randint(1, 20)
-
-    for i in range(mutations):
+    i = 0
+    while i < mutations:
         swap = random.choice(swaps)
         if swap == 'insert':
             individual = toolbox.insert(individual)
@@ -109,8 +111,9 @@ def mutate(toolbox, swaps, individual):
             # wp = random.choice(self.waypoints[1:-1])
             individual = toolbox.move(individual)
         elif swap == 'delete':
-            individual = toolbox.move(individual)
+            individual = toolbox.delete(individual)
         elif swap == 'speed':
             individual = toolbox.speed(individual)
+        i += 1
 
     return individual

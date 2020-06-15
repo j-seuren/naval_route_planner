@@ -40,17 +40,13 @@ def graph_route(start, end, vessel):
     return individual
 
 
-def init_individual(container, toolbox, graph_ind, max_distance):
+def init_individual(container, toolbox, graph_ind):
     # Mutate graph route to obtain a population of initial routes
-    init_ind = graph_ind[:]
-    waypoints_inserted = 0
+    init_ind = toolbox.clone(graph_ind)
+    mutations = 0
     while True:
-        longest_edge, longest_edge_distance = toolbox.evaluate(init_ind, return_longest_edge=True)
-
-        # At least add 10 waypoints and make sure there exist no long edges
-        if longest_edge_distance < max_distance and waypoints_inserted > 10:
+        if mutations > max(10, len(init_ind) // 20):
             break
-        init_ind = toolbox.insert(init_ind, longest_edge)
-        waypoints_inserted += 1
-
+        init_ind = toolbox.mutate(init_ind)
+        mutations += 1
     return container(init_ind)

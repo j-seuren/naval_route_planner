@@ -2,14 +2,28 @@ from haversine import haversine
 from shapely.geometry import LineString
 
 
+distances_cache = dict()
+
+
 def evaluate(vessel, individual, return_longest_edge=False):  # Add memory
+    global distances_cache
     distance = 0
     fuel_consumption = 0
     travel_time = 0
     longest_edge = 0
     longest_edge_distance = 0
     for i in range(len(individual) - 1):
-        edge_distance = haversine(individual[i, 0:2], individual[i+1, 0:2], unit='nmi')
+        u = individual[i, 0:2]
+        v = individual[i+1, 0:2]
+        if u[0] < v[0]:
+            key = (u[0], u[1], v[0], v[1])
+        else:
+            key = (v[0], v[1], u[0], u[1])
+        if key in distances_cache:
+            edge_distance = distances_cache[key]
+        else:
+            edge_distance = haversine((v[0], v[1]), (u[0], u[1]), unit='nmi')
+            distances_cache[key] = edge_distance
         distance += edge_distance
         if not return_longest_edge:
             edge_travel_time = edge_distance / individual[i, 2]  # Hours
@@ -29,7 +43,21 @@ def evaluate(vessel, individual, return_longest_edge=False):  # Add memory
         return travel_time, fuel_consumption
 
 
-def edge_x_geometry(rtree_idx, geometries, u, v):
+def edge_feasible(rtree_idx, prep_geoms, max_distance, u, v):
+    global distances_cache
+
+    if u[0] < v[0]:
+        key = (u[0], u[1], v[0], v[1])
+    else:
+        key = (v[0], v[1], u[0], u[1])
+    if key in distances_cache:
+        distance = distances_cache[key]
+    else:
+        distance = haversine((v[0], v[1]), (u[0], u[1]), unit='nmi')
+        distances_cache[key] = distance
+    if distance > max_distance:
+        return False
+
     u_x, u_y = float(u[0]), float(u[1])
     v_x, v_y = float(v[0]), float(v[1])
     line_bounds = (min(u_x, v_x), min(u_y, v_y),
@@ -40,6 +68,6 @@ def edge_x_geometry(rtree_idx, geometries, u, v):
     if mbr_intersections:  # Create LineString if there is at least one minimum bounding rectangle intersection
         shapely_line = LineString([(u[0], u[1]), (v[0], v[1])])
         for i in mbr_intersections:
-            if geometries[i].intersects(shapely_line):
+            if prep_geoms[i].intersects(shapely_line):
                 return False
-    return False
+    return True
