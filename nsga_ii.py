@@ -88,9 +88,8 @@ def recombination(population, rtree_idx, polygons, offspring_size, max_distance,
     return offspring
 
 
-def nsga_ii(parents, vessel, rtree_idx, polygons, offspring_size, max_gen, max_distance):
+def nsga_ii(parents, vessel, rtree_idx, polygons, offspring_size, max_gen, max_distance, swaps):
     gen_no = 0
-    swaps = ['insert', 'move', 'delete', 'speed']
     pop_size = len(parents)
 
     while gen_no < max_gen:
@@ -98,7 +97,7 @@ def nsga_ii(parents, vessel, rtree_idx, polygons, offspring_size, max_gen, max_d
 
         # Evaluate objective values
         travel_times = [solution.travel_time for solution in parents]
-        print('Value: ', sum(travel_times) / len(travel_times))
+        print('Value: ', min(travel_times), sum(travel_times) / len(travel_times))
         fuels = [solution.fuel_consumption for solution in parents]
 
         # Non dominated sorting of solutions.

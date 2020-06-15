@@ -16,7 +16,7 @@ def arc_length(xyz1, xyz2):
 
 
 # Generate as set of initial solutions
-def initialization(start, end, vessel, population_size, rtree_idx, polygons, max_distance):
+def initialization(start, end, vessel, population_size, rtree_idx, polygons, max_distance, swaps):
     # Load the graph file
     G = nx.read_gpickle("output/final_d6_vd0.gpickle")
 
@@ -73,9 +73,10 @@ def initialization(start, end, vessel, population_size, rtree_idx, polygons, max
             longest_edge = max(init_route.edges, key=attrgetter('miles'))
 
             # At least add 10 waypoints and make sure there exist no long edges
-            if longest_edge.miles < max_distance and waypoints_inserted > 10:
+            # if longest_edge.miles < max_distance and waypoints_inserted > 10:
+            if waypoints_inserted > max(20, len(init_route.waypoints) // 10):
                 break
-            init_route.insert_waypoint(0.5, rtree_idx, polygons, vessel, longest_edge)
+            init_route.mutate(rtree_idx, polygons, swaps, vessel, max_distance)
             waypoints_inserted += 1
         initial_routes.append(init_route)
 

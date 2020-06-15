@@ -1,8 +1,11 @@
 # Importing required modules
+import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+import pickle
 import random
 import fiona
+from plot.plot_on_GSHHS import plot_on_gshhs
 from initialization import initialization
 from shapely.geometry import shape
 from shapely.prepared import prep
@@ -21,6 +24,7 @@ max_gen = 500
 start_weight = 40
 max_no_impr = 5
 max_edge_length = 200  # nautical miles
+swaps = ['insert', 'move', 'delete']
 
 # Vessel characteristics
 vessel_name = 'Fairmaster'
@@ -46,23 +50,26 @@ for pos, polygon in enumerate(polygons):
     rtree_idx.insert(pos, polygon.bounds)
 
 # Initialize population
-initial_pop = initialization(start, end, vessel, pop_size, rtree_idx, prepared_polygons, max_edge_length)
+initial_pop = initialization(start, end, vessel, pop_size, rtree_idx, prepared_polygons, max_edge_length, swaps)
 
 population, fronts = nsga_ii(initial_pop, vessel, rtree_idx, prepared_polygons, offspring_size, max_gen,
-                             max_edge_length)
+                             max_edge_length, swaps)
 
-# # Get solutions from pareto front
-# pareto_front = fronts[0]
-# pareto_solutions = []
-# for solution_index in pareto_front:
-#     pareto_solutions.append(population[solution_index])
-#
-# # Save solutions
-# output_file_name = 'pareto_solutions01'
-# with open('output/' + output_file_name, 'wb') as file:
-#     pickle.dump(pareto_solutions, file)
-#
-# print('Save to: ' + output_file_name)
+# Get solutions from pareto front
+pareto_front = fronts[0]
+pareto_solutions = []
+for solution_index in pareto_front:
+    pareto_solutions.append(population[solution_index])
+
+# Save solutions
+output_file_name = 'pareto_solutions01'
+with open('output/' + output_file_name, 'wb') as file:
+    pickle.dump(pareto_solutions, file)
+
+print('Save to: ' + output_file_name)
+
+plot_on_gshhs(pareto_solutions[0])
+
 #
 # # Evaluate pareto objective values
 # travel_times = [solution.travel_time for solution in pareto_solutions]
@@ -75,4 +82,4 @@ population, fronts = nsga_ii(initial_pop, vessel, rtree_idx, prepared_polygons, 
 # plt.xlabel('Travel time [hours]', fontsize=15)
 # plt.ylabel('Fuel consumption [tons]', fontsize=15)
 # plt.scatter(function1, function2)
-# plt.show()
+plt.show()

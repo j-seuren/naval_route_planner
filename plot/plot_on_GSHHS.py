@@ -39,8 +39,8 @@ def plot_on_gshhs(route):
         plt.plot([e[0][0], e[1][0]], [e[0][1], e[1][1]],
                  color='blue', linewidth=1, marker='o', markersize=3, transform=ccrs.PlateCarree())
 
-
-# with open('C:/dev/projects/naval_route_planner/output/pareto_solutions01', 'rb') as f:
-#     pareto_solutions = pickle.load(f)
-# plot_on_gshhs(pareto_solutions[0])
-# plt.show()
+if __name__ == '__main__':
+    with open('C:/dev/projects/naval_route_planner/output/pareto_solutions01', 'rb') as f:
+        pareto_solutions = pickle.load(f)
+    plot_on_gshhs(pareto_solutions[0])
+    plt.show()
