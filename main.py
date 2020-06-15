@@ -1,5 +1,4 @@
 import matplotlib.pyplot as plt
-import classes
 import fiona
 import init
 import mutation
@@ -17,6 +16,14 @@ from rtree import index
 from shapely.geometry import shape
 from shapely.prepared import prep
 
+
+class Vessel:
+    def __init__(self, name, speeds, fuel_rates):
+        self.name = name
+        self.speeds = speeds
+        self.fuel_rates = fuel_rates
+
+
 max_distance = 200  # nautical miles
 width_ratio = 0.5
 # swaps = ['insert', 'move', 'delete', 'speed']
@@ -27,7 +34,7 @@ vessel_name = 'Fairmaster'
 table = pd.read_excel('C:/dev/data/speed_table.xlsx', sheet_name=vessel_name)
 speeds = [round(speed, 1) for speed in table['Speed']]
 fuel_rates = {speed: round(table['Fuel'][i], 1) for i, speed in enumerate(speeds)}
-vessel = classes.Vessel(vessel_name, speeds, fuel_rates)
+vessel = Vessel(vessel_name, speeds, fuel_rates)
 
 # Route characteristics and navigation area
 start, end = (-5.352121, 48.021295), (53.131866, 13.521350)  # (longitude, latitude)
@@ -61,8 +68,8 @@ def main(seed=None):
     random.seed(seed)
 
     NGEN = 500
-    MU = 16
-    CXPB = 0.9
+    MU = 20
+    CXPB = 1
 
     stats = tools.Statistics(lambda ind: ind.fitness.values)
     stats.register("avg", np.mean, axis=0)
