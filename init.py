@@ -43,6 +43,6 @@ def graph_route(container, start, end, vessel):
 def init_individual(toolbox, graph_ind):
     # Mutate graph route to obtain a population of initial routes
     init_ind = toolbox.clone(graph_ind)
-    for i in range(max(10, len(init_ind) // 10)):
-        toolbox.mutate(init_ind)
+    for i in range(max(100, len(init_ind))):
+        toolbox.mutate(init_ind, check_feasible=True)
     return init_ind

@@ -3,7 +3,7 @@ import numpy as np
 from math import sqrt, pi, cos, sin
 
 
-def insert_waypoint(toolbox, width_ratio, individual):
+def insert_waypoint(toolbox, width_ratio, individual, initializing):
     e = random.randint(0, len(individual) - 2)
     u_tup, v_tup = individual[e][0], individual[e+1][0]
     u, v = np.asarray(u_tup), np.asarray(v_tup)
@@ -39,68 +39,83 @@ def insert_waypoint(toolbox, width_ratio, individual):
         new_wp = u + random.random() * v1 + random.random() * v2  # Random point in quadrilateral
         new_wp_tup = (new_wp[0], new_wp[1])
 
-        if toolbox.edge_feasible(u_tup, new_wp_tup) and toolbox.edge_feasible(new_wp_tup, v_tup):
-            # Insert waypoint
-            individual.insert(e+1, [new_wp_tup, individual[e][1]])
-            return
+        if initializing and (not toolbox.edge_feasible(u_tup, new_wp_tup) or
+                             not toolbox.edge_feasible(new_wp_tup, v_tup)):
+            continue
+        # Insert waypoint
+        individual.insert(e+1, [new_wp_tup, individual[e][1]])
+        return
 
 
-def move_waypoints(toolbox, radius, individual):
-    wp_idx = random.randint(1, len(individual)-2)
-    wp = individual[wp_idx][0]
-    wp_arr = np.asarray(wp)
-    while True:
-        # Pick a random location within a radius from the current waypoint
-        u1, u2 = random.random(), random.random()
-        r = radius * sqrt(u2)  # Square root for a uniform probability of choosing a point in the circle
-        a = u1 * 2 * pi
-        c_s = np.array([cos(a), sin(a)])
-        new_wp_arr = wp_arr + r * c_s
-        new_wp = (new_wp_arr[0], new_wp_arr[1])
+def move_waypoints(toolbox, radius, individual, initializing):
+    if len(individual) < 3:
+        print('move')
+        return
+    n_waypoints = random.randint(1, len(individual) - 2)
+    if initializing:
+        n_waypoints = 1
+    first = random.randrange(1, len(individual) - n_waypoints)
+    for wp_idx in range(first, first + n_waypoints):
+        wp = individual[wp_idx][0]
+        wp_arr = np.asarray(wp)
+        while True:
+            # Pick a random location within a radius from the current waypoint
+            u1, u2 = random.random(), random.random()
+            r = radius * sqrt(u2)  # Square root for a uniform probability of choosing a point in the circle
+            a = u1 * 2 * pi
+            c_s = np.array([cos(a), sin(a)])
+            new_wp_arr = wp_arr + r * c_s
+            new_wp = (new_wp_arr[0], new_wp_arr[1])
 
-        # Check if waypoint and edges do not intersect a polygon
-        if toolbox.edge_feasible(individual[wp_idx-1][0], new_wp) \
-                and toolbox.edge_feasible(new_wp, individual[wp_idx+1][0]):
+            # Check if waypoint and edges do not intersect a polygon
+            if initializing and (not toolbox.edge_feasible(individual[wp_idx - 1][0], new_wp) or
+                                 not toolbox.edge_feasible(new_wp, individual[wp_idx+1][0])):
+                continue
+
             individual[wp_idx][0] = new_wp
+            break
+    return
+
+
+def delete_random_waypoints(toolbox, individual, initializing):
+    if len(individual) < 3:
+        print('del')
+        return
+    distance, maxx = toolbox.distance(individual)
+    n_waypoints_range = list(range(1, max(1, len(individual) - int(distance / maxx))))
+    random.shuffle(n_waypoints_range)
+    while n_waypoints_range:
+        n_waypoints = n_waypoints_range.pop()
+        if initializing:
+            n_waypoints = 1
+        index_range = list(range(1, len(individual) - n_waypoints))
+        random.shuffle(index_range)
+        while index_range:
+            first = index_range.pop()
+            # Check if edge is feasible
+            if not toolbox.edge_feasible(individual[first-1][0], individual[first + n_waypoints][0]):  # check_feasible
+                continue
+            del individual[first:first + n_waypoints]
             return
-
-
-def delete_random_waypoint(toolbox, individual):
-    waypoints = [[i, row[0]] for i, row in enumerate(individual)][1:-1]
-    random.shuffle(waypoints)
-    while waypoints:
-        # Pop waypoint from shuffled list and get its index
-        wp_idx, wp = waypoints.pop()
-
-        # Create new edge
-        pre, nex = individual[wp_idx-1][0], individual[wp_idx+1][0]
-
-        # Check if edge is greater than max distance or intersects a polygon
-        if toolbox.edge_feasible(pre, nex):
-            del individual[wp_idx]
-            return True
-    return False
+    return
 
 
 def change_speed(vessel, individual):
-    n_edges = random.randint(2, len(individual) - 1)
+    n_edges = random.randint(1, len(individual) - 1)
     first = random.randrange(len(individual) - n_edges)
-    new_speed = random.choice([speed for speed in vessel.speeds])
+    new_speed = random.choice([speed for speed in vessel.speeds if speed])
     for item in individual[first:first + n_edges]:
         item[1] = new_speed
     return
 
 
-def mutate(toolbox, swaps, individual):
-    for i in range(random.randint(1, len(individual))):
-        swap = random.choice(swaps)
-        if swap == 'insert':
-            toolbox.insert(individual)
-        elif swap == 'move':
-            toolbox.move(individual)
-        elif swap == 'delete':
-            wp_deleted = toolbox.delete(individual)
-            if not wp_deleted:
-                toolbox.insert(individual)
-        elif swap == 'speed':
-            toolbox.speed(individual)
+def mutate(toolbox, swaps, individual, check_feasible=False):
+    swap = random.choice(swaps)
+    if swap == 'insert':
+        toolbox.insert(individual, check_feasible)
+    elif swap == 'move':
+        toolbox.move(individual, check_feasible)
+    elif swap == 'delete':
+        toolbox.delete(individual, check_feasible)
+    elif swap == 'speed':
+        toolbox.speed(individual)
