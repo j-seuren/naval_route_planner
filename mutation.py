@@ -1,3 +1,6 @@
+from itertools import groupby
+from operator import itemgetter
+import functools
 import random
 import numpy as np
 from math import sqrt, pi, cos, sin
@@ -77,26 +80,34 @@ def move_waypoints(toolbox, radius, individual, initializing):
     return
 
 
-def delete_random_waypoints(toolbox, individual, initializing):
+def star(f):
+    @functools.wraps(f)
+    def f_inner(args):
+        return f(*args)
+    return f_inner
+
+
+def delete_random_waypoints(toolbox, individual):
     if len(individual) < 3:
         print('del')
         return
-    distance, maxx = toolbox.distance(individual)
-    n_waypoints_range = list(range(1, max(1, len(individual) - int(distance / maxx))))
-    random.shuffle(n_waypoints_range)
-    while n_waypoints_range:
-        n_waypoints = n_waypoints_range.pop()
-        if initializing:
-            n_waypoints = 1
-        index_range = list(range(1, len(individual) - n_waypoints))
-        random.shuffle(index_range)
-        while index_range:
-            first = index_range.pop()
-            # Check if edge is feasible
-            if not toolbox.edge_feasible(individual[first-1][0], individual[first + n_waypoints][0]):  # check_feasible
-                continue
-            del individual[first:first + n_waypoints]
-            return
+    to_be_deleted = sorted(random.sample(range(1, len(individual)-1), k=random.randint(1, len(individual)-2)))
+    while to_be_deleted:
+        # Group consecutive waypoints
+        tbd_copy = to_be_deleted[:]
+        for k, g in groupby(enumerate(tbd_copy), key=star(lambda u, x: u - x)):
+            consecutive_nodes = list(map(itemgetter(1), g))
+            first = consecutive_nodes[0]
+            last = consecutive_nodes[-1]
+
+            # If to be created edge is not feasible, remove to be deleted nodes from list
+            if not toolbox.edge_feasible(individual[first-1][0], individual[last+1][0]):
+                del to_be_deleted[to_be_deleted.index(first):to_be_deleted.index(last) + 1]
+
+        # Delete waypoints
+        for i, element in enumerate(to_be_deleted):
+            del individual[element - i]
+        return
     return
 
 
@@ -116,6 +127,6 @@ def mutate(toolbox, swaps, individual, check_feasible=False):
     elif swap == 'move':
         toolbox.move(individual, check_feasible)
     elif swap == 'delete':
-        toolbox.delete(individual, check_feasible)
+        toolbox.delete(individual)
     elif swap == 'speed':
         toolbox.speed(individual)
