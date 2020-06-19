@@ -1,6 +1,7 @@
 output/
 oud/
 netCDF/
+profiles/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
