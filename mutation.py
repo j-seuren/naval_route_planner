@@ -120,12 +120,12 @@ def change_speed(vessel, individual):
     return
 
 
-def mutate(toolbox, swaps, individual, check_feasible=False):
-    swap = random.choice(swaps)
+def mutate(toolbox, mutation_ops, individual, initializing=False):
+    swap = random.choice(mutation_ops)
     if swap == 'insert':
-        toolbox.insert(individual, check_feasible)
+        toolbox.insert(individual, initializing)
     elif swap == 'move':
-        toolbox.move(individual, check_feasible)
+        toolbox.move(individual, initializing)
     elif swap == 'delete':
         toolbox.delete(individual)
     elif swap == 'speed':
