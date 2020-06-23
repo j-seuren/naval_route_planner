@@ -5,13 +5,8 @@ import netCDF4
 import numpy as np
 import operator
 import os
-import pandas as pd
-import pickle
-import scipy
 
 from datetime import datetime
-from deap import base, creator
-from haversine import haversine
 from math import copysign, sqrt
 from mpl_toolkits import basemap
 
