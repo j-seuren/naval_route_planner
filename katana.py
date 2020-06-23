@@ -62,6 +62,28 @@ def plot_geometries(geometries):
     ax.add_geometries(geometries, ccrs.PlateCarree(), facecolor='lightgray', edgecolor='black')
 
 
+def get_split_polygons(res, threshold):
+    GSHHS_dir = 'C:/dev/data/gshhg-shp-2.3.7/GSHHS_shp'
+    geometries = [shape(shoreline['geometry']) for shoreline in
+                  iter(fiona.open(GSHHS_dir + '/{0}/GSHHS_{0}_L1.shp'.format(res)))]
+
+    # Compute split polygons
+    split_polys = split_polygons(geometries, threshold)
+
+    # Save result
+    output_fn = 'split_polygons/res_{0}_treshold_{1}'.format(res, threshold)
+    try:
+        with open('output/' + output_fn, 'wb') as f:
+            pickle.dump(split_polys, f)
+    except FileNotFoundError:
+        os.mkdir('output/split_polygons')
+        with open('output/' + output_fn, 'wb') as f:
+            pickle.dump(split_polys, f)
+    print('Saved to: output/{}'.format(output_fn))
+
+    return split_polys
+
+
 if __name__ == '__main__':
     resolution = 'c'
     max_poly_size = 9
