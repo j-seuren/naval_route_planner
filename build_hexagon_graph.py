@@ -3,13 +3,14 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import fiona
+import pickle
 from mpl_toolkits.mplot3d import Axes3D
 from math import atan2, degrees, acos, sqrt, radians, cos, sin
 from shapely.geometry import shape, Point, LineString
 from shapely.prepared import prep
-from copy import deepcopy
 from rtree import index
 from heapq import nsmallest
+from katana import get_split_polygons
 
 
 class Triangle:
@@ -69,67 +70,8 @@ class IcoSphere:
         self.middle_point_cache[key] = i
         return i
 
-    # def refine_shoreline_intersections(self, idx, polygons, local_mesh_recursion):
-    #     for i in range(local_mesh_recursion):
-    #         cnt = 0
-    #         nr_edges = len(self.graph.edges)
-    #         graph = deepcopy(self.graph)
-    #         for edge in graph.edges():
-    #             # Print progress
-    #             cnt += 1
-    #             if cnt % 100 == 0:
-    #                 print('refining. Level:', i + 1, local_mesh_recursion, 'edge', round(cnt/nr_edges, 2))
-    #
-    #             # Get indices and long/lat positions of nodes from current edge
-    #             u, v = edge[0], edge[1]
-    #             u_pos, v_pos = self.graph.nodes[u]['lon_lat'], self.graph.nodes[v]['lon_lat']
-    #
-    #             # Skip border edges since they always intersect polygons in a 2D grid map
-    #             if abs(u_pos[0] - v_pos[0]) > 340:  # FIND ALTERNATIVE. Transform polygons to spherical coordinates?
-    #                 continue
-    #
-    #             # If edge crosses a polygon exterior, refine two adjacent triangles
-    #             if edge_x_geometry(u_pos, v_pos, idx, polygons):
-    #                 # Get adjacent triangles of intersected edge
-    #                 ww = [e1[1] for e1 in self.graph.edges(u) for e2 in self.graph.edges(v) if e1[1] == e2[1]]
-    #                 triangles = [(u, v, w) for w in ww]
-    #
-    #                 # Find middle point of edge u,v and add node and edges to graph
-    #                 a = self.get_middle_point(u, v)
-    #                 if not self.graph.has_node(a):
-    #                     # Subdivide edge into two equal edges
-    #                     self.graph.remove_edge(u, v)
-    #                     self.graph.add_edge(u, a)
-    #                     self.graph.add_edge(a, v)
-    #
-    #                 # Subdivide each triangle into four equal triangles
-    #                 for tri in triangles:
-    #                     # Get index of third point of triangle u,v,w
-    #                     w = tri[2]
-    #
-    #                     # Find middle point of edge v,w and add node and edges to graph
-    #                     b = self.get_middle_point(v, w)
-    #                     if not self.graph.has_node(b):
-    #                         # Subdivide edge into two equal edges
-    #                         self.graph.remove_edge(v, w)
-    #                         self.graph.add_edge(v, b)
-    #                         self.graph.add_edge(b, w)
-    #
-    #                     # Find middle point of edge w,u and add node and edges to graph
-    #                     c = self.get_middle_point(w, u)
-    #                     if not self.graph.has_node(b):
-    #                         # Subdivide edge into two equal edges
-    #                         self.graph.remove_edge(w, u)
-    #                         self.graph.add_edge(w, c)
-    #                         self.graph.add_edge(c, u)
-    #
-    #                     # Add inner edges of subdivided triangle
-    #                     self.graph.add_edge(a, b)
-    #                     self.graph.add_edge(b, c)
-    #                     self.graph.add_edge(c, a)
-
     def refine_shoreline_intersections(self, idx, polygons, local_mesh_recursion):
-        graph = deepcopy(self.graph)
+        graph = self.graph.copy()
         for edge in graph.edges():
             # Get indices and long/lat positions of nodes from current edge
             u, v = edge[0], edge[1]
@@ -227,7 +169,7 @@ class IcoSphere:
 
             faces = faces2
 
-        # Now add triangles to mesh
+        # Add triangles to mesh
         for tri in faces:
             self.graph.add_edge(tri.v1, tri.v2)
             self.graph.add_edge(tri.v2, tri.v3)
@@ -241,6 +183,11 @@ class IcoSphere:
             del self.graph.nodes[node]['point']
 
         return self.graph
+
+
+# Distance function
+def arc_length(xyz1, xyz2):
+    return 3440 * acos(sum(p * q for p, q in zip(xyz1, xyz2)))
 
 
 def node_x_geometry(n, rtree_idx, geometries):
@@ -274,7 +221,7 @@ def edge_x_geometry(u, v, rtree_idx, geometries):
 def remove_nodes_x_polygons(graph, idx, polygons):
     cnt = 0
     nr_nodes = len(graph.nodes)
-    graph2 = deepcopy(graph)
+    graph2 = graph.copy
     for node_data in graph.nodes(data=True):
         # Printing progress
         cnt += 1
@@ -290,7 +237,7 @@ def remove_nodes_x_polygons(graph, idx, polygons):
 def remove_edges_x_polygons(graph, idx, polygons):
     cnt = 0
     nr_edges = len(graph.edges)
-    graph2 = deepcopy(graph)
+    graph2 = graph.copy
     for edge_data in graph.edges(data=True):
         # Printing progress
         cnt += 1
@@ -343,91 +290,109 @@ def plot_grid(graph):
     ax.tick_params(left=True, bottom=True, labelleft=True, labelbottom=True)
 
 
+def get_graph(res, d, vd, split_polygons, polygon_rtree_idx):
+    try:
+        G = nx.read_gpickle("output/variable_density_geodesic_grids/res_{}_d{}_vd{}.gpickle".format(res, d, vd))
+    except FileNotFoundError:
+        coastlines = fiona.open('C:/dev/data/gshhg-shp-2.3.7/GSHHS_shp/{0}/GSHHS_{0}_L1.shp'.format(res))
+        polygons = [shape(polygon['geometry']) for polygon in iter(coastlines)]
+        exteriors = [polygon.exterior for polygon in polygons]
+        prepared_exteriors = [prep(exterior) for exterior in exteriors]
+
+        # Populate R-tree index with bounds of polygon exteriors
+        exterior_rtree_idx = index.Index()
+        for pos, exterior in enumerate(exteriors):
+            exterior_rtree_idx.insert(pos, exterior.bounds)
+
+        # Get refined graph
+        G = IcoSphere().create(d, vd, exterior_rtree_idx, prepared_exteriors)
+
+        # Postprocessing graph
+        G = remove_nodes_x_polygons(G, polygon_rtree_idx, split_polygons)
+        G = remove_edges_x_polygons(G, polygon_rtree_idx, split_polygons)
+
+        # Create canal nodes
+        G.add_node('panama_south', lon_lat=(-79.540932, 8.894197))
+        G.add_node('panama_north', lon_lat=(-79.919005, 9.391057))
+        G.add_node('suez_south', lon_lat=(32.5164, 29.9159))
+        G.add_node('suez_north', lon_lat=(32.3678, 31.2678))
+        G.add_node('dardanelles_south', lon_lat=(26.1406, 40.0136))
+        G.add_node('dardanelles_north', lon_lat=(26.9961, 40.4861))
+
+        canals = {'Panama': ('panama_south', 'panama_north'),
+                  'Suez': ('suez_south', 'suez_north'),
+                  'Dardanelles': ('dardanelles_south', 'dardanelles_north')}
+
+        # Link each canal node to its three nearest nodes
+        for u, v in canals.values():
+            G.add_edge(u, v)
+
+            lon_u, lat_u, lon_v, lat_v = radians(G.nodes[u]['lon_lat'][0]), radians(G.nodes[u]['lon_lat'][1]), \
+                                         radians(G.nodes[v]['lon_lat'][0]), radians(G.nodes[v]['lon_lat'][1])
+            xyz_u = (cos(lat_u) * cos(lon_u), cos(lat_u) * sin(lon_u), sin(lat_u))
+            xyz_v = (cos(lat_v) * cos(lon_v), cos(lat_v) * sin(lon_v), sin(lat_v))
+            distances_to_u = {n: arc_length(xyz_u, xyz) for n, xyz in nx.get_node_attributes(G, 'xyz').items()}
+            distances_to_v = {n: arc_length(xyz_v, xyz) for n, xyz in nx.get_node_attributes(G, 'xyz').items()}
+            G.nodes[u]['xyz'] = xyz_u
+            G.nodes[v]['xyz'] = xyz_v
+
+            # Add three shortest edges to start and end point
+            for node in nsmallest(3, distances_to_u, key=distances_to_u.get):
+                G.add_edge(u, node, miles=distances_to_u[node])
+            for node in nsmallest(3, distances_to_v, key=distances_to_v.get):
+                G.add_edge(v, node, miles=distances_to_v[node])
+
+        # Set weights to great circle distance (nautical miles)
+        canal_distances = {'panama_south': 43,
+                           'suez_south': 89,
+                           'dardanelles_south': 52}
+        for e in G.edges():
+            if e[0] in canal_distances:
+                G[e[0]][e[1]]['miles'] = canal_distances[e[0]]
+            elif e[1] in canal_distances:
+                G[e[0]][e[1]]['miles'] = canal_distances[e[1]]
+            else:
+                xyz0 = G.nodes[e[0]]['xyz']
+                xyz1 = G.nodes[e[1]]['xyz']
+
+                G[e[0]][e[1]]['miles'] = arc_length(xyz0, xyz1)
+
+        # Get connected components sorted by descending length
+        Gcc = sorted(nx.connected_components(G), key=len, reverse=True)
+
+        # Remove all connected components but the largest
+        for component in Gcc[1:]:
+            G.remove_nodes_from(component)
+
+        # Save graph to file
+        nx.write_gpickle(G, "output/variable_density_geodesic_grids/res_{}_d{}_vd{}.gpickle".format(res, d, vd))
+
+    return G
+
+
 if __name__ == '__main__':
+    resolution = 'c'
+    max_poly_size = 4
     # Import polygons and its exteriors
-    shorelines = fiona.open('C:/dev/data/gshhg-shp-2.3.7/GSHHS_shp/l/GSHHS_l_L1.shp')
+    shorelines = fiona.open('C:/dev/data/gshhg-shp-2.3.7/GSHHS_shp/{0}/GSHHS_{0}_L1.shp'.format(resolution))
     polygon_list = [shape(polygon['geometry']) for polygon in iter(shorelines)]
     exterior_list = [polygon.exterior for polygon in polygon_list]
 
-    # Prepare polygons
-    prepared_polygons = [prep(polygon) for polygon in polygon_list]
-    prepared_exteriors = [prep(exterior) for exterior in exterior_list]
+    # Split and repare polygons
+    try:
+        with open('output/split_polygons/res_{0}_treshold_{1}'.format(resolution, max_poly_size),
+                  'rb') as f:
+            split_polys = pickle.load(f)
+    except FileNotFoundError:
+        split_polys = get_split_polygons(resolution, max_poly_size)
 
-    # Populate R-tree index with bounds of polygon exteriors
-    exterior_rtree_idx = index.Index()
-    for pos, exterior in enumerate(exterior_list):
-        exterior_rtree_idx.insert(pos, exterior.bounds)
+    prepared_polygons = [prep(polygon) for polygon in polygon_list]
 
     # Populate R-tree index with bounds of polygons
-    polygon_rtree_idx = index.Index()
+    poly_rtree_idx = index.Index()
     for pos, polygon in enumerate(polygon_list):
-        polygon_rtree_idx.insert(pos, polygon.bounds)
+        poly_rtree_idx.insert(pos, polygon.bounds)
+    G = get_graph(resolution, 6, 4, polygon_list, prepared_polygons, poly_rtree_idx)
 
-    # Get refined graph
-    G = IcoSphere().create(6, 4, exterior_rtree_idx, prepared_exteriors)
-
-    # Postprocessing graph
-    G = remove_nodes_x_polygons(G, polygon_rtree_idx, prepared_polygons)
-    G = remove_edges_x_polygons(G, polygon_rtree_idx, prepared_polygons)
-
-    # Create canal nodes
-    G.add_node('panama_south', lon_lat=(-79.540932, 8.894197))
-    G.add_node('panama_north', lon_lat=(-79.919005, 9.391057))
-    G.add_node('suez_south', lon_lat=(32.5164, 29.9159))
-    G.add_node('suez_north', lon_lat=(32.3678, 31.2678))
-    G.add_node('dardanelles_south', lon_lat=(26.1406, 40.0136))
-    G.add_node('dardanelles_north', lon_lat=(26.8849, 40.5027))
-
-    canals = {'panama': ('panama_south', 'panama_north'),
-              'suez': ('suez_south', 'suez_north'),
-              'dardanelles': ('dardanelles_south', 'dardanelles_north')}
-
-    # Distance function
-    def arc_length(xyz1, xyz2):
-        return 3440 * acos(sum(p * q for p, q in zip(xyz1, xyz2)))
-
-    # Link each canal node to its three nearest nodes
-    for u, v in canals.values():
-        G.add_edge(u, v)
-
-        lon_u, lat_u, lon_v, lat_v = radians(G.nodes[u]['lon_lat'][0]), radians(G.nodes[u]['lon_lat'][1]), \
-                                     radians(G.nodes[v]['lon_lat'][0]), radians(G.nodes[v]['lon_lat'][1])
-        xyz_u = (cos(lat_u) * cos(lon_u), cos(lat_u) * sin(lon_u), sin(lat_u))
-        xyz_v = (cos(lat_v) * cos(lon_v), cos(lat_v) * sin(lon_v), sin(lat_v))
-        distances_to_u = {n: arc_length(xyz_u, xyz) for n, xyz in nx.get_node_attributes(G, 'xyz').items()}
-        distances_to_v = {n: arc_length(xyz_v, xyz) for n, xyz in nx.get_node_attributes(G, 'xyz').items()}
-        G.nodes[u]['xyz'] = xyz_u
-        G.nodes[v]['xyz'] = xyz_v
-
-        # Add three shortest edges to start and end point
-        for node in nsmallest(3, distances_to_u, key=distances_to_u.get):
-            G.add_edge(u, node, miles=distances_to_u[node])
-        for node in nsmallest(3, distances_to_v, key=distances_to_v.get):
-            G.add_edge(v, node, miles=distances_to_v[node])
-
-    # Set weights to great circle distance (nautical miles)
-    for e in G.edges():
-        p1 = G.nodes[e[0]]['xyz']
-        p2 = G.nodes[e[1]]['xyz']
-
-        G[e[0]][e[1]]['miles'] = arc_length(p1, p2)
-
-    # Get connected components sorted by descending length
-    Gcc = sorted(nx.connected_components(G), key=len, reverse=True)
-
-    # Remove all connected components but the largest
-    for component in Gcc[1:]:
-        G.remove_nodes_from(component)
-
-    # Save graph to file
-    # nx.write_gpickle(G, "output/variable_density_geodesic_grids/res_l_d6_vd4_canals.gpickle")
-    # G = nx.read_gpickle("output/variable_density_geodesic_grids/res_c_d6_vd4_canals.gpickle")
-    # pos = nx.get_node_attributes(G, 'lon_lat')
-    #
-    # nx.draw(G, pos, node_size=.1)
-    # Gcc = sorted(nx.connected_components(G), key=len, reverse=True)
-    # G0 = G.subgraph(Gcc[0])
-    #
-    # for Gi in Gcc[1:2]:
-    #     if len(Gi) > 1:
-    #         nx.draw_networkx_nodes(G.subgraph(Gi), pos=pos, node_color='r', node_size=1)
+    plot_grid(G)
+    plt.show()
