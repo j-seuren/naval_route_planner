@@ -8,11 +8,13 @@
       <w>lons</w>
       <w>nsga</w>
       <w>polys</w>
+      <w>proj</w>
       <w>seca</w>
       <w>shapefile</w>
       <w>slerp</w>
       <w>waypoint</w>
       <w>waypoints</w>
+      <w>yday</w>
     </words>
   </dictionary>
 </component>
