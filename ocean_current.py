@@ -91,8 +91,8 @@ def plot_current_field(uin, vin, lons, lats):
     m.drawmeridians(np.arange(-180., 180., 30.), labels=[0, 0, 0, 1], fontsize=10)
 
     # Transform vector and coordinate data
-    vec_lon = uin.shape[1] // 10
-    vec_lat = uin.shape[0] // 10
+    vec_lon = uin.shape[1] // 5
+    vec_lat = uin.shape[0] // 5
     u_rot, v_rot, x, y = m.transform_vector(uin, vin, lons, lats, vec_lon, vec_lat, returnxy=True)
 
     # Create vector plot on map
@@ -222,9 +222,9 @@ def speed_over_ground(p, q, c_u, c_v, boat_speed):
     return SOG
 
 
-def get_edge_travel_time(p, q, boat_speed, distance, uin, vin, lons, lats):
+def get_edge_travel_time(p1, p2, boat_speed, distance, uin, vin, lons, lats):
     # Middle point of edge
-    x_m, y_m = (item / 2 for item in map(operator.add, p, q))
+    x_m, y_m = (item / 2 for item in map(operator.add, p1, p2))
 
     # Get coordinates of nearby grid points
     lon2, lat2 = np.searchsorted(lons, x_m), np.searchsorted(lats, y_m)
@@ -248,7 +248,7 @@ def get_edge_travel_time(p, q, boat_speed, distance, uin, vin, lons, lats):
         u_m = v_m = 0
 
     # Calculate speed over ground
-    SOG = speed_over_ground(p, q, u_m, v_m, boat_speed)
+    SOG = speed_over_ground(p1, p2, u_m, v_m, boat_speed)
     return distance / SOG
 
 
