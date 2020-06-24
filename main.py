@@ -1,3 +1,4 @@
+import great_circle
 import init
 import matplotlib.pyplot as plt
 import mutation
@@ -6,13 +7,13 @@ import ocean_current
 import os
 import pandas as pd
 import pickle
+import pyproj
 import random
 import recombination
 import rtree
 
 from datetime import datetime
 from deap import base, creator, tools
-from haversine import haversine
 from katana import get_split_polygons
 from shapely.geometry import LineString
 from shapely.prepared import prep
@@ -30,7 +31,7 @@ class RoutePlanner:
                  start,
                  end,
                  start_date='20160101',
-                 max_edge_length=500,
+                 del_s=67,
                  width_ratio=0.5,
                  radius=1,
                  mutation_ops=None,
@@ -38,20 +39,24 @@ class RoutePlanner:
                  max_poly_size=4,
                  n_gen=100,
                  mu=4 * 20,
-                 cxpb=0.9,
+                 cx_prob=0.9,
                  vessel=None,
                  g_density=6,
                  g_var_density=4,
-                 include_currents=True
+                 include_currents=True,
+                 a=6378137.0,
+                 f=0.0033528106647475126
                  ):
         self.start = start                                              # Start location
         self.end = end                                                  # End location
         self.date = start_date                                          # Start date for initializing ocean currents
-        self.distances_cache = dict()
-        self.feasible_cache = dict()
+        self.dist_cache = dict()
+        self.feas_cache = dict()
+        self.points_cache = dict()
+        self.geod = pyproj.Geod(a=a, f=f)
+        self.del_s = del_s                                              # Maximum segment length (nautical miles)
         self.g_density = g_density                                      # Density recursion number, graph
         self.g_var_density = g_var_density                              # Variable density recursion number, graph
-        self.max_edge_length = max_edge_length                          # TO BE REMOVED
         self.width_ratio = width_ratio                                  # Parameter for insert_random_waypoint
         self.radius = radius                                            # Parameter for move_random_waypoint
         if mutation_ops is None:                                        # To be performed mutation operators
@@ -125,7 +130,7 @@ class RoutePlanner:
         # Genetic/Evolutionary algorithm parameter settings
         self.n_gen = n_gen
         self.mu = mu
-        self.cxpb = cxpb
+        self.cx_prob = cx_prob
 
     def nsga2(self, seed=None):
         random.seed(seed)
@@ -175,7 +180,7 @@ class RoutePlanner:
                     # offspring = [self.toolbox.clone(ind) for ind in offspring]
 
                     for ind1, ind2 in zip(offspring[::2], offspring[1::2]):
-                        if random.random() <= self.cxpb:
+                        if random.random() <= self.cx_prob:
                             self.toolbox.mate(ind1, ind2)
                         self.toolbox.mutate(ind1)
                         self.toolbox.mutate(ind2)
@@ -204,95 +209,98 @@ class RoutePlanner:
 
     def evaluate(self, individual):
         # Initialize variables
-        travel_time, fuel_consumption = 0, 0
+        travel_time = fuel_consumption = 0.0
 
-        for i in range(len(individual) - 1):
-            u = individual[i][0]
-            v = individual[i+1][0]
-            speed = individual[i][1]
+        for e in range(len(individual) - 1):
+            p1, p2, boat_speed = individual[e][0], individual[e+1][0], individual[e][1]
+            k = tuple(sorted([p1, p2]))
 
-            if u[0] < v[0]:
-                key = (u, v)
-            else:
-                key = (v, u)
-
-            # If distance in cache, get distance. Otherwise, calculate distance and save to cache
-            if key in self.distances_cache:
-                edge_distance = self.distances_cache[key]
-            else:
-                edge_distance = haversine(u, v, unit='nmi')
-                self.distances_cache[key] = edge_distance
+            e_dist = self.dist_cache.get(k, False)
+            if not e_dist:  # Never steps in IF-statement
+                print('computes distance')
+                e_dist = great_circle.distance(p1[0], p1[1], p2[0], p2[1], self.geod)
+                self.dist_cache[k] = e_dist
 
             if self.include_currents:
-                edge_travel_time = ocean_current.get_edge_travel_time(u, v, speed, edge_distance, self.u, self.v,
-                                                                      self.lons, self.lats)
+                # Split edge in segments (seg) of max seg_length in km
+                points = self.points_cache.get(k, False)
+                if not points:  # Never steps in IF-statement
+                    print('computes points')
+                    points = great_circle.points(p1[0], p1[1], p2[0], p2[1], e_dist, self.geod, self.del_s)
+                    self.points_cache[k] = points
+                lons, lats = points[0], points[1]
+                e_travel_time = 0.0
+                for i in range(len(lons)-1):
+                    p1, p2 = (lons[i], lats[i]), (lons[i+1], lats[i+1])
+                    seg_travel_time = ocean_current.get_edge_travel_time(p1, p2, boat_speed, e_dist, self.u, self.v,
+                                                                         self.lons, self.lats)
+                    e_travel_time += seg_travel_time
             else:
-                edge_travel_time = edge_distance / speed
-            fuel_rate = self.vessel.fuel_rates[speed]  # Tons / Hour
-            edge_fuel_consumption = fuel_rate * edge_travel_time  # Tons
+                e_travel_time = e_dist / boat_speed
+            edge_fuel_consumption = self.vessel.fuel_rates[boat_speed] * e_travel_time  # Tons
 
             # Increment objective values
-            travel_time += edge_travel_time
+            travel_time += e_travel_time
             fuel_consumption += edge_fuel_consumption
 
         return travel_time, fuel_consumption
 
     def feasible(self, individual):
-        waypoints = [item[0] for item in individual]
-
-        for u, v in zip(waypoints[:-1], waypoints[1:]):
-            key = tuple(sorted([u, v]))
-            # If edge in cache, get feasibility. Otherwise, calculate feasibility and save to cache
-            if key in self.feasible_cache:
-                if not self.feasible_cache[key]:
-                    return False
-            else:
-                if not self.edge_feasible(u, v):
-                    return False
+        for i in range(len(individual) - 1):
+            p1, p2 = individual[i][0], individual[i+1][0]
+            if not self.edge_feasible(p1, p2):
+                return False
         return True
 
-    def edge_feasible(self, u, v):
-        key = tuple(sorted([u, v]))
-        # If distance in cache, get distance. Otherwise, calculate distance and save to cache
-        if key in self.distances_cache:
-            distance = self.distances_cache[key]
-        else:
-            distance = haversine(u, v, unit='nmi')
-            self.distances_cache[key] = distance
-
-        # If distance is larger than maximum edge length, return infeasible
-        if distance > self.max_edge_length:
-            self.feasible_cache[key] = False
+    def edge_feasible(self, p1, p2):
+        # First check if feasibility check is already performed
+        k = tuple(sorted([p1, p2]))
+        feasible = self.feas_cache.get(k, None)
+        if feasible == 1:
+            return True
+        elif feasible == 0:
             return False
 
-        # Compute line bounds
-        u_x, u_y = u
-        v_x, v_y = v
-        line_bounds = (min(u_x, v_x), min(u_y, v_y),
-                       max(u_x, v_x), max(u_y, v_y))
+        dist = self.dist_cache.get(k, False)
+        if not dist:
+            dist = great_circle.distance(p1[0], p1[1], p2[0], p2[1], self.geod)
+            self.dist_cache[k] = dist
 
-        # Returns the geometry indices of the minimum bounding rectangles of polygons that intersect the edge bounds
-        mbr_intersections = self.rtree_idx.intersection(line_bounds)
-        if mbr_intersections:
-            # Create LineString if there is at least one minimum bounding rectangle intersection
-            shapely_line = LineString([u, v])
+        points = self.points_cache.get(k, False)
+        if not points:
+            points = great_circle.points(p1[0], p1[1], p2[0], p2[1], dist, self.geod, self.del_s)
+            self.points_cache[k] = points
+        lons, lats = points[0], points[1]
+        for i in range(len(lons)-1):
+            # Compute line bounds
+            q1_x, q1_y = lons[i], lats[i]
+            q2_x, q2_y = lons[i+1], lats[i+1]
+            line_bounds = (min(q1_x, q2_x), min(q1_y, q2_y), max(q1_x, q2_x), max(q1_y, q2_y))
 
-            # For every mbr intersection check if its polygon is actually intersect by the edge
-            for i in mbr_intersections:
-                if self.prepared_polygons[i].intersects(shapely_line):
-                    self.feasible_cache[key] = False
-                    return False
-        self.feasible_cache[key] = True
+            # Returns the geometry indices of the minimum bounding rectangles of polygons that intersect the edge bounds
+            mbr_intersections = self.rtree_idx.intersection(line_bounds)
+            if mbr_intersections:
+                # Create LineString if there is at least one minimum bounding rectangle intersection
+                shapely_line = LineString([(q1_x, q1_y), (q2_x, q2_y)])
+
+                # For every mbr intersection check if its polygon is actually intersect by the edge
+                for idx in mbr_intersections:
+                    if self.prepared_polygons[idx].intersects(shapely_line):
+                        self.feas_cache[k] = 0
+                        return False
+        self.feas_cache[k] = 1
         return True
 
 
 if __name__ == "__main__":
     # start, end = (3.14516, 4.68508), (-94.5968, 26.7012)  # Gulf of Guinea, Gulf of Mexico
-    start, end = (-5.352121, 48.021295), (53.131866, 13.521350)  # (longitude, latitude)
-    # start, end = (34.252773, 43.461197), (53.131866, 13.521350)  # Black of Sea, Gulf of Aden
+    # start, end = (-23.4166, -7.2574), (-72.3352, 12.8774)  # South Atlantic (Brazil), Caribbean Sea
+    # start, end = (77.7962, 4.90087), (48.1425, 12.5489)  # Laccadive Sea, Gulf of Aden
+    # start, end = (-5.352121, 48.021295), (53.131866, 13.521350)  #
+    start, end = (34.252773, 43.461197), (53.131866, 13.521350)  # Black of Sea, Gulf of Aden
 
-    planner = RoutePlanner(start, end)
-    paths_populations, paths_statistics = planner.nsga2(1)
+    planner = RoutePlanner(start, end, include_currents=False, n_gen=200)
+    paths_populations, paths_statistics = planner.nsga2(seed=1)
 
     all_best_individuals, sub_path_pop = [], None
     timestamp = datetime.now()
