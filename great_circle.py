@@ -22,7 +22,7 @@ def points(lon1, lat1, lon2, lat2, dist, gc, del_s):
     ==============   =======================================================
     Returns two lists of lons, lats points on great circle
     """
-    n_points = int((dist + 0.5 * 1000. * del_s) / (1000. * del_s))
+    n_points = int((dist + 0.5 * del_s) / del_s)
     lon_lats = gc.npts(lon1, lat1, lon2, lat2, n_points)
     lons, lats = [lon1], [lat1]
     for lon, lat in lon_lats:
