@@ -1,21 +1,21 @@
-import datetime
-import matplotlib.pyplot as plt
 import init
+import matplotlib.pyplot as plt
 import mutation
 import numpy as np
+import ocean_current
+import os
 import pandas as pd
 import pickle
 import random
 import recombination
-import os
-import fiona
-from katana import get_split_polygons
+import rtree
 
+from datetime import datetime
 from deap import base, creator, tools
-from rtree import index
-from shapely.geometry import shape, LineString
-from shapely.prepared import prep
 from haversine import haversine
+from katana import get_split_polygons
+from shapely.geometry import LineString
+from shapely.prepared import prep
 
 
 class Vessel:
@@ -29,6 +29,7 @@ class RoutePlanner:
     def __init__(self,
                  start,
                  end,
+                 start_date='20160101',
                  max_edge_length=500,
                  width_ratio=0.5,
                  radius=1,
@@ -38,25 +39,28 @@ class RoutePlanner:
                  n_gen=100,
                  mu=4 * 20,
                  cxpb=0.9,
-                 vessel=None
+                 vessel=None,
+                 g_density=6,
+                 g_var_density=4,
+                 include_currents=True
                  ):
         self.start = start                                              # Start location
-        self.end = end                                                   # End location
+        self.end = end                                                  # End location
+        self.date = start_date                                          # Start date for initializing ocean currents
         self.distances_cache = dict()
         self.feasible_cache = dict()
+        self.g_density = g_density                                      # Density recursion number, graph
+        self.g_var_density = g_var_density                              # Variable density recursion number, graph
         self.max_edge_length = max_edge_length                          # TO BE REMOVED
         self.width_ratio = width_ratio                                  # Parameter for insert_random_waypoint
         self.radius = radius                                            # Parameter for move_random_waypoint
-
         if mutation_ops is None:                                        # To be performed mutation operators
             self.mutation_ops = ['insert', 'move', 'delete', 'speed']
         else:
             self.mutation_ops = mutation_ops
         self.resolution = resolution                                    # Resolution of shorelines
         self.max_poly_size = max_poly_size                              # Parameter for split_polygon
-
-        if vessel is None:
-            # Set vessel characteristics
+        if vessel is None:                                              # Set vessel characteristics
             vessel_name = 'Fairmaster'
             table = pd.read_excel('C:/dev/data/speed_table.xlsx', sheet_name=vessel_name)
             speeds = [round(speed, 1) for speed in table['Speed']]
@@ -76,9 +80,16 @@ class RoutePlanner:
         self.prepared_polygons = [prep(polygon) for polygon in split_polys]
 
         # Populate R-tree index with bounds of polygons
-        self.rtree_idx = index.Index()
+        self.rtree_idx = rtree.index.Index()
         for pos, polygon in enumerate(split_polys):
             self.rtree_idx.insert(pos, polygon.bounds)
+
+        # Get ocean current variables
+        self.include_currents = include_currents
+        if include_currents:
+            self.u, self.v, self.lons, self.lats = ocean_current.read_netcdf(self.date)
+        else:
+            self.u, self.v, self.lons, self.lats = None, None, None, None
 
         # Create Fitness and Individual types
         creator.create("FitnessMin", base.Fitness, weights=(-1.0, -1.0))
@@ -106,7 +117,8 @@ class RoutePlanner:
         self.toolbox.register("select", tools.selNSGA2)
 
         # Initialization
-        self.toolbox.register("global_routes", init.get_global_routes, creator.Individual,
+        self.toolbox.register("global_routes", init.get_global_routes, creator.Individual, self.resolution,
+                              self.g_density, self.g_var_density, self.prepared_polygons, self.rtree_idx,
                               self.start, self.end, self.vessel)
         self.toolbox.register("population", tools.initRepeat, list)
 
@@ -159,8 +171,8 @@ class RoutePlanner:
                 for gen in range(1, self.n_gen):
                     # Vary the population
                     offspring = tools.selTournamentDCD(pop, len(pop))
-                    # offspring = list(toolbox.map(toolbox.clone, offspring))
-                    offspring = [self.toolbox.clone(ind) for ind in offspring]
+                    offspring = list(self.toolbox.map(self.toolbox.clone, offspring))
+                    # offspring = [self.toolbox.clone(ind) for ind in offspring]
 
                     for ind1, ind2 in zip(offspring[::2], offspring[1::2]):
                         if random.random() <= self.cxpb:
@@ -211,9 +223,12 @@ class RoutePlanner:
                 edge_distance = haversine(u, v, unit='nmi')
                 self.distances_cache[key] = edge_distance
 
-            edge_travel_time = edge_distance / speed  # Hours
+            if self.include_currents:
+                edge_travel_time = ocean_current.get_edge_travel_time(u, v, speed, edge_distance, self.u, self.v,
+                                                                      self.lons, self.lats)
+            else:
+                edge_travel_time = edge_distance / speed
             fuel_rate = self.vessel.fuel_rates[speed]  # Tons / Hour
-            # fuel_rate = 30
             edge_fuel_consumption = fuel_rate * edge_travel_time  # Tons
 
             # Increment objective values
@@ -272,14 +287,15 @@ class RoutePlanner:
 
 
 if __name__ == "__main__":
-    # Route characteristics and navigation area
+    # start, end = (3.14516, 4.68508), (-94.5968, 26.7012)  # Gulf of Guinea, Gulf of Mexico
     start, end = (-5.352121, 48.021295), (53.131866, 13.521350)  # (longitude, latitude)
-    # start, end = (34.252773, 43.461197), (53.131866, 13.521350)  # (longitude, latitude)
+    # start, end = (34.252773, 43.461197), (53.131866, 13.521350)  # Black of Sea, Gulf of Aden
 
     planner = RoutePlanner(start, end)
     paths_populations, paths_statistics = planner.nsga2(1)
-    all_best_individuals = []
-    timestamp = datetime.datetime.now()
+
+    all_best_individuals, sub_path_pop = [], None
+    timestamp = datetime.now()
     for p, path_population in enumerate(paths_populations):
         best_individual = []
         for s, sub_path_pop in enumerate(path_population):
@@ -295,17 +311,13 @@ if __name__ == "__main__":
                 with open('output/' + output_file_name, 'wb') as file:
                     pickle.dump(sub_path_pop, file)
 
-            # print(statistics)
-
             # Select sub path with least fitness values
             best_individual.append(sub_path_pop[0])
 
         print('Path {}: '.format(p), tuple(sum([np.array(path.fitness.values) for path in best_individual])))
         all_best_individuals.extend(best_individual)
 
-    # plot_paths(all_best_individuals, vessel)
-    # plt.show()
-
-    # front = np.array([ind.fitness.values for ind in sub_path_pop])
-    # plt.scatter(front[:, 0], front[:, 1], c="b")
-    # plt.axis("tight")
+    front = np.array([ind.fitness.values for ind in sub_path_pop])
+    plt.scatter(front[:, 0], front[:, 1], c="b")
+    plt.axis("tight")
+    plt.show()
