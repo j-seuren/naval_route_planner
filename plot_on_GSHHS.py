@@ -1,42 +1,44 @@
 from matplotlib import cm
 import matplotlib.pyplot as plt
-from mpl_toolkits.basemap import Basemap, addcyclic
+from mpl_toolkits.basemap import Basemap
 import pandas as pd
 import pickle
-from math import floor, ceil
+import math
 import numpy as np
 import ocean_current
 
 
-def draw_basemap(individuals, vessel, cb=True, plot_vectors=False, uin=None, vin=None, lons=None, lats=None):
-    wps = []
-    for ind in individuals:
-        wps.extend([item[0] for item in ind])
+def draw_basemap(individuals, vessel, m=None, uin=None, vin=None, lons=None, lats=None):
+    col_map = cm.rainbow
 
-    min_x, min_y = min(wps, key=lambda t: t[0])[0], min(wps, key=lambda t: t[1])[1]
-    max_x, max_y = max(wps, key=lambda t: t[0])[0], max(wps, key=lambda t: t[1])[1]
-    m = 5
-    left, right, bottom, top = max(floor(min_x) - m, -180), min(ceil(max_x) + m, 180), \
-                               max(floor(min_y) - m, -90), min(ceil(max_y) + m, 90)
+    if not m:
+        wps = []
+        for ind in individuals:
+            wps.extend([item[0] for item in ind])
 
-    m = Basemap(projection='merc', resolution='c', llcrnrlat=bottom, urcrnrlat=top, llcrnrlon=left, urcrnrlon=right)
-    m.drawparallels(np.arange(-90., 90., 10.), labels=[1, 0, 0, 0], fontsize=10)
-    m.drawmeridians(np.arange(-180., 180., 10.), labels=[0, 0, 0, 1], fontsize=10)
-    m.drawcoastlines()
-    m.fillcontinents()
+        min_x, min_y = min(wps, key=lambda t: t[0])[0], min(wps, key=lambda t: t[1])[1]
+        max_x, max_y = max(wps, key=lambda t: t[0])[0], max(wps, key=lambda t: t[1])[1]
+        margin = 5
+        # left, right, bottom, top = max(math.floor(min_x) - margin, -180), min(math.ceil(max_x) + margin, 180), \
+        #                            max(math.floor(min_y) - margin, -90), min(math.ceil(max_y) + margin, 90)
 
-    if plot_vectors:
-        # Transform vector and coordinate data
-        vec_lon = int(uin.shape[1] / (10 * 360 / (right - left)))
-        vec_lat = int(uin.shape[0] / (10 * 180 / (top - bottom)))
-        u_rot, v_rot, x, y = m.transform_vector(uin, vin, lons, lats, vec_lon, vec_lat, returnxy=True)
+        left, right, bottom, top = -179, 179, -75, 75
 
-        vec_plot = m.quiver(x, y, u_rot, v_rot, scale=50)
-        plt.quiverkey(vec_plot, 0.2, -0.2, 1, '1 knot', labelpos='W')  # Position and reference label
+        m = Basemap(projection='merc', resolution='c', llcrnrlat=bottom, urcrnrlat=top, llcrnrlon=left, urcrnrlon=right)
+        m.drawparallels(np.arange(-90., 90., 10.), labels=[1, 0, 0, 0], fontsize=10)
+        m.drawmeridians(np.arange(-180., 180., 10.), labels=[0, 0, 0, 1], fontsize=10)
+        m.drawcoastlines()
+        m.fillcontinents()
 
-    col_map = cm.jet
-    if cb:
-        # Create colorbar
+        # # Transform vector and coordinate data
+        # vec_lon = int(uin.shape[1] / (2 * 360 / (right - left)))
+        # vec_lat = int(uin.shape[0] / (2 * 180 / (top - bottom)))
+        # u_rot, v_rot, x, y = m.transform_vector(uin, vin, lons, lats, vec_lon, vec_lat, returnxy=True)
+        #
+        # vec_plot = m.quiver(x, y, u_rot, v_rot, color='darkgray', scale=50, width=.002)
+        # plt.quiverkey(vec_plot, 0.2, -0.2, 1, '1 knot', labelpos='W')  # Position and reference label
+
+        # Create color bar
         sm = plt.cm.ScalarMappable(cmap=col_map)
         col_bar = plt.colorbar(sm, norm=plt.Normalize(vmin=min(vessel.speeds), vmax=max(vessel.speeds)))
         max_s = max(vessel.speeds)
@@ -58,11 +60,12 @@ def draw_basemap(individuals, vessel, cb=True, plot_vectors=False, uin=None, vin
         waypoints = [item[0] for item in ind]
         edges = zip(waypoints[:-1], waypoints[1:])
         for i, e in enumerate(edges):
-            m.drawgreatcircle(e[0][0], e[0][1], e[1][0], e[1][1], linewidth=1, color=col_map(normalized_speeds[i]),)
+            m.drawgreatcircle(e[0][0], e[0][1], e[1][0], e[1][1], linewidth=2, color=col_map(normalized_speeds[i]), zorder=1)
 
-        # Plot waypoints
         for i, (x, y) in enumerate(waypoints):
-            m.scatter(x, y, latlon=True, color=col_map(normalized_speeds[i]), marker='o', s=2)
+            m.scatter(x, y, latlon=True, color='dimgray', marker='o', s=5, zorder=2)
+
+    return m
 
 
 if __name__ == "__main__":
@@ -89,8 +92,8 @@ if __name__ == "__main__":
 
     populations = []
     individuals = []
-    for i in range(1):
-        with open('output/path_1/10_00_24_population_sub_path_{}'.format(i), 'rb') as f:
+    for i in range(2):
+        with open('output/path_0/14_43_17_population_sub_path_{}'.format(i), 'rb') as f:
             population = pickle.load(f)
 
         min_tt, min_fc = 9999999999, 99999999999
@@ -104,13 +107,38 @@ if __name__ == "__main__":
                 fc_ind = ind
                 min_fc = fuel_consumption
 
-        individuals.append(fc_ind)
+        # individuals.append(fc_ind)
         individuals.append(tt_ind)
         print('Fuel individual:', fc_ind.fitness.values)
         print('Travel time individual: ', tt_ind.fitness.values)
 
         populations.append(population)
-    u_out, v_out, lons, lats = ocean_current.read_netcdf('20160101')
-    draw_basemap(individuals, vessel, cb=False, plot_vectors=True, uin=u_out, vin=v_out, lons=lons, lats=lats)
+    # u_out, v_out, lons, lats = ocean_current.read_netcdf('20160101')
+    m = draw_basemap(individuals, vessel)
+
+    populations = []
+    individuals = []
+    for i in range(1):
+        with open('output/path_1/14_43_17_population_sub_path_0', 'rb') as f:
+            population = pickle.load(f)
+
+        min_tt, min_fc = 9999999999, 99999999999
+        tt_ind, fc_ind = None, None
+        for ind in population:
+            travel_time, fuel_consumption = ind.fitness.values
+            if travel_time < min_tt:
+                tt_ind = ind
+                min_tt = travel_time
+            if fuel_consumption < min_fc:
+                fc_ind = ind
+                min_fc = fuel_consumption
+
+        # individuals.append(fc_ind)
+        individuals.append(tt_ind)
+        print('Fuel individual:', fc_ind.fitness.values)
+        print('Travel time individual: ', tt_ind.fitness.values)
+
+        populations.append(population)
+    draw_basemap(individuals, vessel, m=m)
 
     plt.show()
