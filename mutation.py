@@ -17,7 +17,7 @@ def insert_waypoint(toolbox, width_ratio, individual, initializing):
     dx = v[0] - u[0]
 
     try:
-        slope = dy / dx
+        slope = dy / (dx + 0.0)
     except ZeroDivisionError:
         slope = 'inf'
 
