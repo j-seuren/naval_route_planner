@@ -15,6 +15,7 @@ class Initializer:
                  resolution,
                  prep_polys,
                  rtree_idx,
+                 toolbox,
                  graph_d=6,
                  graph_vd=4):
         self.start = start                                                  # Start location
@@ -24,6 +25,7 @@ class Initializer:
         self.resolution = resolution                                        # Resolution of shorelines
         self.prep_polys = prep_polys
         self.rtree_idx = rtree_idx
+        self.toolbox = toolbox
         self.graph_d = graph_d                                              # Density recursion number, graph
         self.graph_vd = graph_vd                                            # Variable density recursion number, graph
 
@@ -49,11 +51,29 @@ class Initializer:
         self.graph.add_node('start', lon_lat=self.start)
         self.graph.add_node('end', lon_lat=self.end)
 
-        # Add three shortest edges to start and end point
-        for node in heapq.nsmallest(3, d_start, key=d_start.get):
-            self.graph.add_edge('start', node, miles=d_start[node])
-        for node in heapq.nsmallest(3, d_end, key=d_end.get):
-            self.graph.add_edge('end', node, miles=d_end[node])
+        # Add three shortest edges to start and end point after checking feasibility
+        nr_edges = 0
+        for node in heapq.nsmallest(10, d_start, key=d_start.get):
+            p2 = self.graph.nodes[node]['lon_lat']
+            if self.toolbox.edge_feasible(self.start, p2):
+                nr_edges += 1
+                self.graph.add_edge('start', node, miles=d_start[node])
+                if nr_edges > 2:
+                    break
+            else:
+                print('Shortest edge to start not feasible')
+        assert nr_edges > 0
+        nr_edges = 0
+        for node in heapq.nsmallest(10, d_end, key=d_end.get):
+            p2 = self.graph.nodes[node]['lon_lat']
+            if self.toolbox.edge_feasible(self.end, p2):
+                nr_edges += 1
+                self.graph.add_edge('end', node, miles=d_end[node])
+                if nr_edges > 2:
+                    break
+            else:
+                print('Shortest edge to end not feasible')
+        assert nr_edges > 0
 
         self.canals = {'Panama': ['panama_south', 'panama_north'],
                        'Suez': ['suez_south', 'suez_north'],
@@ -120,9 +140,9 @@ class Initializer:
         return global_routes, n_paths
 
 
-def init_individual(toolbox, individual):
+def init_individual(toolbox, individual_in):
     # Mutate graph route to obtain a population of initial routes
-    init_ind = toolbox.clone(individual)
-    for i in range(max(100, len(init_ind) // 10)):
-        toolbox.mutate(init_ind, initializing=True)
-    return init_ind
+    mutant = toolbox.clone(individual_in)
+    for i in range(max(100, len(individual_in) // 10)):
+        toolbox.mutate(mutant, initializing=True)
+    return mutant
