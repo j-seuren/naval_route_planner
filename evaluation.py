@@ -23,9 +23,9 @@ class Evaluator:
         self.del_sc = del_sc                                            # Maximum segment length for current calculation
         self.include_currents = include_currents
         if include_currents:
-            self.u, self.v, self.lons, self.lats = ocean_current.read_netcdf(self.date)
+            self.u, self.v, _, _ = ocean_current.read_netcdf(self.date)
         else:
-            self.u, self.v, self.lons, self.lats = None, None, None, None
+            self.u, self.v = None, None
         self.dist_cache = dict()
         self.feas_cache = dict()
         self.points_cache = dict()
@@ -55,8 +55,8 @@ class Evaluator:
                 e_travel_time = 0.0
                 for i in range(len(lons) - 1):
                     p1, p2 = (lons[i], lats[i]), (lons[i + 1], lats[i + 1])
-                    seg_travel_time = ocean_current.get_edge_travel_time(p1, p2, boat_speed, e_dist, self.u, self.v,
-                                                                         self.lons, self.lats)
+                    seg_dist = great_circle.distance(p1[0], p1[1], p2[0], p2[1], self.geod)
+                    seg_travel_time = ocean_current.get_edge_travel_time(p1, p2, boat_speed, seg_dist, self.u, self.v)
                     e_travel_time += seg_travel_time
             else:
                 e_travel_time = e_dist / boat_speed

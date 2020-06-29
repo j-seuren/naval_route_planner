@@ -67,7 +67,7 @@ def ncdump(nc_fid, verb=True):
     if verb:
         print("NetCDF dimension information:")
         for dim in nc_dims:
-            print("\tName:", dim )
+            print("\tName:", dim)
             print("\t\tsize:", len(nc_fid.dimensions[dim]))
             print_ncattr(dim)
     # Variable information.
@@ -85,18 +85,19 @@ def ncdump(nc_fid, verb=True):
 
 def plot_current_field(uin, vin, lons, lats):
     # Create map
-    m = basemap.Basemap(projection='cyl', llcrnrlat=-90., urcrnrlat=90., resolution='c', llcrnrlon=-180., urcrnrlon=180.)
+    m = basemap.Basemap(projection='cyl', resolution='c',
+                        llcrnrlat=-90., urcrnrlat=90., llcrnrlon=-180., urcrnrlon=180.)
     m.drawcoastlines()
     m.drawparallels(np.arange(-90., 90., 30.), labels=[1, 0, 0, 0], fontsize=10)
     m.drawmeridians(np.arange(-180., 180., 30.), labels=[0, 0, 0, 1], fontsize=10)
 
     # Transform vector and coordinate data
-    vec_lon = uin.shape[1] // 5
-    vec_lat = uin.shape[0] // 5
+    vec_lon = uin.shape[1] // 10
+    vec_lat = uin.shape[0] // 10
     u_rot, v_rot, x, y = m.transform_vector(uin, vin, lons, lats, vec_lon, vec_lat, returnxy=True)
 
     # Create vector plot on map
-    vec_plot = m.quiver(x, y, u_rot, v_rot, scale=50)
+    vec_plot = m.quiver(x, y, u_rot, v_rot, scale=50, width=0.002)
     plt.quiverkey(vec_plot, 0.2, -0.2, 1, '1 knot', labelpos='W')  # Position and reference label
 
 
@@ -157,7 +158,7 @@ def read_netcdf(date):
     src_projection, tgt_projection = ccrs.PlateCarree(), ccrs.Mercator()
     u_proj, v_proj = tgt_projection.transform_vectors(src_projection, lons_mesh, lats_mesh, u_cyc, v_cyc)
 
-    return u_proj, v_proj, np.array(lons.tolist()), np.array(lats.tolist())
+    return u_proj, v_proj, lons, lats
 
 
 def bilinear_interpolation(x, y, z, xi, yi):
@@ -222,26 +223,14 @@ def speed_over_ground(p, q, c_u, c_v, boat_speed):
     return SOG
 
 
-def get_edge_travel_time(p1, p2, boat_speed, distance, uin, vin, lons, lats):
+def get_edge_travel_time(p1, p2, boat_speed, distance, uin, vin):
     # Middle point of edge
     x_m, y_m = (item / 2 for item in map(operator.add, p1, p2))
 
-    # Get coordinates of nearby grid points
-    lon2, lat2 = np.searchsorted(lons, x_m), np.searchsorted(lats, y_m)
-    lon_idx, lat_idx = [lon2-1, lon2], [lat2-1, lat2]
-    x = np.array([lons[lon_idx[0]], lons[lon_idx[1]]])
-    y = np.array([lats[lat_idx[0]], lats[lat_idx[1]]])
-
-    # Create array of u,v values at grid points
-    u, v = np.empty([2, 2]), np.empty([2, 2])
-    for i in range(2):
-        for j in range(2):
-            u[i, j] = uin[lat_idx[j], lon_idx[i]]
-            v[i, j] = vin[lat_idx[j], lon_idx[i]]
-
-    # Bilinear interpolation of u and v at point m
-    u_m = bilinear_interpolation(x, y, u, x_m, y_m)
-    v_m = bilinear_interpolation(x, y, v, x_m, y_m)
+    # Get coordinates of nearest grid point
+    lon_idx, lat_idx = int(round((x_m + 179.875) / 0.25)), int(round((y_m + 89.875) / 0.25))
+    u_m = uin[lat_idx, lon_idx]
+    v_m = vin[lat_idx, lon_idx]
 
     # If u, v value is masked or nan, set ocean current to 0
     if np.ma.is_masked(u_m) or np.isnan(u_m) or np.ma.is_masked(v_m) or np.isnan(v_m):
@@ -254,7 +243,7 @@ def get_edge_travel_time(p1, p2, boat_speed, distance, uin, vin, lons, lats):
 
 if __name__ == '__main__':
     # Read netCDF
-    u_read, v_read, lons_read, lats_read = read_netcdf('20160101')
+    u_read, v_read = read_netcdf('20160101')
 
     # Plot current field
     plot_current_field(u_read, v_read, lons_read, lats_read)
