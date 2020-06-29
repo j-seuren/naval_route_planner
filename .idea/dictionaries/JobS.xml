@@ -2,9 +2,12 @@
   <dictionary name="JobS">
     <words>
       <w>bilinear</w>
+      <w>geod</w>
       <w>graphfile</w>
       <w>gshhs</w>
       <w>haversine</w>
+      <w>hexa</w>
+      <w>hexagraph</w>
       <w>laccadive</w>
       <w>lons</w>
       <w>nsga</w>
