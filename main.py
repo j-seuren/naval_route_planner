@@ -1,145 +1,101 @@
-import great_circle
-import init
+import evaluation
+import initialization
+import katana
+import math
 import matplotlib.pyplot as plt
-import mutation
+import operations
 import numpy as np
-import ocean_current
-import os
 import pandas as pd
-import pickle
 import pyproj
+import pickle
 import random
-import recombination
 import rtree
 
 from datetime import datetime
 from deap import base, creator, tools
-from katana import get_split_polygons
-from shapely.geometry import LineString
 from shapely.prepared import prep
 
 
 class Vessel:
-    def __init__(self, name, _speeds, _fuel_rates):
+    def __init__(self, name='Fairmaster'):
         self.name = name
-        self.speeds = _speeds
-        self.fuel_rates = _fuel_rates
+        table = pd.read_excel('C:/dev/data/speed_table.xlsx', sheet_name=self.name)
+        self.speeds = [round(speed, 1) for speed in table['Speed']]
+        self.fuel_rates = {speed: round(table['Fuel'][i], 1) for i, speed in enumerate(self.speeds)}
 
 
 class RoutePlanner:
     def __init__(self,
                  start,
                  end,
-                 start_date='20160101',
-                 del_s=67,
-                 width_ratio=0.5,
-                 radius=1,
-                 mutation_ops=None,
                  resolution='c',
                  max_poly_size=4,
                  n_gen=100,
                  mu=4 * 20,
-                 cx_prob=0.9,
-                 vessel=None,
-                 g_density=6,
-                 g_var_density=4,
-                 include_currents=True,
-                 a=6378137.0,
-                 f=0.0033528106647475126
+                 vessel_name='Fairmaster',
+                 cx_prob=0.9
                  ):
-        self.start = start                                              # Start location
-        self.end = end                                                  # End location
-        self.date = start_date                                          # Start date for initializing ocean currents
-        self.dist_cache = dict()
-        self.feas_cache = dict()
-        self.points_cache = dict()
-        self.geod = pyproj.Geod(a=a, f=f)
-        self.del_s = del_s                                              # Maximum segment length (nautical miles)
-        self.g_density = g_density                                      # Density recursion number, graph
-        self.g_var_density = g_var_density                              # Variable density recursion number, graph
-        self.width_ratio = width_ratio                                  # Parameter for insert_random_waypoint
-        self.radius = radius                                            # Parameter for move_random_waypoint
-        if mutation_ops is None:                                        # To be performed mutation operators
-            self.mutation_ops = ['insert', 'move', 'delete', 'speed']
-        else:
-            self.mutation_ops = mutation_ops
-        self.resolution = resolution                                    # Resolution of shorelines
-        self.max_poly_size = max_poly_size                              # Parameter for split_polygon
-        if vessel is None:                                              # Set vessel characteristics
-            vessel_name = 'Fairmaster'
-            table = pd.read_excel('C:/dev/data/speed_table.xlsx', sheet_name=vessel_name)
-            speeds = [round(speed, 1) for speed in table['Speed']]
-            fuel_rates = {speed: round(table['Fuel'][i], 1) for i, speed in enumerate(speeds)}
-            self.vessel = Vessel(vessel_name, speeds, fuel_rates)
-        else:
-            self.vessel = vessel
-
-        # Import land obstacles as polygons
-        try:
-            with open('output/split_polygons/res_{0}_treshold_{1}'.format(self.resolution, self.max_poly_size),
-                      'rb') as f:
-                split_polys = pickle.load(f)
-        except FileNotFoundError:
-            split_polys = get_split_polygons(self.resolution, self.max_poly_size)
-
-        self.prepared_polygons = [prep(polygon) for polygon in split_polys]
-
-        # Populate R-tree index with bounds of polygons
-        self.rtree_idx = rtree.index.Index()
-        for pos, polygon in enumerate(split_polys):
-            self.rtree_idx.insert(pos, polygon.bounds)
-
-        # Get ocean current variables
-        self.include_currents = include_currents
-        if include_currents:
-            self.u, self.v, self.lons, self.lats = ocean_current.read_netcdf(self.date)
-        else:
-            self.u, self.v, self.lons, self.lats = None, None, None, None
 
         # Create Fitness and Individual types
         creator.create("FitnessMin", base.Fitness, weights=(-1.0, -1.0))
         creator.create("Individual", list, fitness=creator.FitnessMin)
 
-        # --Register function aliases
+        # Create toolbox for function aliases
         self.toolbox = base.Toolbox()
 
-        # Feasibility
-        self.toolbox.register("edge_feasible", self.edge_feasible)
+        self.start = start
+        self.end = end
+        self.geod = pyproj.Geod(a=6378137.0, f=0.0033528106647475126)
+        self.vessel = Vessel(vessel_name)                                   # Create vessel class
+        self.resolution = resolution                                        # Resolution of shorelines
+        self.max_poly_size = max_poly_size                                  # Parameter for split_polygon
+        try:                                                                # Import land obstacles as polygons
+            with open('output/split_polygons/res_{0}_treshold_{1}'.format(self.resolution, self.max_poly_size),
+                      'rb') as f:
+                split_polys = pickle.load(f)
+        except FileNotFoundError:
+            split_polys = katana.get_split_polygons(self.resolution, self.max_poly_size)
+        self.prep_polys = [prep(poly) for poly in split_polys]              # Prepared and split land polygons
 
-        # Mutation
-        self.toolbox.register("insert", mutation.insert_waypoint, self.toolbox, self.width_ratio)
-        self.toolbox.register("delete", mutation.delete_random_waypoints, self.toolbox)
-        self.toolbox.register("speed", mutation.change_speed, self.vessel)
-        self.toolbox.register("move", mutation.move_waypoints, self.toolbox, self.radius)
-        self.toolbox.register("mutate", mutation.mutate, self.toolbox, self.mutation_ops)
+        # Populate R-tree index with bounds of polygons
+        self.rtree_idx = rtree.index.Index()
+        for idx, poly in enumerate(split_polys):
+            self.rtree_idx.insert(idx, poly.bounds)
 
-        # Evaluation
-        self.toolbox.register("evaluate", self.evaluate)
-        self.toolbox.decorate("evaluate", tools.DeltaPenalty(self.feasible, [99999999999, 99999999999]))
+        # Initialize "Evaluator" and register it's functions
+        self.evaluator = evaluation.Evaluator(self.vessel, self.prep_polys, self.rtree_idx, self.geod)
+        self.toolbox.register("edge_feasible", self.evaluator.edge_feasible)
+        self.toolbox.register("feasible", self.evaluator.feasible)
+        self.toolbox.register("evaluate", self.evaluator.evaluate)
+        self.toolbox.decorate("evaluate", tools.DeltaPenalty(self.toolbox.feasible, [math.inf, math.inf]))
 
-        # Selection and crossover
-        self.toolbox.register("mate", recombination.crossover, self.toolbox, )
+        # Initialize "Initializer" and register it's functions
+        self.initializer = initialization.Initializer(self.start, self.end, self.geod, self.vessel, self.resolution,
+                                                      self.prep_polys, self.rtree_idx, self.toolbox)
+        self.toolbox.register("global_routes", self.initializer.get_global_routes, creator.Individual)
+
+        # Initialize "Operator" and register it's functions
+        self.operators = operations.Operators(self.toolbox, self.vessel)
+        self.toolbox.register("mutate", self.operators.mutate)
+        self.toolbox.register("mate", self.operators.crossover)
+
+        # Register NSGA2 functions and set parameter settings
         self.toolbox.register("select", tools.selNSGA2)
-
-        # Initialization
-        self.toolbox.register("global_routes", init.get_global_routes, creator.Individual, self.resolution,
-                              self.g_density, self.g_var_density, self.prepared_polygons, self.rtree_idx,
-                              self.start, self.end, self.vessel)
         self.toolbox.register("population", tools.initRepeat, list)
-
-        # Genetic/Evolutionary algorithm parameter settings
+        self.cx_prob = cx_prob
         self.n_gen = n_gen
         self.mu = mu
-        self.cx_prob = cx_prob
 
     def nsga2(self, seed=None):
         random.seed(seed)
 
-        stats = tools.Statistics(lambda ind: ind.fitness.values)
-        stats.register("avg", np.mean, axis=0)
-        stats.register("std", np.std, axis=0)
-        stats.register("min", np.min, axis=0)
-        stats.register("max", np.max, axis=0)
+        stats_fit = tools.Statistics(lambda ind: ind.fitness.values)
+        stats_size = tools.Statistics(key=len)
+        mstats = tools.MultiStatistics(fitness=stats_fit, size=stats_size)
+        mstats.register("avg", np.mean, axis=0)
+        mstats.register("std", np.std, axis=0)
+        mstats.register("min", np.min, axis=0)
+        mstats.register("max", np.max, axis=0)
 
         glob_routes, n_paths = self.toolbox.global_routes()
 
@@ -151,10 +107,12 @@ class RoutePlanner:
                 print('----------------- Computing sub path {0} of {1} -----------------'.format(su + 1,
                                                                                                  len(glob_route)))
 
-                self.toolbox.register("individual", init.init_individual, self.toolbox, sub_route)
+                self.toolbox.register("individual", initialization.init_individual, self.toolbox, sub_route)
 
                 logbook = tools.Logbook()
-                logbook.header = "gen", "evals", "std", "min", "avg", "max"
+                logbook.header = "gen", "evals", "fitness", "size"
+                logbook.chapters["fitness"].header = "min", "avg", "max"
+                logbook.chapters["size"].header = "min", "avg", "max"
 
                 pop = self.toolbox.population(self.toolbox.individual, self.mu)
 
@@ -168,7 +126,7 @@ class RoutePlanner:
                 # no actual selection is done
                 pop = self.toolbox.select(pop, len(pop))
 
-                record = stats.compile(pop)
+                record = mstats.compile(pop)
                 logbook.record(gen=0, evals=len(invalid_ind), **record)
                 print(logbook.stream)
 
@@ -194,7 +152,7 @@ class RoutePlanner:
 
                     # Select the next generation population
                     pop = self.toolbox.select(pop + offspring, self.mu)
-                    record = stats.compile(pop)
+                    record = mstats.compile(pop)
                     logbook.record(gen=gen, evals=len(invalid_ind), **record)
                     print(logbook.stream)
 
@@ -207,99 +165,15 @@ class RoutePlanner:
 
         return all_pops, all_logs
 
-    def evaluate(self, individual):
-        # Initialize variables
-        travel_time = fuel_consumption = 0.0
-
-        for e in range(len(individual) - 1):
-            p1, p2, boat_speed = individual[e][0], individual[e+1][0], individual[e][1]
-            k = tuple(sorted([p1, p2]))
-
-            e_dist = self.dist_cache.get(k, False)
-            if not e_dist:  # Never steps in IF-statement
-                print('computes distance')
-                e_dist = great_circle.distance(p1[0], p1[1], p2[0], p2[1], self.geod)
-                self.dist_cache[k] = e_dist
-
-            if self.include_currents:
-                # Split edge in segments (seg) of max seg_length in km
-                points = self.points_cache.get(k, False)
-                if not points:  # Never steps in IF-statement
-                    print('computes points')
-                    points = great_circle.points(p1[0], p1[1], p2[0], p2[1], e_dist, self.geod, self.del_s)
-                    self.points_cache[k] = points
-                lons, lats = points[0], points[1]
-                e_travel_time = 0.0
-                for i in range(len(lons)-1):
-                    p1, p2 = (lons[i], lats[i]), (lons[i+1], lats[i+1])
-                    seg_travel_time = ocean_current.get_edge_travel_time(p1, p2, boat_speed, e_dist, self.u, self.v,
-                                                                         self.lons, self.lats)
-                    e_travel_time += seg_travel_time
-            else:
-                e_travel_time = e_dist / boat_speed
-            edge_fuel_consumption = self.vessel.fuel_rates[boat_speed] * e_travel_time  # Tons
-
-            # Increment objective values
-            travel_time += e_travel_time
-            fuel_consumption += edge_fuel_consumption
-
-        return travel_time, fuel_consumption
-
-    def feasible(self, individual):
-        for i in range(len(individual) - 1):
-            p1, p2 = individual[i][0], individual[i+1][0]
-            if not self.edge_feasible(p1, p2):
-                return False
-        return True
-
-    def edge_feasible(self, p1, p2):
-        # First check if feasibility check is already performed
-        k = tuple(sorted([p1, p2]))
-        feasible = self.feas_cache.get(k, None)
-        if feasible == 1:
-            return True
-        elif feasible == 0:
-            return False
-
-        dist = self.dist_cache.get(k, False)
-        if not dist:
-            dist = great_circle.distance(p1[0], p1[1], p2[0], p2[1], self.geod)
-            self.dist_cache[k] = dist
-
-        points = self.points_cache.get(k, False)
-        if not points:
-            points = great_circle.points(p1[0], p1[1], p2[0], p2[1], dist, self.geod, self.del_s)
-            self.points_cache[k] = points
-        lons, lats = points[0], points[1]
-        for i in range(len(lons)-1):
-            # Compute line bounds
-            q1_x, q1_y = lons[i], lats[i]
-            q2_x, q2_y = lons[i+1], lats[i+1]
-            line_bounds = (min(q1_x, q2_x), min(q1_y, q2_y), max(q1_x, q2_x), max(q1_y, q2_y))
-
-            # Returns the geometry indices of the minimum bounding rectangles of polygons that intersect the edge bounds
-            mbr_intersections = self.rtree_idx.intersection(line_bounds)
-            if mbr_intersections:
-                # Create LineString if there is at least one minimum bounding rectangle intersection
-                shapely_line = LineString([(q1_x, q1_y), (q2_x, q2_y)])
-
-                # For every mbr intersection check if its polygon is actually intersect by the edge
-                for idx in mbr_intersections:
-                    if self.prepared_polygons[idx].intersects(shapely_line):
-                        self.feas_cache[k] = 0
-                        return False
-        self.feas_cache[k] = 1
-        return True
-
 
 if __name__ == "__main__":
-    # start, end = (3.14516, 4.68508), (-94.5968, 26.7012)  # Gulf of Guinea, Gulf of Mexico
-    # start, end = (-23.4166, -7.2574), (-72.3352, 12.8774)  # South Atlantic (Brazil), Caribbean Sea
-    # start, end = (77.7962, 4.90087), (48.1425, 12.5489)  # Laccadive Sea, Gulf of Aden
-    # start, end = (-5.352121, 48.021295), (53.131866, 13.521350)  #
-    start, end = (34.252773, 43.461197), (53.131866, 13.521350)  # Black of Sea, Gulf of Aden
+    # _start, _end = (3.14516, 4.68508), (-94.5968, 26.7012)  # Gulf of Guinea, Gulf of Mexico
+    # _start, _end = (-23.4166, -7.2574), (-72.3352, 12.8774)  # South Atlantic (Brazil), Caribbean Sea
+    # _start, _end = (77.7962, 4.90087), (48.1425, 12.5489)  # Laccadive Sea, Gulf of Aden
+    # _start, _end = (-5.352121, 48.021295), (-53.306878, 46.423969)  # Normandy, Canada
+    _start, _end = (34.252773, 43.461197), (53.131866, 13.521350)  # Black of Sea, Gulf of Aden
 
-    planner = RoutePlanner(start, end, include_currents=False, n_gen=200)
+    planner = RoutePlanner(_start, _end)
     paths_populations, paths_statistics = planner.nsga2(seed=1)
 
     all_best_individuals, sub_path_pop = [], None
@@ -310,22 +184,43 @@ if __name__ == "__main__":
             statistics = paths_statistics[p][s]
             sub_path_pop.sort(key=lambda x: x.fitness.values)
 
-            output_file_name = 'path_{0}/{1:%H_%M_%S}_population_sub_path_{2}'.format(p, timestamp, s)
-            try:
-                with open('output/' + output_file_name, 'wb') as file:
-                    pickle.dump(sub_path_pop, file)
-            except FileNotFoundError:
-                os.mkdir('output/path_{}'.format(p))
-                with open('output/' + output_file_name, 'wb') as file:
-                    pickle.dump(sub_path_pop, file)
-
+            output_file_name = '{0:%H_%M_%S}_population_p{1}_sp{2}'.format(timestamp, p, s)
+            with open('output/paths/' + output_file_name, 'wb') as file:
+                pickle.dump(sub_path_pop, file)
+            print('Saved path {}, sub path {} to output/{}'.format(p, s, output_file_name))
             # Select sub path with least fitness values
             best_individual.append(sub_path_pop[0])
+            print(sub_path_pop[0].fitness.values)
 
         print('Path {}: '.format(p), tuple(sum([np.array(path.fitness.values) for path in best_individual])))
         all_best_individuals.extend(best_individual)
 
-    front = np.array([ind.fitness.values for ind in sub_path_pop])
-    plt.scatter(front[:, 0], front[:, 1], c="b")
-    plt.axis("tight")
+    for logs in paths_statistics:
+        for logbook in logs:
+            gen = logbook.select("gen")
+            fit_mins = logbook.chapters["fitness"].select("min")
+            size_avgs = logbook.chapters["size"].select("avg")
+
+            fig, ax1 = plt.subplots()
+            line1 = ax1.plot(gen, fit_mins, "b-", label="Minimum Fitness")
+            ax1.set_xlabel("Generation")
+            ax1.set_ylabel("Fitness", color="b")
+            for tl in ax1.get_yticklabels():
+                tl.set_color("b")
+
+            ax2 = ax1.twinx()
+            line2 = ax2.plot(gen, size_avgs, "r-", label="Average Size")
+            ax2.set_ylabel("Size", color="r")
+            for tl in ax2.get_yticklabels():
+                tl.set_color("r")
+
+            lns = line1 + line2
+            labs = [l.get_label() for l in lns]
+            ax1.legend(lns, labs, loc="center right")
+
     plt.show()
+
+    # front = np.array([ind.fitness.values for ind in sub_path_pop])
+    # plt.scatter(front[:, 0], front[:, 1], c="b")
+    # plt.axis("tight")
+    # plt.show()
