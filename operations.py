@@ -19,7 +19,7 @@ class Operators:
                  toolbox,
                  vessel,
                  radius=1,
-                 width_ratio=0.5,
+                 width_ratio=1,
                  mutation_ops=None
                  ):
         self.toolbox = toolbox
@@ -41,6 +41,7 @@ class Operators:
             self.change_speed(ind)
         else:
             self.insert_waypoint(ind, initializing)
+        return ind,
     
     def insert_waypoint(self, ind, initializing):
         if initializing:
@@ -57,7 +58,7 @@ class Operators:
             dy, dx = p2[1] - p1[1], p2[0] - p1[0]
 
             try:
-                slope = dy / (dx + 0.0)
+                slope = dy / dx
             except ZeroDivisionError:
                 slope = 'inf'
 
@@ -80,7 +81,8 @@ class Operators:
             v1, v2 = a - p1, b - p1
             trials = 0
             while True:
-                new_wp = tuple(p1 + random.random() * v1 + random.random() * v2)  # Random point in quadrilateral
+                new_wp_arr = p1 + random.random() * v1 + random.random() * v2
+                new_wp = tuple(np.clip(new_wp_arr, [-180, -90], [180, 90]))
 
                 if initializing and (not self.toolbox.edge_feasible(p1_tup, new_wp) or
                                      not self.toolbox.edge_feasible(new_wp, p2_tup)):
@@ -94,7 +96,7 @@ class Operators:
                 ind.insert(e+1, [new_wp, ind[e][1]])
                 break
         return
-    
+
     def move_waypoints(self, ind, initializing):
         if initializing:
             n_wps = 1
@@ -110,7 +112,9 @@ class Operators:
                 r = self.radius * sqrt(u2)  # Square root for a uniform probability of choosing a point in the circle
                 a = u1 * 2 * pi
                 c_s = np.array([cos(a), sin(a)])
-                new_wp = tuple(wp + r * c_s)
+
+                new_wp_arr = wp + r * c_s
+                new_wp = tuple(np.clip(new_wp_arr, [-180, -90], [180, 90]))
     
                 # Check if waypoint and edges do not intersect a polygon
                 if initializing and (not self.toolbox.edge_feasible(ind[wp_idx-1][0], new_wp) or
@@ -183,17 +187,42 @@ class Operators:
             item[1] = new_speed
         return
 
+    # def crossover(self, ind1, ind2):
+    #     p1s = [[i, el[0]] for i, el in enumerate(ind1)][1:-2]
+    #     random.shuffle(p1s)
+    #     p2s = [[i, el[0]] for i, el in enumerate(ind2)][2:-1]
+    #     random.shuffle(p2s)
+    #     while p1s:
+    #         p1_idx, p1 = p1s.pop()
+    #         p2s_copy = p2s[:]
+    #         while p2s_copy:
+    #             p2_idx, p2 = p2s_copy.pop()
+    #             if self.toolbox.edge_feasible(p1, p2):
+    #                 ind1[p1_idx:] = ind2[p2_idx:]
+    #             # if len(ind2[:p2_idx]) + len(ind1[p1_idx:]) > 4 and len(ind1[:p1_idx]) + len(ind2[p2_idx:]) > 4 \
+    #             #         and self.toolbox.edge_feasible(ind1[p1_idx-1][0], p2) \
+    #             #         and self.toolbox.edge_feasible(ind2[p2_idx-1][0], p1):
+    #             #     ind1[p1_idx:] = ind2[p2_idx:]
+    #             #     ind2[p2_idx:] = ind1[p1_idx:]
+    #             #
+    #             #     assert len(ind1) > 2 and len(ind2) > 2
+    #                 return ind1, ind2
+    #     return ind1, ind2
+
     def crossover(self, ind1, ind2):
-        p1s = [[i, el[0]] for i, el in enumerate(ind1)][1:-2]
-        random.shuffle(p1s)
-        p2s = [[i, el[0]] for i, el in enumerate(ind2)][2:-1]
-        random.shuffle(p2s)
-        while p1s:
-            p1_idx, p1 = p1s.pop()
-            p2s_copy = p2s[:]
-            while p2s_copy:
-                p2_idx, p2 = p2s_copy.pop()
-                if self.toolbox.edge_feasible(p1, p2):
-                    child = ind1[:p1_idx + 1] + ind2[p2_idx:]
-                    return child
-        return False
+        size = min(len(ind1), len(ind2))
+        cx_pt1, cx_pt2 = random.randint(2, size - 2), random.randint(2, size - 2)
+        trials = 0
+        while ind2[cx_pt2-1][0] == ind1[cx_pt1][0] or ind1[cx_pt1-1][0] == ind2[cx_pt2][0]:
+            cx_pt1, cx_pt2 = random.randint(2, size - 2), random.randint(2, size - 2)
+            trials += 1
+            if trials > 100:
+                print('Crossover trials exceeded')
+                return ind1, ind2
+
+        # Check feasibility
+        if self.toolbox.edge_feasible(ind1[cx_pt1-1][0], ind2[cx_pt2][0]) \
+                and self.toolbox.edge_feasible(ind2[cx_pt2-1][0], ind1[cx_pt1][0]):
+            assert len(ind1[:cx_pt1]) + len(ind2[cx_pt2:]) > 2 and len(ind2[:cx_pt2]) + len(ind1[cx_pt1:]) > 2
+            ind1[cx_pt1:], ind2[cx_pt2:] = ind2[cx_pt2:], ind1[cx_pt1:]
+        return ind1, ind2
