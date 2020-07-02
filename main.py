@@ -12,7 +12,7 @@ import random
 import rtree
 
 from datetime import datetime
-from deap import base, creator, tools
+from deap import base, creator, tools, algorithms
 from shapely.prepared import prep
 
 
@@ -24,16 +24,22 @@ class Vessel:
         self.fuel_rates = {speed: round(table['Fuel'][i], 1) for i, speed in enumerate(self.speeds)}
 
 
+Nbar = 50
+N = 100
+GEN = 250
+CXPB = 0.9
+MUTPB = 0.9
+
+
 class RoutePlanner:
     def __init__(self,
-                 start,
-                 end,
+                 start=None,
+                 end=None,
+                 seca_factor=1.2,
                  resolution='c',
                  max_poly_size=4,
-                 n_gen=100,
-                 mu=4 * 20,
                  vessel_name='Fairmaster',
-                 cx_prob=0.9
+                 include_currents=True
                  ):
 
         # Create Fitness and Individual types
@@ -45,7 +51,8 @@ class RoutePlanner:
 
         self.start = start
         self.end = end
-        self.geod = pyproj.Geod(a=6378137.0, f=0.0033528106647475126)
+        self.seca_factor = seca_factor
+        self.geod = pyproj.Geod(a=3443.918467, f=0.0033528106647475126)
         self.vessel = Vessel(vessel_name)                                   # Create vessel class
         self.resolution = resolution                                        # Resolution of shorelines
         self.max_poly_size = max_poly_size                                  # Parameter for split_polygon
@@ -63,30 +70,33 @@ class RoutePlanner:
             self.rtree_idx.insert(idx, poly.bounds)
 
         # Initialize "Evaluator" and register it's functions
-        self.evaluator = evaluation.Evaluator(self.vessel, self.prep_polys, self.rtree_idx, self.geod)
+        self.evaluator = evaluation.Evaluator(self.vessel, self.prep_polys, self.rtree_idx, self.geod, self.seca_factor,
+                                              include_currents=include_currents)
         self.toolbox.register("edge_feasible", self.evaluator.edge_feasible)
         self.toolbox.register("feasible", self.evaluator.feasible)
         self.toolbox.register("evaluate", self.evaluator.evaluate)
         self.toolbox.decorate("evaluate", tools.DeltaPenalty(self.toolbox.feasible, [math.inf, math.inf]))
 
         # Initialize "Initializer" and register it's functions
-        self.initializer = initialization.Initializer(self.start, self.end, self.geod, self.vessel, self.resolution,
-                                                      self.prep_polys, self.rtree_idx, self.toolbox)
-        self.toolbox.register("global_routes", self.initializer.get_global_routes, creator.Individual)
+        if start and end:
+            self.initializer = initialization.Initializer(self.start, self.end, self.geod, self.vessel, self.resolution,
+                                                          self.prep_polys, self.rtree_idx, self.toolbox)
+            self.toolbox.register("init_routes", self.initializer.get_init_routes, creator.Individual)
+        else:
+            print('No start and endpoint given')
 
         # Initialize "Operator" and register it's functions
-        self.operators = operations.Operators(self.toolbox, self.vessel)
+        self.operators = operations.Operators(self.toolbox, self.vessel, width_ratio=3, radius=5)
         self.toolbox.register("mutate", self.operators.mutate)
         self.toolbox.register("mate", self.operators.crossover)
+        # self.toolbox.register("mate", tools.cxOnePoint)
 
-        # Register NSGA2 functions and set parameter settings
-        self.toolbox.register("select", tools.selNSGA2)
         self.toolbox.register("population", tools.initRepeat, list)
-        self.cx_prob = cx_prob
-        self.n_gen = n_gen
-        self.mu = mu
 
-    def nsga2(self, seed=None):
+    def spea2(self, seed=None):
+        # Register SPEA2 selection function
+        self.toolbox.register("select", tools.selSPEA2)
+
         random.seed(seed)
 
         stats_fit = tools.Statistics(lambda ind: ind.fitness.values)
@@ -97,24 +107,100 @@ class RoutePlanner:
         mstats.register("min", np.min, axis=0)
         mstats.register("max", np.max, axis=0)
 
-        glob_routes, n_paths = self.toolbox.global_routes()
+        init_routes = self.toolbox.init_routes()
 
-        all_pops, all_logs = [], []
-        for gl, glob_route in enumerate(glob_routes):
-            print('----------------- Computing path {0} of {1} -----------------'.format(gl + 1, len(glob_routes)))
-            path_pops, path_logs = [], []
-            for su, sub_route in enumerate(glob_route):
-                print('----------------- Computing sub path {0} of {1} -----------------'.format(su + 1,
-                                                                                                 len(glob_route)))
+        paths, path_logs = {}, {}
+        for p_idx, init_route in enumerate(init_routes):
+            print('----------------- Path {0}/{1} -----------------'.format(p_idx+1, len(init_routes)))
+            sub_paths, sub_path_logs = {}, {}
+            for sp_idx, sub_route in enumerate(init_route):
+                print('----------------- Sub path {0}/{1} -----------------'.format(sp_idx+1, len(init_route)))
 
                 self.toolbox.register("individual", initialization.init_individual, self.toolbox, sub_route)
 
-                logbook = tools.Logbook()
-                logbook.header = "gen", "evals", "fitness", "size"
-                logbook.chapters["fitness"].header = "min", "avg", "max"
-                logbook.chapters["size"].header = "min", "avg", "max"
+                log = tools.Logbook()
+                log.header = "gen", "evals", "fitness", "size"
+                log.chapters["fitness"].header = "min", "avg", "max"
+                log.chapters["size"].header = "min", "avg", "max"
 
-                pop = self.toolbox.population(self.toolbox.individual, self.mu)
+                # Step 1 Initialization
+                pop = self.toolbox.population(self.toolbox.individual, N)
+                archive = []
+                curr_gen = 1
+
+                # Begin the generational process
+                while True:
+                    # Step 2: Fitness assignment
+                    # Population
+                    invalid_ind1 = [ind for ind in pop if not ind.fitness.valid]
+                    fitnesses = self.toolbox.map(self.toolbox.evaluate, invalid_ind1)
+                    for ind, fit in zip(invalid_ind1, fitnesses):
+                        ind.fitness.values = fit
+
+                    # Archive
+                    invalid_ind2 = [ind for ind in archive if not ind.fitness.valid]
+                    fitnesses = self.toolbox.map(self.toolbox.evaluate, invalid_ind2)
+                    for ind, fit in zip(invalid_ind2, fitnesses):
+                        ind.fitness.values = fit
+
+                    # Step 3: Environmental selection
+                    archive = self.toolbox.select(pop + archive, k=Nbar)
+
+                    record = mstats.compile(archive)
+                    log.record(gen=curr_gen, evals=(len(invalid_ind1) + len(invalid_ind2)), **record)
+                    print(log.stream)
+
+                    # Step 4: Termination
+                    if curr_gen >= GEN:
+                        sub_paths[sp_idx] = archive
+                        sub_path_logs[sp_idx] = log
+                        self.toolbox.unregister("individual")
+                        break
+
+                    # Step 5 Mating Selection
+                    mating_pool = tools.selTournament(archive, k=N, tournsize=2)
+
+                    # Step 6: Variation
+                    pop = algorithms.varAnd(mating_pool, self.toolbox, CXPB, MUTPB)
+
+                    curr_gen += 1
+
+            paths[p_idx] = sub_paths
+            path_logs[p_idx] = sub_path_logs
+
+        return paths, path_logs, init_routes
+
+    def nsga2(self, seed=None):
+        # Register NSGA2 selection function
+        self.toolbox.register("select", tools.selNSGA2)
+
+        random.seed(seed)
+
+        stats_fit = tools.Statistics(lambda ind: ind.fitness.values)
+        stats_size = tools.Statistics(key=len)
+        mstats = tools.MultiStatistics(fitness=stats_fit, size=stats_size)
+        mstats.register("avg", np.mean, axis=0)
+        mstats.register("std", np.std, axis=0)
+        mstats.register("min", np.min, axis=0)
+        mstats.register("max", np.max, axis=0)
+
+        init_routes = self.toolbox.init_routes()
+
+        paths, path_logs = {}, {}
+        for p_idx, init_route in enumerate(init_routes):
+            print('----------------- Path {0}/{1} -----------------'.format(p_idx+1, len(init_routes)))
+            sub_paths, sub_path_logs = {}, {}
+            for sp_idx, sub_route in enumerate(init_route):
+                print('----------------- Sub path {0}/{1} -----------------'.format(sp_idx+1, len(init_route)))
+
+                self.toolbox.register("individual", initialization.init_individual, self.toolbox, sub_route)
+
+                log = tools.Logbook()
+                log.header = "gen", "evals", "fitness", "size"
+                log.chapters["fitness"].header = "min", "avg", "max"
+                log.chapters["size"].header = "min", "avg", "max"
+
+                pop = self.toolbox.population(self.toolbox.individual, N)
 
                 # Evaluate the individuals with an invalid fitness
                 invalid_ind = [ind for ind in pop if not ind.fitness.valid]
@@ -127,22 +213,13 @@ class RoutePlanner:
                 pop = self.toolbox.select(pop, len(pop))
 
                 record = mstats.compile(pop)
-                logbook.record(gen=0, evals=len(invalid_ind), **record)
-                print(logbook.stream)
+                log.record(gen=0, evals=len(invalid_ind), **record)
+                print(log.stream)
 
                 # Begin the generational process
-                for gen in range(1, self.n_gen):
-                    # Vary the population
-                    offspring = tools.selTournamentDCD(pop, len(pop))
-                    offspring = list(self.toolbox.map(self.toolbox.clone, offspring))
-                    # offspring = [self.toolbox.clone(ind) for ind in offspring]
-
-                    for ind1, ind2 in zip(offspring[::2], offspring[1::2]):
-                        if random.random() <= self.cx_prob:
-                            self.toolbox.mate(ind1, ind2)
-                        self.toolbox.mutate(ind1)
-                        self.toolbox.mutate(ind2)
-                        del ind1.fitness.values, ind2.fitness.values
+                for gen in range(1, GEN):
+                    # Variation of the population
+                    offspring = algorithms.varAnd(pop, self.toolbox, CXPB, MUTPB)
 
                     # Evaluate the individuals with an invalid fitness
                     invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
@@ -151,19 +228,21 @@ class RoutePlanner:
                         ind.fitness.values = fit
 
                     # Select the next generation population
-                    pop = self.toolbox.select(pop + offspring, self.mu)
-                    record = mstats.compile(pop)
-                    logbook.record(gen=gen, evals=len(invalid_ind), **record)
-                    print(logbook.stream)
+                    pop = self.toolbox.select(pop + offspring, N)
 
-                path_pops.append(pop)
-                path_logs.append(logbook)
+                    # Record statistics
+                    record = mstats.compile(pop)
+                    log.record(gen=gen, evals=len(invalid_ind), **record)
+                    print(log.stream)
+
+                sub_paths[sp_idx] = pop
+                sub_path_logs[sp_idx] = log
                 self.toolbox.unregister("individual")
 
-            all_pops.append(path_pops)
-            all_logs.append(path_logs)
+            paths[p_idx] = sub_paths
+            path_logs[p_idx] = sub_path_logs
 
-        return all_pops, all_logs
+        return paths, path_logs, init_routes
 
 
 if __name__ == "__main__":
@@ -171,56 +250,65 @@ if __name__ == "__main__":
     # _start, _end = (-23.4166, -7.2574), (-72.3352, 12.8774)  # South Atlantic (Brazil), Caribbean Sea
     # _start, _end = (77.7962, 4.90087), (48.1425, 12.5489)  # Laccadive Sea, Gulf of Aden
     # _start, _end = (-5.352121, 48.021295), (-53.306878, 46.423969)  # Normandy, Canada
-    _start, _end = (34.252773, 43.461197), (53.131866, 13.521350)  # Black of Sea, Gulf of Aden
+    # _start, _end = (34.252773, 43.461197), (53.131866, 13.521350)  # Black of Sea, Gulf of Aden
+    _start, _end = (20.891193, 58.464147), (-85.063585, 29.175463)  # Gulf of Bothnia, Gulf of Mexico
+    # _start, _end = (3.891292, 60.088472), (-7.562237, 47.403357)  # North UK, South UK
 
-    planner = RoutePlanner(_start, _end)
-    paths_populations, paths_statistics = planner.nsga2(seed=1)
+    _route_planner = RoutePlanner(_start, _end, seca_factor=1, include_currents=False)
+    _paths, _path_logs, _init_routes = _route_planner.spea2(seed=1)
 
-    all_best_individuals, sub_path_pop = [], None
+    # Save parameters
     timestamp = datetime.now()
-    for p, path_population in enumerate(paths_populations):
-        best_individual = []
-        for s, sub_path_pop in enumerate(path_population):
-            statistics = paths_statistics[p][s]
-            sub_path_pop.sort(key=lambda x: x.fitness.values)
 
-            output_file_name = '{0:%H_%M_%S}_population_p{1}_sp{2}'.format(timestamp, p, s)
-            with open('output/paths/' + output_file_name, 'wb') as file:
-                pickle.dump(sub_path_pop, file)
-            print('Saved path {}, sub path {} to output/{}'.format(p, s, output_file_name))
-            # Select sub path with least fitness values
-            best_individual.append(sub_path_pop[0])
-            print(sub_path_pop[0].fitness.values)
+    # Save initial routes
+    init_routes_fn = '{0:%H_%M_%S}_init_routes'.format(timestamp)
+    with open('output/glob_routes/' + init_routes_fn, 'wb') as file:
+        pickle.dump(_init_routes, file)
+    print('Saved initial routes to: ' + 'output/glob_routes/' + init_routes_fn)
 
-        print('Path {}: '.format(p), tuple(sum([np.array(path.fitness.values) for path in best_individual])))
-        all_best_individuals.extend(best_individual)
+    # Save logs
+    logs_fn = '{:%H_%M_%S}_logs'.format(timestamp)
+    with open('output/logs/' + logs_fn, 'wb') as file:
+        pickle.dump(_path_logs, file)
+    print('Saved logs to output/logs/{}'.format(logs_fn))
 
-    for logs in paths_statistics:
-        for logbook in logs:
-            gen = logbook.select("gen")
-            fit_mins = logbook.chapters["fitness"].select("min")
-            size_avgs = logbook.chapters["size"].select("avg")
+    # Save paths
+    paths_fn = '{0:%H_%M_%S}_paths'.format(timestamp)
+    with open('output/paths/' + paths_fn, 'wb') as file:
+        pickle.dump(_paths, file)
+    print('Saved paths to "output/paths/{}"'.format(paths_fn))
+
+    # Plot statistics
+    for p, path_log in enumerate(_path_logs.values()):
+        for sp, sub_path_log in enumerate(path_log.values()):
+            _gen = sub_path_log.select("gen")
+            fit_mins = sub_path_log.chapters["fitness"].select("min")
+            time_mins = [fit_min[0] for fit_min in fit_mins]
+            fuel_mins = [fit_min[1] for fit_min in fit_mins]
+            path_time_min = fit_mins[time_mins.index(min(time_mins))]
+            path_fuel_min = fit_mins[fuel_mins.index(min(fuel_mins))]
+            print('P{0} SP{1}: Min Time {2}'.format(p, sp, path_time_min))
+            print('P{0} SP{1}: Min Fuel {2}'.format(p, sp, path_fuel_min))
+            size_avgs = sub_path_log.chapters["size"].select("avg")
 
             fig, ax1 = plt.subplots()
-            line1 = ax1.plot(gen, fit_mins, "b-", label="Minimum Fitness")
+            line1 = ax1.plot(_gen, fit_mins, "b-", label="Minimum Fitness")
             ax1.set_xlabel("Generation")
             ax1.set_ylabel("Fitness", color="b")
             for tl in ax1.get_yticklabels():
                 tl.set_color("b")
 
             ax2 = ax1.twinx()
-            line2 = ax2.plot(gen, size_avgs, "r-", label="Average Size")
+            line2 = ax2.plot(_gen, size_avgs, "r-", label="Average Size")
             ax2.set_ylabel("Size", color="r")
             for tl in ax2.get_yticklabels():
                 tl.set_color("r")
 
-            lns = line1 + line2
-            labs = [l.get_label() for l in lns]
-            ax1.legend(lns, labs, loc="center right")
-
-    plt.show()
+            lines = line1 + line2
+            labs = [line.get_label() for line in lines]
+            ax1.legend(lines, labs, loc="center right")
 
     # front = np.array([ind.fitness.values for ind in sub_path_pop])
     # plt.scatter(front[:, 0], front[:, 1], c="b")
     # plt.axis("tight")
-    # plt.show()
+    plt.show()
