@@ -2,6 +2,7 @@ import great_circle
 import hexagraph
 import heapq
 import itertools
+import math
 import networkx as nx
 import numpy as np
 
@@ -48,8 +49,11 @@ class Initializer:
                  for n, lon_lat in nx.get_node_attributes(self.graph, 'lon_lat').items()}
 
         # Add start and end nodes
-        self.graph.add_node('start', lon_lat=self.start)
-        self.graph.add_node('end', lon_lat=self.end)
+        x_s, x_e = math.cos(self.start[0]) * math.cos(self.start[1]), math.cos(self.end[0]) * math.cos(self.end[1])
+        y_s, y_e = math.sin(self.start[0]) * math.cos(self.start[1]), math.sin(self.end[0]) * math.cos(self.end[1])
+        z_s, z_e = math.sin(self.start[1]), math.sin(self.end[1])
+        self.graph.add_node('start', lon_lat=self.start, xyz=(x_s, y_s, z_s))
+        self.graph.add_node('end', lon_lat=self.end, xyz=(x_e, y_e, z_e))
 
         # Add three shortest edges to start and end point after checking feasibility
         nr_edges = 0
@@ -80,6 +84,11 @@ class Initializer:
                        'Dardanelles': ['dardanelles_south', 'dardanelles_north']}
         self.canal_nodes = [n for element in self.canals.values() for n in element]
 
+    def dist_heur(self, n1, n2):
+        (lon1, lat1) = self.graph.nodes[n1]['lon_lat']
+        (lon2, lat2) = self.graph.nodes[n2]['lon_lat']
+        return great_circle.distance(lon1, lat1, lon2, lat2, self.geod)
+
     def get_path(self, print_crossing=True):
         """
         Calculate shortest path from
@@ -87,6 +96,8 @@ class Initializer:
              path: list of sub paths of a shortest path from start to end
              x_canal_pairs: list with tuples of crossed canal nodes in order of crossing
         """
+
+        # path = [nx.astar_path(self.graph, 'start', 'end', heuristic=self.dist_heur, weight='miles')]
         path = [nx.shortest_path(self.graph, 'start', 'end', weight='miles', method='dijkstra')]
         x_canal_nodes = [wp for wp in path[0] if wp in self.canal_nodes]
 
@@ -105,7 +116,7 @@ class Initializer:
             x_canal_pairs = []
         return path, x_canal_pairs
 
-    def get_global_routes(self, container):
+    def get_init_routes(self, container):
         path, x_canal_pairs = self.get_path()
         paths = [path]
         if x_canal_pairs:
@@ -123,7 +134,7 @@ class Initializer:
                     paths.append(alternative_path)
 
         # Create individual of each sub path
-        global_routes = []
+        init_routes = []
         for path in paths:
             path_individuals = []
             for sub_path in path:
@@ -134,15 +145,13 @@ class Initializer:
                 for i, waypoint in enumerate(waypoints):
                     individual.append([waypoint, speeds[i]])
                 path_individuals.append(container(individual))
-            global_routes.append(path_individuals)
-
-        n_paths = {i: len(global_routes[i]) for i in range(len(global_routes))}
-        return global_routes, n_paths
+            init_routes.append(path_individuals)
+        return init_routes
 
 
 def init_individual(toolbox, individual_in):
     # Mutate graph route to obtain a population of initial routes
     mutant = toolbox.clone(individual_in)
     for i in range(max(100, len(individual_in) // 10)):
-        toolbox.mutate(mutant, initializing=True)
+        mutant, = toolbox.mutate(mutant, initializing=True)
     return mutant
