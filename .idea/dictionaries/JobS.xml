@@ -2,6 +2,7 @@
   <dictionary name="JobS">
     <words>
       <w>bilinear</w>
+      <w>colorbar</w>
       <w>coords</w>
       <w>cxpb</w>
       <w>geod</w>
@@ -10,6 +11,7 @@
       <w>haversine</w>
       <w>hexa</w>
       <w>hexagraph</w>
+      <w>inds</w>
       <w>laccadive</w>
       <w>lons</w>
       <w>mutpb</w>
