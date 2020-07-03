@@ -86,10 +86,9 @@ class RoutePlanner:
             print('No start and endpoint given')
 
         # Initialize "Operator" and register it's functions
-        self.operators = operations.Operators(self.toolbox, self.vessel, width_ratio=3, radius=5)
+        self.operators = operations.Operators(self.toolbox, self.vessel, self.geod, width_ratio=3, radius=5)
         self.toolbox.register("mutate", self.operators.mutate)
         self.toolbox.register("mate", self.operators.crossover)
-        # self.toolbox.register("mate", tools.cxOnePoint)
 
         self.toolbox.register("population", tools.initRepeat, list)
 
@@ -123,31 +122,25 @@ class RoutePlanner:
                 log.chapters["fitness"].header = "min", "avg", "max"
                 log.chapters["size"].header = "min", "avg", "max"
 
-                # Step 1 Initialization
+                # Step 1: Initialization
                 pop = self.toolbox.population(self.toolbox.individual, N)
                 archive = []
                 curr_gen = 1
 
+                # Step 2: Fitness assignment
+                invalid_inds1, invalid_inds2 = pop, []
+                fits = self.toolbox.map(self.toolbox.evaluate, invalid_inds1)
+                for ind, fit in zip(invalid_inds1, fits):
+                    ind.fitness.values = fit
+
                 # Begin the generational process
                 while True:
-                    # Step 2: Fitness assignment
-                    # Population
-                    invalid_ind1 = [ind for ind in pop if not ind.fitness.valid]
-                    fitnesses = self.toolbox.map(self.toolbox.evaluate, invalid_ind1)
-                    for ind, fit in zip(invalid_ind1, fitnesses):
-                        ind.fitness.values = fit
-
-                    # Archive
-                    invalid_ind2 = [ind for ind in archive if not ind.fitness.valid]
-                    fitnesses = self.toolbox.map(self.toolbox.evaluate, invalid_ind2)
-                    for ind, fit in zip(invalid_ind2, fitnesses):
-                        ind.fitness.values = fit
-
                     # Step 3: Environmental selection
                     archive = self.toolbox.select(pop + archive, k=Nbar)
 
+                    # Record statistics
                     record = mstats.compile(archive)
-                    log.record(gen=curr_gen, evals=(len(invalid_ind1) + len(invalid_ind2)), **record)
+                    log.record(gen=curr_gen, evals=(len(invalid_inds1) + len(invalid_inds2)), **record)
                     print(log.stream)
 
                     # Step 4: Termination
@@ -157,11 +150,24 @@ class RoutePlanner:
                         self.toolbox.unregister("individual")
                         break
 
-                    # Step 5 Mating Selection
+                    # Step 5: Mating Selection
                     mating_pool = tools.selTournament(archive, k=N, tournsize=2)
 
                     # Step 6: Variation
                     pop = algorithms.varAnd(mating_pool, self.toolbox, CXPB, MUTPB)
+
+                    # Step 2: Fitness assignment
+                    # Population
+                    invalid_inds1 = [ind for ind in pop if not ind.fitness.valid]
+                    fits = self.toolbox.map(self.toolbox.evaluate, invalid_inds1)
+                    for ind, fit in zip(invalid_inds1, fits):
+                        ind.fitness.values = fit
+
+                    # Archive
+                    invalid_inds2 = [ind for ind in archive if not ind.fitness.valid]
+                    fits = self.toolbox.map(self.toolbox.evaluate, invalid_inds2)
+                    for ind, fit in zip(invalid_inds2, fits):
+                        ind.fitness.values = fit
 
                     curr_gen += 1
 
@@ -200,44 +206,43 @@ class RoutePlanner:
                 log.chapters["fitness"].header = "min", "avg", "max"
                 log.chapters["size"].header = "min", "avg", "max"
 
+                # Step 1 Initialization
                 pop = self.toolbox.population(self.toolbox.individual, N)
+                offspring = []
+                curr_gen = 1
 
-                # Evaluate the individuals with an invalid fitness
-                invalid_ind = [ind for ind in pop if not ind.fitness.valid]
-                fitnesses = self.toolbox.map(self.toolbox.evaluate, invalid_ind)
-                for ind, fit in zip(invalid_ind, fitnesses):
+                # Step 2: Fitness assignment
+                fits = self.toolbox.map(self.toolbox.evaluate, pop)
+                for ind, fit in zip(pop, fits):
                     ind.fitness.values = fit
 
-                # This is just to assign the crowding distance to the individuals
-                # no actual selection is done
-                pop = self.toolbox.select(pop, len(pop))
-
-                record = mstats.compile(pop)
-                log.record(gen=0, evals=len(invalid_ind), **record)
-                print(log.stream)
-
                 # Begin the generational process
-                for gen in range(1, GEN):
-                    # Variation of the population
-                    offspring = algorithms.varAnd(pop, self.toolbox, CXPB, MUTPB)
-
-                    # Evaluate the individuals with an invalid fitness
-                    invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-                    fitnesses = self.toolbox.map(self.toolbox.evaluate, invalid_ind)
-                    for ind, fit in zip(invalid_ind, fitnesses):
-                        ind.fitness.values = fit
-
-                    # Select the next generation population
+                while True:
+                    # Step 3: Environmental selection
                     pop = self.toolbox.select(pop + offspring, N)
 
                     # Record statistics
                     record = mstats.compile(pop)
-                    log.record(gen=gen, evals=len(invalid_ind), **record)
+                    log.record(gen=curr_gen, evals=len(pop), **record)
                     print(log.stream)
 
-                sub_paths[sp_idx] = pop
-                sub_path_logs[sp_idx] = log
-                self.toolbox.unregister("individual")
+                    # Step 4: Termination
+                    if curr_gen >= GEN:
+                        sub_paths[sp_idx] = pop
+                        sub_path_logs[sp_idx] = log
+                        self.toolbox.unregister("individual")
+                        break
+
+                    # Step 5: Variation
+                    offspring = algorithms.varAnd(pop, self.toolbox, CXPB, MUTPB)
+
+                    # Step 2: Fitness assignment
+                    invalid_inds = [ind for ind in offspring if not ind.fitness.valid]
+                    fits = self.toolbox.map(self.toolbox.evaluate, invalid_inds)
+                    for ind, fit in zip(invalid_inds, fits):
+                        ind.fitness.values = fit
+
+                    curr_gen += 1
 
             paths[p_idx] = sub_paths
             path_logs[p_idx] = sub_path_logs
@@ -246,15 +251,15 @@ class RoutePlanner:
 
 
 if __name__ == "__main__":
-    # _start, _end = (3.14516, 4.68508), (-94.5968, 26.7012)  # Gulf of Guinea, Gulf of Mexico
+    _start, _end = (3.14516, 4.68508), (-94.5968, 26.7012)  # Gulf of Guinea, Gulf of Mexico
     # _start, _end = (-23.4166, -7.2574), (-72.3352, 12.8774)  # South Atlantic (Brazil), Caribbean Sea
     # _start, _end = (77.7962, 4.90087), (48.1425, 12.5489)  # Laccadive Sea, Gulf of Aden
     # _start, _end = (-5.352121, 48.021295), (-53.306878, 46.423969)  # Normandy, Canada
     # _start, _end = (34.252773, 43.461197), (53.131866, 13.521350)  # Black of Sea, Gulf of Aden
-    _start, _end = (20.891193, 58.464147), (-85.063585, 29.175463)  # Gulf of Bothnia, Gulf of Mexico
+    # _start, _end = (20.891193, 58.464147), (-85.063585, 29.175463)  # Gulf of Bothnia, Gulf of Mexico
     # _start, _end = (3.891292, 60.088472), (-7.562237, 47.403357)  # North UK, South UK
 
-    _route_planner = RoutePlanner(_start, _end, seca_factor=1, include_currents=False)
+    _route_planner = RoutePlanner(_start, _end, seca_factor=1.2, include_currents=False)
     _paths, _path_logs, _init_routes = _route_planner.spea2(seed=1)
 
     # Save parameters
