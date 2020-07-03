@@ -31,7 +31,8 @@ class Evaluator:
         self.include_currents = include_currents
         self.dist_cache = dict()
         self.feas_cache = dict()
-        self.points_cache = dict()
+        self.feas_points_cache = dict()
+        self.curr_points_cache = dict()
         self.travel_time_cache = dict()
 
         with open('C:/dev/data/seca_areas_csv', 'rb') as f:
@@ -59,11 +60,14 @@ class Evaluator:
                 self.dist_cache[k] = e_dist
 
             if self.include_currents:
-                k2 = k + (travel_time, boat_speed)
-                e_travel_time = self.travel_time_cache.get(k2, False)
+                k3 = k + (travel_time, boat_speed)
+                e_travel_time = self.travel_time_cache.get(k3, False)
                 if not e_travel_time:
                     # Split edge in segments (seg) of max seg_length in km
-                    points = self.points_cache.get(k, False)  # Evaluated in "Feasible" decorator
+                    points = self.curr_points_cache.get(k, False)
+                    if not points:
+                        points = great_circle.points(p1[0], p1[1], p2[0], p2[1], e_dist, self.geod, self.del_sc)
+                        self.curr_points_cache[k] = points
                     lons, lats = points[0], points[1]
                     e_travel_time = 0.0
                     for i in range(len(lons) - 1):
@@ -72,7 +76,7 @@ class Evaluator:
                         now = self.start_date + timedelta(hours=travel_time + e_travel_time)
                         seg_travel_time = self.get_seg_travel_time(p1, p2, boat_speed, seg_dist, now)
                         e_travel_time += seg_travel_time
-                    self.travel_time_cache[k2] = e_travel_time
+                    self.travel_time_cache[k3] = e_travel_time
             else:
                 e_travel_time = e_dist / boat_speed
 
@@ -110,10 +114,10 @@ class Evaluator:
             dist = great_circle.distance(p1[0], p1[1], p2[0], p2[1], self.geod)
             self.dist_cache[k] = dist
 
-        points = self.points_cache.get(k, False)
+        points = self.feas_points_cache.get(k, False)
         if not points:
             points = great_circle.points(p1[0], p1[1], p2[0], p2[1], dist, self.geod, self.del_s)
-            self.points_cache[k] = points
+            self.feas_points_cache[k] = points
         lons, lats = points[0], points[1]
         for i in range(len(lons) - 1):
             # Compute line bounds
