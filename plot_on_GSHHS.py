@@ -13,7 +13,7 @@ class Plotter:
                  vessel,
                  secas,
                  n_plots,
-                 ID_dict,
+                 id_dict,
                  plot_secas=True,
                  show_colorbar=True,
                  uin=None,
@@ -22,7 +22,7 @@ class Plotter:
                  lats=None):
         self.vessel = vessel
         self.col_map = cm.rainbow
-        self.ID_dict = ID_dict
+        self.ID_dict = id_dict
 
         if uin is not None:
             self.uin = uin
@@ -129,46 +129,51 @@ if __name__ == "__main__":
     route_planner = main.RoutePlanner(seca_factor=1.2,
                                       resolution='c',
                                       max_poly_size=4,
-                                      n_gen=100,
-                                      mu=4 * 20,
                                       vessel_name='Fairmaster',
-                                      cx_prob=0.9,
                                       include_currents=True)
 
-    ID_dict = {'NSGA2': '22_43_00',
-               'SPEA2': '19_12_34'}
+    _ID_dict = {'SPEA2': '20_07_23',
+                'NSGA2': '20_04_27'}
 
-    # ID_dict = {'Currents Seca': '16_55_20',
-    #            'Currents     ': '17_06_23',
-    #            '         Seca': '17_10_02',
-    #            '             ': '17_54_32'}
+    # # Brazil -> Caribbean Sea
+    # _ID_dict = {'   Currents -    SECA': '',
+    #             '   Currents - no SECA': '',
+    #             'no Currents -    SECA': '11_40_38',
+    #             'no Currents - no SECA': '11_42_36'}
 
-    # ID_dict = {'Currents Seca': '15_13_57',  # Currents and seca
-    #            'Currents     ': '15_21_43',  # Currents and no seca
-    #            '         Seca': '15_25_58',  # No currents and seca
-    #            '             ': '15_24_44'}  # No currents and no seca
-    initialized = False
-    for _i, key in enumerate(ID_dict.keys()):
-        with open('C:/dev/data/seca_areas_csv', 'rb') as file:
-            _secas = pickle.load(file)
+    # # Scandinavia -> Caribbean Sea
+    # _ID_dict = {'   Currents -    SECA': '16_55_20',
+    #             '   Currents - no SECA': '17_06_23',
+    #             'no Currents -    SECA': '17_10_02',
+    #             'no Currents - no SECA': '17_54_32'}
 
-        with open('output/paths/{}_paths'.format(ID_dict[key]), 'rb') as f:
+    # _ID_dict = {'   Currents -    SECA': '15_13_57',  # Currents and seca
+    #             '   Currents - no SECA': '15_21_43',  # Currents and no seca
+    #             'no Currents -    SECA': '15_25_58',  # No currents and seca
+    #             'no Currents - no SECA': '15_24_44'}  # No currents and no seca
+
+    with open('C:/dev/data/seca_areas_csv', 'rb') as file:
+        _secas = pickle.load(file)
+
+    with open('output/paths/{}_paths'.format(next(iter(_ID_dict.values()))), 'rb') as f:
+        first_paths = pickle.load(f)
+
+    _n_plots = len(_ID_dict)
+    plotter = Plotter(first_paths, route_planner.vessel, _secas, _n_plots, _ID_dict)
+
+    for _i, key in enumerate(_ID_dict.keys()):
+        with open('output/paths/{}_paths'.format(_ID_dict[key]), 'rb') as f:
             _paths = pickle.load(f)
 
-        with open('output/glob_routes/{}_init_routes'.format(ID_dict[key]), 'rb') as f:
+        with open('output/glob_routes/{}_init_routes'.format(_ID_dict[key]), 'rb') as f:
             _global_routes = pickle.load(f)
 
-        if not initialized:
-            n_plots = len(ID_dict)
-            plotter = Plotter(_paths, route_planner.vessel, _secas, n_plots, ID_dict)
-            initialized = True
-
         best_inds = {}
-        for sub_paths in _paths.values():
-            for pop in sub_paths.values():
+        for _sub_paths in _paths.values():
+            for _pop in _sub_paths.values():
                 min_tt, min_fc = math.inf, math.inf
                 tt_ind, fc_ind = None, None
-                for min_ind in pop:
+                for min_ind in _pop:
                     tt, fc = min_ind.fitness.values
                     if tt < min_tt:
                         tt_ind = min_ind
@@ -183,8 +188,10 @@ if __name__ == "__main__":
         plotter.plot_individuals(best_inds.values(), _i)
         plotter.plot_global_routes(_global_routes, _i)
 
-        for k, ind in best_inds.items():
-            fit = route_planner.toolbox.evaluate(ind)
-            print('{0}, {1}'.format(list(ID_dict.keys())[_i], k), fit)
+        for k, _ind in best_inds.items():
+            fit = route_planner.toolbox.evaluate(_ind)
+            print('{0:>20}, {1}'.format(list(_ID_dict.keys())[_i], k), fit)
+            print('{0:>20}, {1} ORIGINAL'.format(list(_ID_dict.keys())[_i], k), _ind.fitness.values)
+            # print('DIFF ORIGINAL: {}'.format(np.subtract(_ind.fitness.values, fit)))
 
     plt.show()
