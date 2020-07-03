@@ -1,7 +1,6 @@
 import evaluation
 import initialization
 import katana
-import math
 import matplotlib.pyplot as plt
 import operations
 import numpy as np
@@ -75,7 +74,7 @@ class RoutePlanner:
         self.toolbox.register("edge_feasible", self.evaluator.edge_feasible)
         self.toolbox.register("feasible", self.evaluator.feasible)
         self.toolbox.register("evaluate", self.evaluator.evaluate)
-        self.toolbox.decorate("evaluate", tools.DeltaPenalty(self.toolbox.feasible, [math.inf, math.inf]))
+        self.toolbox.decorate("evaluate", tools.DeltaPenalty(self.toolbox.feasible, [1e+20, 1e+20]))
 
         # Initialize "Initializer" and register it's functions
         if start and end:
