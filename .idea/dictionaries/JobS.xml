@@ -1,32 +1,68 @@
 <component name="ProjectDictionaryState">
   <dictionary name="JobS">
     <words>
+      <w>avgs</w>
       <w>bilinear</w>
+      <w>bothnia</w>
+      <w>ccrs</w>
+      <w>chunked</w>
+      <w>cnodes</w>
       <w>colorbar</w>
       <w>coords</w>
+      <w>cpairs</w>
       <w>cxpb</w>
+      <w>dataset</w>
+      <w>dateset</w>
+      <w>eftp</w>
+      <w>eulerian</w>
+      <w>evals</w>
+      <w>fairmaster</w>
       <w>geod</w>
+      <w>globcurrent</w>
+      <w>gpickle</w>
       <w>graphfile</w>
+      <w>gshhg</w>
       <w>gshhs</w>
       <w>haversine</w>
       <w>hexa</w>
       <w>hexagraph</w>
+      <w>ifremer</w>
       <w>inds</w>
       <w>laccadive</w>
+      <w>lightgray</w>
       <w>lons</w>
+      <w>maxx</w>
+      <w>memoized</w>
+      <w>mins</w>
+      <w>mstats</w>
       <w>mutpb</w>
       <w>nbar</w>
+      <w>ncar</w>
+      <w>ncattr</w>
+      <w>ncdump</w>
+      <w>ndays</w>
       <w>nsga</w>
+      <w>objtype</w>
       <w>polys</w>
       <w>proj</w>
+      <w>retr</w>
+      <w>reul</w>
+      <w>rmtree</w>
       <w>seca</w>
       <w>secas</w>
       <w>shapefile</w>
+      <w>shutil</w>
       <w>slerp</w>
       <w>spea</w>
+      <w>sqrt</w>
+      <w>uncacheable</w>
+      <w>vals</w>
       <w>waypoint</w>
       <w>waypoints</w>
+      <w>xformatter</w>
+      <w>xlsx</w>
       <w>yday</w>
+      <w>yformatter</w>
     </words>
   </dictionary>
 </component>

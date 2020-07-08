@@ -1,11 +1,14 @@
 import evaluation
+import great_circle
 import initialization
 import katana
 import matplotlib.pyplot as plt
+import ocean_current
 import operations
+import os
+import math
 import numpy as np
 import pandas as pd
-import pyproj
 import pickle
 import random
 import rtree
@@ -18,14 +21,18 @@ from shapely.prepared import prep
 class Vessel:
     def __init__(self, name='Fairmaster'):
         self.name = name
-        table = pd.read_excel('C:/dev/data/speed_table.xlsx', sheet_name=self.name)
+        table = pd.read_excel('C:/dev/data/speed_table.xlsx',
+                              sheet_name=self.name)
         self.speeds = [round(speed, 1) for speed in table['Speed']]
-        self.fuel_rates = {speed: round(table['Fuel'][i], 1) for i, speed in enumerate(self.speeds)}
+        self.fuel_rates = {speed: round(table['Fuel'][i], 1)
+                           for i, speed in enumerate(self.speeds)}
 
 
 Nbar = 50
-N = 100
-GEN = 250
+# GEN = 250
+# N = 100
+N = 40
+GEN = 2
 CXPB = 0.9
 MUTPB = 0.9
 
@@ -34,70 +41,85 @@ class RoutePlanner:
     def __init__(self,
                  start=None,
                  end=None,
+                 start_date=datetime(2016, 1, 1),
                  seca_factor=1.2,
-                 resolution='c',
-                 max_poly_size=4,
+                 res='c',
+                 spl_th=4,
                  vessel_name='Fairmaster',
-                 include_currents=True
+                 incl_curr=True
                  ):
 
         # Create Fitness and Individual types
         creator.create("FitnessMin", base.Fitness, weights=(-1.0, -1.0))
         creator.create("Individual", list, fitness=creator.FitnessMin)
 
-        # Create toolbox for function aliases
-        self.toolbox = base.Toolbox()
+        self.tb = base.Toolbox()              # Function toolbox
+        self.start = start                    # Start point
+        self.end = end                        # End point
+        self.start_date = start_date          # Start date of voyage
+        self.seca_factor = seca_factor        # Multiplication factor SECA fuel
+        self.vessel = Vessel(vessel_name)     # Vessel class instance
+        self.res = res                        # Resolution of shorelines
+        self.spl_th = spl_th                  # Threshold for split_polygon
+        self.incl_curr = incl_curr            # Boolean for including currents
+        self.gc = great_circle.GreatCircle()  # Geod class instance
 
-        self.start = start
-        self.end = end
-        self.seca_factor = seca_factor
-        self.geod = pyproj.Geod(a=3443.918467, f=0.0033528106647475126)
-        self.vessel = Vessel(vessel_name)                                   # Create vessel class
-        self.resolution = resolution                                        # Resolution of shorelines
-        self.max_poly_size = max_poly_size                                  # Parameter for split_polygon
-        try:                                                                # Import land obstacles as polygons
-            with open('output/split_polygons/res_{0}_treshold_{1}'.format(self.resolution, self.max_poly_size),
-                      'rb') as f:
-                split_polys = pickle.load(f)
+        # Import land obstacles as polygons
+        try:
+            spl_dir = 'output/split_polygons/'
+            spl_fn = 'res_{0}_threshold_{1}'.format(res, spl_th)
+            spl_fp = os.path.join(spl_dir, spl_fn)
+            with open(spl_fp, 'rb') as f:
+                spl_polys = pickle.load(f)
         except FileNotFoundError:
-            split_polys = katana.get_split_polygons(self.resolution, self.max_poly_size)
-        self.prep_polys = [prep(poly) for poly in split_polys]              # Prepared and split land polygons
+            spl_polys = katana.get_split_polygons(self.res, self.spl_th)
+
+        # Prepared and split land polygons
+        self.prep_polys = [prep(poly) for poly in spl_polys]
 
         # Populate R-tree index with bounds of polygons
         self.rtree_idx = rtree.index.Index()
-        for idx, poly in enumerate(split_polys):
+        for idx, poly in enumerate(spl_polys):
             self.rtree_idx.insert(idx, poly.bounds)
 
         # Initialize "Evaluator" and register it's functions
-        self.evaluator = evaluation.Evaluator(self.vessel, self.prep_polys, self.rtree_idx, self.geod, self.seca_factor,
-                                              include_currents=include_currents)
-        self.toolbox.register("edge_feasible", self.evaluator.edge_feasible)
-        self.toolbox.register("feasible", self.evaluator.feasible)
-        self.toolbox.register("evaluate", self.evaluator.evaluate)
-        self.toolbox.decorate("evaluate", tools.DeltaPenalty(self.toolbox.feasible, [1e+20, 1e+20]))
+        self.evaluator = evaluation.Evaluator(self.vessel, self.prep_polys,
+                                              self.rtree_idx, seca_factor,
+                                              start_date, self.gc, incl_curr)
+        self.tb.register("e_feasible", self.evaluator.e_feasible)
+        self.tb.register("feasible", self.evaluator.feasible)
+        self.tb.register("evaluate", self.evaluator.evaluate)
+        self.tb.decorate("evaluate", tools.DeltaPenalty(self.tb.feasible,
+                                                        [1e+20, 1e+20]))
 
         # Initialize "Initializer" and register it's functions
         if start and end:
-            self.initializer = initialization.Initializer(self.start, self.end, self.geod, self.vessel, self.resolution,
-                                                          self.prep_polys, self.rtree_idx, self.toolbox)
-            self.toolbox.register("init_routes", self.initializer.get_init_routes, creator.Individual)
+            self.initializer = initialization.Initializer(start, end,
+                                                          self.vessel, res,
+                                                          self.prep_polys,
+                                                          self.rtree_idx,
+                                                          self.tb,
+                                                          self.gc)
+            self.tb.register("init_routes", self.initializer.get_init_inds,
+                             creator.Individual)
         else:
             print('No start and endpoint given')
 
         # Initialize "Operator" and register it's functions
-        self.operators = operations.Operators(self.toolbox, self.vessel, self.geod, width_ratio=3, radius=5)
-        self.toolbox.register("mutate", self.operators.mutate)
-        self.toolbox.register("mate", self.operators.crossover)
+        self.operators = operations.Operators(self.tb, self.vessel,
+                                              width_ratio=3, radius=5)
+        self.tb.register("mutate", self.operators.mutate)
+        self.tb.register("mate", self.operators.crossover)
 
-        self.toolbox.register("population", tools.initRepeat, list)
+        self.tb.register("population", tools.initRepeat, list)
 
     def spea2(self, seed=None):
         # Register SPEA2 selection function
-        self.toolbox.register("select", tools.selSPEA2)
+        self.tb.register("select", tools.selSPEA2)
 
         random.seed(seed)
 
-        stats_fit = tools.Statistics(lambda ind: ind.fitness.values)
+        stats_fit = tools.Statistics(lambda _ind: _ind.fitness.values)
         stats_size = tools.Statistics(key=len)
         mstats = tools.MultiStatistics(fitness=stats_fit, size=stats_size)
         mstats.register("avg", np.mean, axis=0)
@@ -105,16 +127,18 @@ class RoutePlanner:
         mstats.register("min", np.min, axis=0)
         mstats.register("max", np.max, axis=0)
 
-        init_routes = self.toolbox.init_routes()
+        init_routes = self.tb.init_routes()
 
         paths, path_logs = {}, {}
         for p_idx, init_route in enumerate(init_routes):
-            print('----------------- Path {0}/{1} -----------------'.format(p_idx+1, len(init_routes)))
+            print('Path {0}/{1}'.format(p_idx+1, len(init_routes)))
             sub_paths, sub_path_logs = {}, {}
             for sp_idx, sub_route in enumerate(init_route):
-                print('----------------- Sub path {0}/{1} -----------------'.format(sp_idx+1, len(init_route)))
+                print('Sub path {0}/{1}'.format(sp_idx+1, len(init_route)))
 
-                self.toolbox.register("individual", initialization.init_individual, self.toolbox, sub_route)
+                self.tb.register("individual",
+                                 initialization.init_individual,
+                                 self.tb, sub_route)
 
                 log = tools.Logbook()
                 log.header = "gen", "evals", "fitness", "size"
@@ -122,50 +146,58 @@ class RoutePlanner:
                 log.chapters["size"].header = "min", "avg", "max"
 
                 # Step 1: Initialization
-                pop = self.toolbox.population(self.toolbox.individual, N)
+                pop = self.tb.population(self.tb.individual, N)
                 archive = []
                 curr_gen = 1
 
+                if self.incl_curr:
+                    self.evaluator.current_data = ocean_current.CurrentData(
+                        self.start_date, self.get_n_days(pop))
+
                 # Step 2: Fitness assignment
-                invalid_inds1, invalid_inds2 = pop, []
-                fits = self.toolbox.map(self.toolbox.evaluate, invalid_inds1)
-                for ind, fit in zip(invalid_inds1, fits):
+                inv_inds1, inv_inds2 = pop, []
+                fits = self.tb.map(self.tb.evaluate, inv_inds1)
+                for ind, fit in zip(inv_inds1, fits):
                     ind.fitness.values = fit
 
                 # Begin the generational process
                 while True:
                     # Step 3: Environmental selection
-                    archive = self.toolbox.select(pop + archive, k=Nbar)
+                    archive = self.tb.select(pop + archive, k=Nbar)
 
                     # Record statistics
                     record = mstats.compile(archive)
-                    log.record(gen=curr_gen, evals=(len(invalid_inds1) + len(invalid_inds2)), **record)
+                    log.record(gen=curr_gen,
+                               evals=(len(inv_inds1) + len(inv_inds2)),
+                               **record)
                     print(log.stream)
 
                     # Step 4: Termination
                     if curr_gen >= GEN:
                         sub_paths[sp_idx] = archive
                         sub_path_logs[sp_idx] = log
-                        self.toolbox.unregister("individual")
+                        self.tb.unregister("individual")
                         break
 
                     # Step 5: Mating Selection
                     mating_pool = tools.selTournament(archive, k=N, tournsize=2)
 
                     # Step 6: Variation
-                    pop = algorithms.varAnd(mating_pool, self.toolbox, CXPB, MUTPB)
+                    pop = algorithms.varAnd(mating_pool, self.tb, CXPB,
+                                            MUTPB)
 
                     # Step 2: Fitness assignment
                     # Population
-                    invalid_inds1 = [ind for ind in pop if not ind.fitness.valid]
-                    fits = self.toolbox.map(self.toolbox.evaluate, invalid_inds1)
-                    for ind, fit in zip(invalid_inds1, fits):
+                    inv_inds1 = [ind for ind in pop if not ind.fitness.valid]
+                    fits = self.tb.map(self.tb.evaluate, inv_inds1)
+                    for ind, fit in zip(inv_inds1, fits):
                         ind.fitness.values = fit
 
                     # Archive
-                    invalid_inds2 = [ind for ind in archive if not ind.fitness.valid]
-                    fits = self.toolbox.map(self.toolbox.evaluate, invalid_inds2)
-                    for ind, fit in zip(invalid_inds2, fits):
+                    inv_inds2 = [ind for ind in archive
+                                 if not ind.fitness.valid]
+                    fits = self.tb.map(self.tb.evaluate, inv_inds2)
+                    for ind, fit in zip(inv_inds2, fits):
                         ind.fitness.values = fit
 
                     curr_gen += 1
@@ -177,11 +209,11 @@ class RoutePlanner:
 
     def nsga2(self, seed=None):
         # Register NSGA2 selection function
-        self.toolbox.register("select", tools.selNSGA2)
+        self.tb.register("select", tools.selNSGA2)
 
         random.seed(seed)
 
-        stats_fit = tools.Statistics(lambda ind: ind.fitness.values)
+        stats_fit = tools.Statistics(lambda _ind: _ind.fitness.values)
         stats_size = tools.Statistics(key=len)
         mstats = tools.MultiStatistics(fitness=stats_fit, size=stats_size)
         mstats.register("avg", np.mean, axis=0)
@@ -189,16 +221,18 @@ class RoutePlanner:
         mstats.register("min", np.min, axis=0)
         mstats.register("max", np.max, axis=0)
 
-        init_routes = self.toolbox.init_routes()
+        init_routes = self.tb.init_routes()
 
         paths, path_logs = {}, {}
         for p_idx, init_route in enumerate(init_routes):
-            print('----------------- Path {0}/{1} -----------------'.format(p_idx+1, len(init_routes)))
+            print('Path {0}/{1}'.format(p_idx + 1, len(init_routes)))
             sub_paths, sub_path_logs = {}, {}
             for sp_idx, sub_route in enumerate(init_route):
-                print('----------------- Sub path {0}/{1} -----------------'.format(sp_idx+1, len(init_route)))
+                print('Sub path {0}/{1}'.format(sp_idx + 1, len(init_route)))
 
-                self.toolbox.register("individual", initialization.init_individual, self.toolbox, sub_route)
+                self.tb.register("individual",
+                                 initialization.init_individual,
+                                 self.tb, sub_route)
 
                 log = tools.Logbook()
                 log.header = "gen", "evals", "fitness", "size"
@@ -206,19 +240,19 @@ class RoutePlanner:
                 log.chapters["size"].header = "min", "avg", "max"
 
                 # Step 1 Initialization
-                pop = self.toolbox.population(self.toolbox.individual, N)
+                pop = self.tb.population(self.tb.individual, N)
                 offspring = []
                 curr_gen = 1
 
                 # Step 2: Fitness assignment
-                fits = self.toolbox.map(self.toolbox.evaluate, pop)
+                fits = self.tb.map(self.tb.evaluate, pop)
                 for ind, fit in zip(pop, fits):
                     ind.fitness.values = fit
 
                 # Begin the generational process
                 while True:
                     # Step 3: Environmental selection
-                    pop = self.toolbox.select(pop + offspring, N)
+                    pop = self.tb.select(pop + offspring, N)
 
                     # Record statistics
                     record = mstats.compile(pop)
@@ -229,16 +263,18 @@ class RoutePlanner:
                     if curr_gen >= GEN:
                         sub_paths[sp_idx] = pop
                         sub_path_logs[sp_idx] = log
-                        self.toolbox.unregister("individual")
+                        self.tb.unregister("individual")
                         break
 
                     # Step 5: Variation
-                    offspring = algorithms.varAnd(pop, self.toolbox, CXPB, MUTPB)
+                    offspring = algorithms.varAnd(pop, self.tb, CXPB,
+                                                  MUTPB)
 
                     # Step 2: Fitness assignment
-                    invalid_inds = [ind for ind in offspring if not ind.fitness.valid]
-                    fits = self.toolbox.map(self.toolbox.evaluate, invalid_inds)
-                    for ind, fit in zip(invalid_inds, fits):
+                    inv_inds = [ind for ind in offspring
+                                if not ind.fitness.valid]
+                    fits = self.tb.map(self.tb.evaluate, inv_inds)
+                    for ind, fit in zip(inv_inds, fits):
                         ind.fitness.values = fit
 
                     curr_gen += 1
@@ -248,17 +284,42 @@ class RoutePlanner:
 
         return paths, path_logs, init_routes
 
+    def get_n_days(self, pop):
+        boat_speed = min(self.vessel.speeds)
+        max_travel_time = 0
+        # Get conservative estimate of number of days of travel time
+        for ind in pop:
+            # Initialize variables
+            travel_time = 0.0
+            for e in range(len(ind) - 1):
+                p1, p2 = sorted((ind[e][0], ind[e + 1][0]))
+                e_dist = self.gc.distance(p1, p2)
+                e_travel_time = e_dist / boat_speed
+                travel_time += e_travel_time
+            if travel_time > max_travel_time:
+                max_travel_time = travel_time
+        n_days = int(math.ceil(max_travel_time / 24))
+        print('Number of days:', n_days)
+        return n_days
+
 
 if __name__ == "__main__":
-    _start, _end = (3.14516, 4.68508), (-94.5968, 26.7012)  # Gulf of Guinea, Gulf of Mexico
-    # _start, _end = (-23.4166, -7.2574), (-72.3352, 12.8774)  # South Atlantic (Brazil), Caribbean Sea
-    # _start, _end = (77.7962, 4.90087), (48.1425, 12.5489)  # Laccadive Sea, Gulf of Aden
-    # _start, _end = (-5.352121, 48.021295), (-53.306878, 46.423969)  # Normandy, Canada
-    # _start, _end = (34.252773, 43.461197), (53.131866, 13.521350)  # Black of Sea, Gulf of Aden
-    # _start, _end = (20.891193, 58.464147), (-85.063585, 29.175463)  # Gulf of Bothnia, Gulf of Mexico
-    # _start, _end = (3.891292, 60.088472), (-7.562237, 47.403357)  # North UK, South UK
+    # Gulf of Guinea, Gulf of Mexico
+    _start, _end = (3.14516, 4.68508), (-94.5968, 26.7012)
+    # South Atlantic (Brazil), Caribbean Sea
+    # _start, _end = (-23.4166, -7.2574), (-72.3352, 12.8774)
+    # Laccadive Sea, Gulf of Aden
+    # _start, _end = (77.7962, 4.90087), (48.1425, 12.5489)
+    # Normandy, Canada
+    # _start, _end = (-5.352121, 48.021295), (-53.306878, 46.423969)
+    # Normandy, Canada
+    # _start, _end = (34.252773, 43.461197), (53.131866, 13.521350)
+    # Gulf of Bothnia, Gulf of Mexico
+    # _start, _end = (20.891193, 58.464147), (-85.063585, 29.175463)
+    # North UK, South UK
+    # _start, _end = (3.891292, 60.088472), (-7.562237, 47.403357)
 
-    _route_planner = RoutePlanner(_start, _end, seca_factor=1.2, include_currents=False)
+    _route_planner = RoutePlanner(_start, _end, seca_factor=1.2, incl_curr=True)
     _paths, _path_logs, _init_routes = _route_planner.spea2(seed=1)
 
     # Save parameters
@@ -312,7 +373,7 @@ if __name__ == "__main__":
             labs = [line.get_label() for line in lines]
             ax1.legend(lines, labs, loc="center right")
 
-    # front = np.array([ind.fitness.values for ind in sub_path_pop])
+    # front = np.array([_ind.fitness.values for _ind in sub_path_pop])
     # plt.scatter(front[:, 0], front[:, 1], c="b")
     # plt.axis("tight")
-    plt.show()
+    # plt.show()

@@ -1,4 +1,5 @@
-from shapely.geometry import box, Polygon, MultiPolygon, GeometryCollection, shape
+from shapely.geometry import (box, Polygon, MultiPolygon,
+                              GeometryCollection, shape)
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
@@ -7,34 +8,34 @@ import os
 import pickle
 
 
-def split_polygon(geometry, threshold, count=0):
+def split_polygon(geo, threshold, cnt=0):
     """Split a Polygon into two parts across it's shortest dimension"""
-    bounds = geometry.bounds
-    width = bounds[2] - bounds[0]
-    height = bounds[3] - bounds[1]
-    if max(width, height) <= threshold or count == 250:
+    (minx, miny, maxx, maxy) = geo.bounds
+    width = maxx - minx
+    height = maxy - miny
+    if max(width, height) <= threshold or cnt == 250:
         # either the polygon is smaller than the threshold, or the maximum
         # number of recursions has been reached
-        return [geometry]
+        return [geo]
     if height >= width:
         # split left to right
-        a = box(bounds[0], bounds[1], bounds[2], bounds[1]+height/2)
-        b = box(bounds[0], bounds[1]+height/2, bounds[2], bounds[3])
+        a = box(minx, miny, maxx, miny + height/2)
+        b = box(minx, miny + height / 2, maxx, maxy)
     else:
         # split top to bottom
-        a = box(bounds[0], bounds[1], bounds[0]+width/2, bounds[3])
-        b = box(bounds[0]+width/2, bounds[1], bounds[2], bounds[3])
+        a = box(minx, miny, minx+width/2, maxy)
+        b = box(minx + width / 2, miny, maxx, maxy)
     result = []
     for d in (a, b,):
-        c = geometry.intersection(d)
+        c = geo.intersection(d)
         if not isinstance(c, GeometryCollection):
             c = [c]
         for e in c:
             if isinstance(e, (Polygon, MultiPolygon)):
-                result.extend(split_polygon(e, threshold, count+1))
-    if count > 0:
+                result.extend(split_polygon(e, threshold, cnt + 1))
+    if cnt > 0:
         return result
-    # convert multipart into singlepart
+    # convert multi part into single part
     final_result = []
     for g in result:
         if isinstance(g, MultiPolygon):
@@ -45,10 +46,10 @@ def split_polygon(geometry, threshold, count=0):
 
 
 def split_polygons(geometries, threshold):
-    split_polygons = []
+    split_polys = []
     for polygon in geometries:
-        split_polygons.extend(split_polygon(polygon, threshold))
-    return split_polygons
+        split_polys.extend(split_polygon(polygon, threshold))
+    return split_polys
 
 
 def plot_geometries(geometries):
@@ -59,27 +60,31 @@ def plot_geometries(geometries):
     gl.xformatter = LONGITUDE_FORMATTER
     gl.yformatter = LATITUDE_FORMATTER
 
-    ax.add_geometries(geometries, ccrs.PlateCarree(), facecolor='lightgray', edgecolor='black')
+    ax.add_geometries(geometries, ccrs.PlateCarree(), facecolor='lightgray',
+                      edgecolor='black')
 
 
 def get_split_polygons(res, threshold):
-    GSHHS_dir = 'C:/dev/data/gshhg-shp-2.3.7/GSHHS_shp'
-    geometries = [shape(shoreline['geometry']) for shoreline in
-                  iter(fiona.open(GSHHS_dir + '/{0}/GSHHS_{0}_L1.shp'.format(res)))]
+    gshhg_dir = 'C:/dev/data/gshhg-shp-2.3.7/GSHHS_shp'
+    gshhg_fp = '{0}/GSHHS_{0}_L1.shp'.format(res)
+    geos = [shape(shoreline['geometry']) for shoreline in
+            iter(fiona.open(os.path.join(gshhg_dir, gshhg_fp)))]
 
     # Compute split polygons
-    split_polys = split_polygons(geometries, threshold)
+    split_polys = split_polygons(geos, threshold)
 
     # Save result
-    output_fn = 'split_polygons/res_{0}_treshold_{1}'.format(res, threshold)
+    result_dir = 'output/split_polygons'
+    result_fn = 'res_{0}_threshold_{1}'.format(res, threshold)
+    result_fp = os.path.join(result_dir, result_fn)
     try:
-        with open('output/' + output_fn, 'wb') as f:
+        with open(result_fp, 'wb') as f:
             pickle.dump(split_polys, f)
     except FileNotFoundError:
         os.mkdir('output/split_polygons')
-        with open('output/' + output_fn, 'wb') as f:
+        with open(result_fp, 'wb') as f:
             pickle.dump(split_polys, f)
-    print('Saved to: output/{}'.format(output_fn))
+    print('Saved to: ', result_fp)
 
     return split_polys
 
@@ -89,23 +94,25 @@ if __name__ == '__main__':
     max_poly_size = 9
 
     # Get polygons
-    polygons = [shape(shoreline['geometry']) for shoreline in
-                iter(fiona.open('C:/dev/data/gshhg-shp-2.3.7/GSHHS_shp/{0}/GSHHS_{0}_L1.shp'.format(resolution)))]
-
+    _gshhg_dir = 'C:/dev/data/gshhg-shp-2.3.7/GSHHS_shp'
+    _gshhg_fp = '{0}/GSHHS_{0}_L1.shp'.format(resolution)
+    _geos = [shape(shoreline['geometry']) for shoreline in
+             iter(fiona.open(os.path.join(_gshhg_dir, _gshhg_fp)))]
     # Compute split polygons
-    result = split_polygons(polygons, threshold=max_poly_size)
+    _result = split_polygons(_geos, threshold=max_poly_size)
 
     # Save result
-    output_file_name = 'split_polygons/res_{0}_treshold_{1}'.format(resolution, max_poly_size)
+    _result_dir = 'output/split_polygons'
+    _result_fn = 'res_{0}_threshold_{1}'.format(resolution, max_poly_size)
+    _result_fp = os.path.join(_result_dir, _result_fn)
     try:
-        with open('output/' + output_file_name, 'wb') as file:
-            pickle.dump(result, file)
+        with open(_result_fp, 'wb') as _f:
+            pickle.dump(_result, _f)
     except FileNotFoundError:
         os.mkdir('output/split_polygons')
-        with open('output/' + output_file_name, 'wb') as file:
-            pickle.dump(result, file)
-    print('Saved to: output/{}'.format(output_file_name))
-
+        with open(_result_fp, 'wb') as _f:
+            pickle.dump(_result, _f)
+    print('Saved to: ', _result_fp)
 
     # Plot result
     # plot_geometries(result)

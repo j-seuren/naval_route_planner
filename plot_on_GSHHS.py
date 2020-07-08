@@ -127,10 +127,10 @@ if __name__ == "__main__":
     import main
 
     route_planner = main.RoutePlanner(seca_factor=1.2,
-                                      resolution='c',
-                                      max_poly_size=4,
+                                      res='c',
+                                      spl_th=4,
                                       vessel_name='Fairmaster',
-                                      include_currents=True)
+                                      incl_curr=True)
 
     _ID_dict = {'SPEA2': '20_07_23',
                 'NSGA2': '20_04_27'}
@@ -189,7 +189,7 @@ if __name__ == "__main__":
         plotter.plot_global_routes(_global_routes, _i)
 
         for k, _ind in best_inds.items():
-            fit = route_planner.toolbox.evaluate(_ind)
+            fit = route_planner.tb.evaluate(_ind)
             print('{0:>20}, {1}'.format(list(_ID_dict.keys())[_i], k), fit)
             print('{0:>20}, {1} ORIGINAL'.format(list(_ID_dict.keys())[_i], k), _ind.fitness.values)
             # print('DIFF ORIGINAL: {}'.format(np.subtract(_ind.fitness.values, fit)))

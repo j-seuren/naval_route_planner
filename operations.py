@@ -16,18 +16,18 @@ def star(f):
 
 class Operators:
     def __init__(self,
-                 toolbox,
+                 tb,
                  vessel,
-                 geod,
                  radius=5,
                  width_ratio=1,
                  mutation_ops=None
                  ):
-        self.toolbox = toolbox
-        self.vessel = vessel
-        self.geod = geod
-        self.radius = radius                                                # Parameter for move_random_waypoint
-        self.width_ratio = width_ratio                                      # Parameter for insert_random_waypoint
+        self.tb = tb                    # Function toolbox
+        self.vessel = vessel            # Vessel class instance
+        self.radius = radius            # Move radius
+        self.width_ratio = width_ratio  # Insert width ratio
+
+        # Mutation operators list
         if mutation_ops is None:
             self.mutation_ops = ['insert', 'move', 'delete', 'speed']
         else:
@@ -43,7 +43,7 @@ class Operators:
             self.change_speed(ind)
         else:
             self.insert_waypoint(ind, initializing)
-        assert no_similar_points(ind), 'similar points in individual after crossover'
+        assert no_similar_points(ind), 'similar points after mutate'
         return ind,
 
     def insert_waypoint(self, ind, initializing, shape='rhombus'):
@@ -71,10 +71,13 @@ class Operators:
                     # Scale x and y to the dimensions of the ellipse
                     pt_origin = unit_circle * np.array([width, height]) / 2.0
                 elif shape == 'rhombus':
-                    v1, v2 = np.array([width / 2.0, - height / 2.0]), np.array([width / 2.0, height / 2.0])
-                    pt_origin = random.random() * v1 + random.random() * v2 - np.array([width / 2.0, 0.0])
+                    v1 = np.array([width / 2.0, - height / 2.0])
+                    v2 = np.array([width / 2.0, height / 2.0])
+                    offset = np.array([width / 2.0, 0.0])
+                    pt_origin = random.random() * v1 + random.random() * v2 - offset
                 else:
-                    raise ValueError("Shape argument invalid: try 'ellipse' or 'rhombus'")
+                    raise ValueError("Shape argument invalid: "
+                                     "try 'ellipse' or 'rhombus'")
 
                 # Transform
                 dy, dx = p2[1] - p1[1], p2[0] - p1[0]
@@ -93,8 +96,9 @@ class Operators:
                 pt = ctr + pt_rotated  # Translate
                 new_wp = tuple(np.clip(pt, [-180, -90], [180, 90]))
 
-                if initializing and (not self.toolbox.edge_feasible(p1_tup, new_wp) or
-                                     not self.toolbox.edge_feasible(new_wp, p2_tup)):
+                if initializing and (
+                        not self.tb.e_feasible(p1_tup, new_wp) or
+                        not self.tb.e_feasible(new_wp, p2_tup)):
                     trials += 1
                     if trials > 100:
                         print('no waypoint inserted in edge')
@@ -119,8 +123,9 @@ class Operators:
             wp = np.asarray(ind[wp_idx][0])
             trials = 0
             while True:
-                # Pick a random location within a radius from the current waypoint
-                r = self.radius * sqrt(random.random())  # Square root ensures a uniform distribution inside the circle.
+                # Pick random location within a radius from the current waypoint
+                # Square root ensures a uniform distribution inside the circle.
+                r = self.radius * sqrt(random.random())
                 phi = random.random() * 2 * pi
                 new_wp_arr = wp + r * np.array([cos(phi), sin(phi)])
                 new_wp = tuple(np.clip(new_wp_arr, [-180, -90], [180, 90]))
@@ -130,8 +135,9 @@ class Operators:
                     break
 
                 # Ensure feasibility during initialization
-                if initializing and (not self.toolbox.edge_feasible(ind[wp_idx-1][0], new_wp) or
-                                     not self.toolbox.edge_feasible(new_wp, ind[wp_idx+1][0])):
+                if initializing and (
+                        not self.tb.e_feasible(ind[wp_idx - 1][0], new_wp) or
+                        not self.tb.e_feasible(new_wp, ind[wp_idx + 1][0])):
                     trials += 1
                     if trials > 100:
                         print('exceeded move trials')
@@ -146,19 +152,21 @@ class Operators:
         if len(ind) == 2:
             print('skipped delete')
             return
-        # Get random sample of to be deleted waypoints indices of random length of max size(ind) - 3
+        # Get random sample of to be deleted waypoints indices
         tbd_len = random.randint(1, len(ind) - 2)
         tbd = sorted(random.sample(range(1, len(ind)-1), k=tbd_len))
         if initializing:  # Ensure feasibility
             # Group consecutive waypoints
             tbd_copy = tbd[:]
-            for k, g in itertools.groupby(enumerate(tbd_copy), key=star(lambda u, x: u - x)):
+            for k, g in itertools.groupby(enumerate(tbd_copy),
+                                          key=star(lambda u, x: u - x)):
                 consecutive_nodes = list(map(itemgetter(1), g))
                 first = consecutive_nodes[0]
                 last = consecutive_nodes[-1]
 
-                # If to be created edge is not feasible, remove to be deleted nodes from list
-                if not self.toolbox.edge_feasible(ind[first-1][0], ind[last+1][0]):
+                # If to be created edge is not feasible,
+                # remove to be deleted nodes from list
+                if not self.tb.e_feasible(ind[first - 1][0], ind[last + 1][0]):
                     del tbd[tbd.index(first):tbd.index(last) + 1]
         for pt_idx in sorted(tbd, reverse=True):
             del ind[pt_idx]
@@ -172,11 +180,11 @@ class Operators:
         if len(ind) == 2:
             print('skipped change speed')
             return
-        n_edges = random.randint(1, len(ind) - 1)
-        first = random.randrange(len(ind) - n_edges)
-        new_speed = random.choice([speed for speed in self.vessel.speeds if speed])
-        for item in ind[first:first + n_edges]:
-            item[1] = new_speed
+        k = random.randint(1, len(ind)-1)
+        i = random.randrange(len(ind)-k)
+        new_speed = random.choice([s for s in self.vessel.speeds])
+        for e in ind[i:i+k]:
+            e[1] = new_speed
         return
 
     def crossover(self, ind1, ind2):
@@ -184,20 +192,23 @@ class Operators:
         if size == 2:
             print('skipped crossover')
             return ind1, ind2
-        cx_pt1, cx_pt2 = random.randint(1, size - 1), random.randint(1, size - 1)
+        cx_pt1, cx_pt2 = random.randint(1, size-1), random.randint(1, size-1)
         trials = 0
-        while ind2[cx_pt2-1][0] == ind1[cx_pt1][0] or ind1[cx_pt1-1][0] == ind2[cx_pt2][0]:
-            cx_pt1, cx_pt2 = random.randint(1, size - 1), random.randint(1, size - 1)
+        while ind2[cx_pt2-1][0] == ind1[cx_pt1][0] \
+                or ind1[cx_pt1-1][0] == ind2[cx_pt2][0]:
+            cx_pt1, cx_pt2 = random.randint(1, size-1), random.randint(1, size-1)
             trials += 1
             if trials > 100:
                 print('exceeded crossover trials')
                 return ind1, ind2
 
         # Check feasibility
-        if self.toolbox.edge_feasible(ind1[cx_pt1-1][0], ind2[cx_pt2][0]) \
-                and self.toolbox.edge_feasible(ind2[cx_pt2-1][0], ind1[cx_pt1][0]):
+        if self.tb.e_feasible(ind1[cx_pt1-1][0], ind2[cx_pt2][0]) \
+                and self.tb.e_feasible(ind2[cx_pt2-1][0], ind1[cx_pt1][0]):
             ind1[cx_pt1:], ind2[cx_pt2:] = ind2[cx_pt2:], ind1[cx_pt1:]
-        assert no_similar_points(ind1) and no_similar_points(ind2), 'similar points in individual after crossover'
+
+        assert no_similar_points(ind1) and no_similar_points(ind2), \
+            'similar points after crossover'
         assert len(ind1) > 2 and len(ind2) > 2, 'crossover children length < 3'
         return ind1, ind2
 

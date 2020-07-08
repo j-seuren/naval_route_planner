@@ -1,78 +1,83 @@
-import great_circle
 import hexagraph
 import heapq
 import itertools
-import math
 import networkx as nx
-import numpy as np
+import os
+
+from haversine import haversine
+from math import cos, sin
 
 
 class Initializer:
     def __init__(self,
-                 start,
-                 end,
-                 geod,
+                 pt_s,
+                 pt_e,
                  vessel,
-                 resolution,
+                 res,
                  prep_polys,
                  rtree_idx,
                  toolbox,
-                 graph_d=6,
-                 graph_vd=4):
-        self.start = start                                                  # Start location
-        self.end = end                                                      # End location
-        self.geod = geod
-        self.vessel = vessel                                                # Vessel class
-        self.resolution = resolution                                        # Resolution of shorelines
-        self.prep_polys = prep_polys
-        self.rtree_idx = rtree_idx
-        self.toolbox = toolbox
-        self.graph_d = graph_d                                              # Density recursion number, graph
-        self.graph_vd = graph_vd                                            # Variable density recursion number, graph
+                 gc,
+                 dens=6,
+                 var_dens=4):
+        self.pt_s = pt_s              # Start point
+        self.pt_e = pt_e              # End point
+        self.vessel = vessel          # Vessel class
+        self.res = res                # Resolution of shorelines
+        self.prep_polys = prep_polys  # Prepared land polygons
+        self.rtree_idx = rtree_idx    # prep_polys' R-tree spatial index
+        self.toolbox = toolbox        # Function toolbox
+        self.gc = gc                  # Geod class instance
+        self.dens = dens              # Density recursion number, graph
+        self.var_dens = var_dens      # Variable density recursion number, graph
 
         # Load or build graph
         graph_dir = 'output/variable_density_geodesic_grids/'
+        graph_fn = 'res_{}_d{}_vd{}.gpickle'.format(self.res,
+                                                    self.dens,
+                                                    self.var_dens)
         try:
-            self.graph = nx.read_gpickle(graph_dir + 'res_{}_d{}_vd{}.gpickle'.format(self.resolution, self.graph_d,
-                                                                                      self.graph_vd))
+            self.G = nx.read_gpickle(os.path.join(graph_dir, graph_fn))
         except FileNotFoundError:
             # Initialize "Hexagraph"
-            hexagon_graph = hexagraph.Hexagraph(self.prep_polys, self.rtree_idx, self.resolution,
-                                                self.graph_d, self.graph_vd)
-            self.graph = hexagon_graph.get_graph()
+            hex_graph = hexagraph.Hexagraph(dens, var_dens, res, prep_polys,
+                                            rtree_idx)
+            self.G = hex_graph.get_g()
 
-        # Add start and end node to graph
         # Compute distances to start and end locations
-        d_start = {n: great_circle.distance(self.start[0], self.start[1], lon_lat[0], lon_lat[1], self.geod)
-                   for n, lon_lat in nx.get_node_attributes(self.graph, 'lon_lat').items()}
-        d_end = {n: great_circle.distance(self.end[0], self.end[1], lon_lat[0], lon_lat[1], self.geod)
-                 for n, lon_lat in nx.get_node_attributes(self.graph, 'lon_lat').items()}
+        d_s = {n: haversine(self.pt_s, n_deg, unit='nmi')
+               for n, n_deg in nx.get_node_attributes(self.G, 'deg').items()}
+        d_e = {n: haversine(self.pt_e, n_deg, unit='nmi')
+               for n, n_deg in nx.get_node_attributes(self.G, 'deg').items()}
 
-        # Add start and end nodes
-        x_s, x_e = math.cos(self.start[0]) * math.cos(self.start[1]), math.cos(self.end[0]) * math.cos(self.end[1])
-        y_s, y_e = math.sin(self.start[0]) * math.cos(self.start[1]), math.sin(self.end[0]) * math.cos(self.end[1])
-        z_s, z_e = math.sin(self.start[1]), math.sin(self.end[1])
-        self.graph.add_node('start', lon_lat=self.start, xyz=(x_s, y_s, z_s))
-        self.graph.add_node('end', lon_lat=self.end, xyz=(x_e, y_e, z_e))
+        # Add start and end nodes to graph
+        lo_s, la_s = self.pt_s
+        lo_e, la_e = self.pt_e
+        x_s, x_e = cos(lo_s) * cos(la_s), cos(lo_e) * cos(la_e)
+        y_s, y_e = sin(lo_s) * cos(la_s), sin(lo_e) * cos(la_e)
+        z_s, z_e = sin(la_s), sin(la_e)
+        self.G.add_node('start', deg=self.pt_s, xyz=(x_s, y_s, z_s))
+        self.G.add_node('end', deg=self.pt_e, xyz=(x_e, y_e, z_e))
 
-        # Add three shortest edges to start and end point after checking feasibility
+        # Add three shortest edges to start and end point
+        # after checking feasibility
         nr_edges = 0
-        for node in heapq.nsmallest(10, d_start, key=d_start.get):
-            p2 = self.graph.nodes[node]['lon_lat']
-            if self.toolbox.edge_feasible(self.start, p2):
+        for n in heapq.nsmallest(10, d_s, key=d_s.get):
+            p2 = self.G.nodes[n]['deg']
+            if self.toolbox.e_feasible(self.pt_s, p2):
                 nr_edges += 1
-                self.graph.add_edge('start', node, miles=d_start[node])
+                self.G.add_edge('start', n, miles=d_s[n])
                 if nr_edges > 2:
                     break
             else:
                 print('Shortest edge to start not feasible')
         assert nr_edges > 0
         nr_edges = 0
-        for node in heapq.nsmallest(10, d_end, key=d_end.get):
-            p2 = self.graph.nodes[node]['lon_lat']
-            if self.toolbox.edge_feasible(self.end, p2):
+        for n in heapq.nsmallest(10, d_e, key=d_e.get):
+            p2 = self.G.nodes[n]['deg']
+            if self.toolbox.e_feasible(self.pt_e, p2):
                 nr_edges += 1
-                self.graph.add_edge('end', node, miles=d_end[node])
+                self.G.add_edge('end', n, miles=d_e[n])
                 if nr_edges > 2:
                     break
             else:
@@ -80,78 +85,84 @@ class Initializer:
         assert nr_edges > 0
 
         self.canals = {'Panama': ['panama_south', 'panama_north'],
-                       'Suez': ['suez_south', 'suez_north'],
-                       'Dardanelles': ['dardanelles_south', 'dardanelles_north']}
-        self.canal_nodes = [n for element in self.canals.values() for n in element]
+                       'Suez': ['suez_south', 'suez_north']}
+        self.canal_nodes = [n for val in self.canals.values() for n in val]
 
-    def dist_heur(self, n1, n2):
-        (lon1, lat1) = self.graph.nodes[n1]['lon_lat']
-        (lon2, lat2) = self.graph.nodes[n2]['lon_lat']
-        return great_circle.distance(lon1, lat1, lon2, lat2, self.geod)
+    def dist_heuristic(self, n1, n2):
+        return self.gc.distance(self.G.nodes[n1]['deg'],
+                                self.G.nodes[n2]['deg'])
 
-    def get_path(self, print_crossing=True):
+    def get_path(self):
         """
-        Calculate shortest path from
+        Calculate shortest path from 'start' to 'end' on self.G
         Returns:
-             path: list of sub paths of a shortest path from start to end
-             x_canal_pairs: list with tuples of crossed canal nodes in order of crossing
+             path: list of sub paths of the shortest path
+             x_cpairs: list of tuples of crossed canal nodes
+                       in order of crossing
         """
+        # Calculate shortest path on graph from 'start' to 'end'
+        path = [nx.astar_path(self.G, 'start', 'end',
+                              heuristic=self.dist_heuristic,
+                              weight='miles')]
+        # path = [nx.shortest_path(self.graph, 'start', 'end', weight='miles',
+        #                          method='dijkstra')]
 
-        # path = [nx.astar_path(self.graph, 'start', 'end', heuristic=self.dist_heur, weight='miles')]
-        path = [nx.shortest_path(self.graph, 'start', 'end', weight='miles', method='dijkstra')]
-        x_canal_nodes = [wp for wp in path[0] if wp in self.canal_nodes]
+        # Get crossed canal nodes in path
+        x_cnodes = [wp for wp in path[0] if wp in self.canal_nodes]
+        if x_cnodes:
+            # Zip crossed canal nodes to crossed canal pairs
+            x_cpairs = list(zip(x_cnodes[::2], x_cnodes[1::2]))
+            pairs_reversed = x_cpairs[::-1]
+            while pairs_reversed:
+                # Get sub path in which canal node is found
+                x_canal_pair = pairs_reversed.pop()
+                sp = path.pop()
 
-        if x_canal_nodes:
-            x_canal_pairs = list(zip(x_canal_nodes[::2], x_canal_nodes[1::2]))
-            reversed_pairs = x_canal_pairs[::-1]
-
-            while reversed_pairs:
-                x_canal_pair = reversed_pairs.pop()
-                sub_path = path.pop()  # Get sub path in which canal node is found
-                i = sub_path.index(x_canal_pair[0])  # Get index of canal_node in sub path
-                path.extend([sub_path[:i+1], sub_path[i+1:]])  # Split sub path at canal, and extend to path
-                if print_crossing:
-                    print('Crossing canal from {0} to {1}'.format(x_canal_pair[0], x_canal_pair[1]))
+                # Split sub path at canal, and extend to path
+                i = sp.index(x_canal_pair[0])
+                path.extend([sp[:i+1], sp[i+1:]])
+                print('Crossing canal {}'.format(x_canal_pair))
         else:
-            x_canal_pairs = []
-        return path, x_canal_pairs
+            x_cpairs = []
+        return path, x_cpairs
 
-    def get_init_routes(self, container):
-        path, x_canal_pairs = self.get_path()
+    def get_init_inds(self, container):
+        path, x_cpairs = self.get_path()
         paths = [path]
-        if x_canal_pairs:
-            route_combinations = itertools.product(*[(True, False)] * len(x_canal_pairs))
-            for rc in route_combinations:
-                excl_canals = [canal for i, canal in enumerate(x_canal_pairs) if rc[i]]
-                self.graph.remove_edges_from(excl_canals)
+        if x_cpairs:
+            # Calculate route combinations
+            rcs = itertools.product(*[(True, False)] * len(x_cpairs))
+            for rc in rcs:
+                # Get list of canal pairs to be removed from graph
+                excl_cs = [c for i, c in enumerate(x_cpairs) if rc[i]]
+                self.G.remove_edges_from(excl_cs)
                 try:
-                    alternative_path, _ = self.get_path(print_crossing=False)
-                    self.graph.add_edges_from(excl_canals)
+                    alternative_path, _ = self.get_path()
+                    self.G.add_edges_from(excl_cs)
                 except nx.exception.NetworkXNoPath:
-                    self.graph.add_edges_from(excl_canals)
+                    self.G.add_edges_from(excl_cs)
                     continue
                 if alternative_path not in paths:
                     paths.append(alternative_path)
 
         # Create individual of each sub path
-        init_routes = []
+        init_inds = []
         for path in paths:
-            path_individuals = []
-            for sub_path in path:
-                waypoints = [(self.graph.nodes[node]['lon_lat'][0], self.graph.nodes[node]['lon_lat'][1])
-                             for node in sub_path]
-                speeds = np.asarray([self.vessel.speeds[0]] * (len(sub_path) - 1) + [None])
-                individual = []
-                for i, waypoint in enumerate(waypoints):
-                    individual.append([waypoint, speeds[i]])
-                path_individuals.append(container(individual))
-            init_routes.append(path_individuals)
-        return init_routes
+            path_inds = []
+            for sp in path:
+                wps = [self.G.nodes[n]['deg'] for n in sp]
+
+                # Set initial boat speed to max boat speed
+                speeds = [self.vessel.speeds[0]] * (len(sp) - 1) + [None]
+                ind = [list(tup) for tup in zip(wps, speeds)]
+                path_inds.append(container(ind))
+            init_inds.append(path_inds)
+        return init_inds
 
 
-def init_individual(toolbox, individual_in):
-    # Mutate graph route to obtain a population of initial routes
-    mutant = toolbox.clone(individual_in)
-    for i in range(max(100, len(individual_in) // 10)):
+def init_individual(toolbox, ind_in):
+    mutant = toolbox.clone(ind_in)
+    nr_mutations = max(100, len(ind_in) // 10)
+    for i in range(nr_mutations):
         mutant, = toolbox.mutate(mutant, initializing=True)
     return mutant
