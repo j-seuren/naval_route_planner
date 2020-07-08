@@ -1,5 +1,8 @@
+import dask.array as da
+from dask.diagnostics import ProgressBar
 import netCDF4
 import numpy as np
+import xarray as xr
 
 
 def ncdump(nc_fid, verb=True):
@@ -66,20 +69,35 @@ def ncdump(nc_fid, verb=True):
                 print_ncattr(var)
     return nc_attrs, nc_dims, nc_vars
 
+x = da.array(np.int8([0.2, 6.4, 3.0, 1.6]))
+
+print(x)
 
 # Open data as read-only
 fp = 'C:/dev/data/gebco_2020_netcdf/' + 'GEBCO_2020.nc'
 fp_TID = 'C:/dev/data/gebco_2020_tid_netcdf/' + 'GEBCO_2020_TID.nc'
-TID = netCDF4.Dataset(fp_TID, mode='r')
-data = netCDF4.Dataset(fp, mode='r')
-ncdump(data)
-ncdump(TID)
+# TID = xr.open_dataset(fp_TID, chunks={'lon': 16000, 'lat': 8000})
+ds = xr.open_dataset(fp, chunks={'lon': 11313, 'lat': 5657})
+ds = da.from_array(ds.to_array())
+print(ds)
+print(ds[0, 20000, 40000].compute())
 
-# Get longitudes and latitudes
-lons = data.variables['lon'][:]
-lats = data.variables['lat'][:]
-data.close()
+bins = np.int8([-5, -10, -20])
 
-tid = TID.variables['tid']
-# elevation = data.variables['elevation'][:]
-TID.close()
+inds = np.digitize(ds, bins)
+
+print(inds[0, 20000, 40000].compute())
+
+# print(inds[1, 20000, 40000].compute())
+#
+# print(ds2.isel(lon=40000, lat=20000).compute())
+# # print(ds2)
+#
+# # Get longitudes and latitudes
+# lons = ds.variables['lon']
+# lats = ds.variables['lat']
+#
+#
+# # tid = TID.variables['tid']
+# # elevation = data.variables['elevation'][:]
+# # TID.close()
