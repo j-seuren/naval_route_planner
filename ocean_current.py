@@ -1,16 +1,49 @@
+import collections
 import datetime
-import ftplib
+import download_currents
+import functools
+import math
 import matplotlib.pyplot as plt
 import numpy as np
-import os
-import xarray as xr
 
+from dask.cache import Cache
 from mpl_toolkits import basemap
+
+
+class Memoized(object):
+    """Decorator. Caches a function's return value each time it is called.
+    If called later with the same arguments, the cached value is returned
+    (not reevaluated).
+    """
+    def __init__(self, func):
+        self.func = func
+        self.cache = {}
+
+    def __call__(self, *args):
+        if not isinstance(args, collections.Hashable):
+            # uncacheable: better to not cache than blow up.
+            print(args, 'not hashable')
+            return self.func(*args)
+        if args in self.cache:
+            return self.cache[args]
+        else:
+            value = self.func(*args)
+            self.cache[args] = value
+            return value
+
+    def __repr__(self):
+        """Return the function's docstring."""
+        return self.func.__doc__
+
+    def __get__(self, obj, objtype):
+        """Support instance methods."""
+        return functools.partial(self.__call__, obj)
 
 
 def round_to_3h(t):
     # Rounds to nearest hour by adding a timedelta hour if minute >= 30
-    t_out = t.replace(second=0, microsecond=0, minute=0, hour=t.hour) + datetime.timedelta(hours=t.minute // 30)
+    t_out = t.replace(second=0, microsecond=0, minute=0, hour=t.hour) \
+            + datetime.timedelta(hours=t.minute // 30)
     if t_out.hour % 3 == 1:
         return t_out - datetime.timedelta(hours=1)
     elif t_out.hour % 3 == 2:
@@ -19,40 +52,29 @@ def round_to_3h(t):
 
 
 class CurrentData:
-    def __init__(self):
-        self.period = None
-        self.ds = None
+    def __init__(self, start_date, n_days):
+        self.start_date = round_to_3h(start_date)
+        self.n_days = n_days
+        self.ds = download_currents.load(self.start_date, self.n_days).compute()
+        print('Loaded data into memory')
+        cache = Cache(2e9)  # Leverage two gigabytes of memory
+        cache.register()  # Turn cache on globally
 
-    def get_currents(self, date_in):
-        date_rounded = round_to_3h(date_in)
+    @Memoized
+    def get_grid_pt_current(self, date_in, lon_idx, lat_idx):
+        delta = date_in - self.start_date
+        if delta.days < self.n_days:
+            day_idx = delta.seconds // 3600 // 3
+            vals = self.ds.isel(time=day_idx, lat=lat_idx, lon=lon_idx).load()
+            u_pt = float(vals['u_knot'])
+            v_pt = float(vals['v_knot'])
 
-        # Convert date_time to day of year
-        Y = str(date_rounded.year)
-        current_yday = date_rounded.timetuple().tm_yday
-        period_length = 5
-        period = current_yday // period_length
-
-        if self.period == period:
-            ds = self.ds
+            if math.isnan(u_pt) or math.isnan(v_pt):
+                u_pt = v_pt = 0.0
         else:
-            if self.ds:
-                self.ds.close()
-            p = 'current_netCDF/chunked_data/'
-            ds = xr.open_dataset(p + '{0}_period{1}_length{2}.nc'.format(Y, period, period_length))
-            self.ds = ds
-            self.period = period
+            u_pt = v_pt = 0.0
 
-        day_idx = current_yday % period_length
-        hr_idx = date_rounded.hour // 3
-        ds = ds.isel(time=(8 * day_idx + hr_idx))
-
-        # Get eastward (u) and northward (v) Euler velocities in knots
-        u = ds.variables['u_knot']
-        v = ds.variables['v_knot']
-        lons = ds.variables['lon']
-        lats = ds.variables['lat']
-
-        return u, v, lons, lats
+        return u_pt, v_pt
 
 
 class Vessel:
@@ -65,19 +87,23 @@ class Vessel:
 def plot_current_field(uin, vin, lons, lats):
     # Create map
     m = basemap.Basemap(projection='cyl', resolution='c',
-                        llcrnrlat=-90., urcrnrlat=90., llcrnrlon=-180., urcrnrlon=180.)
+                        llcrnrlat=-90., urcrnrlat=90.,
+                        llcrnrlon=-180., urcrnrlon=180.)
     m.drawcoastlines()
-    m.drawparallels(np.arange(-90., 90., 30.), labels=[1, 0, 0, 0], fontsize=10)
-    m.drawmeridians(np.arange(-180., 180., 30.), labels=[0, 0, 0, 1], fontsize=10)
+    m.drawparallels(np.arange(-90., 90., 30.),
+                    labels=[1, 0, 0, 0], fontsize=10)
+    m.drawmeridians(np.arange(-180., 180., 30.),
+                    labels=[0, 0, 0, 1], fontsize=10)
 
     # Transform vector and coordinate data
     vec_lon = uin.shape[1] // 10
     vec_lat = uin.shape[0] // 10
-    u_rot, v_rot, x, y = m.transform_vector(uin, vin, lons, lats, vec_lon, vec_lat, returnxy=True)
+    u_rot, v_rot, x, y = m.transform_vector(uin, vin, lons, lats,
+                                            vec_lon, vec_lat, returnxy=True)
 
     # Create vector plot on map
     vec_plot = m.quiver(x, y, u_rot, v_rot, scale=50, width=0.002)
-    plt.quiverkey(vec_plot, 0.2, -0.2, 1, '1 knot', labelpos='W')  # Position and reference label
+    plt.quiverkey(vec_plot, 0.2, -0.2, 1, '1 knot', labelpos='W')
 
 
 def bilinear_interpolation(x, y, z, xi, yi):
@@ -88,8 +114,4 @@ def bilinear_interpolation(x, y, z, xi, yi):
 
 
 if __name__ == '__main__':
-    # Initialize "CurrentData"
-    _start_date = datetime.datetime(2016, 1, 1)
-    current_data = CurrentData()
-
-    u_out, v_out, lons_out, lats_out = current_data.get_currents(_start_date)
+    print(None)
