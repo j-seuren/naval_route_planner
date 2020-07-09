@@ -92,7 +92,7 @@ class Evaluator:
             tt += e_tt
             fc += e_fc
 
-        return tt, fc
+        return tt / 24, fc
 
     def feasible(self, ind):
         for i in range(len(ind)-1):

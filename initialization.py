@@ -126,7 +126,7 @@ class Initializer:
             x_cpairs = []
         return path, x_cpairs
 
-    def get_init_inds(self, container):
+    def get_shortest_paths(self, container):
         path, x_cpairs = self.get_path()
         paths = [path]
         if x_cpairs:
@@ -160,9 +160,8 @@ class Initializer:
         return init_inds
 
 
-def init_individual(toolbox, ind_in):
-    mutant = toolbox.clone(ind_in)
-    nr_mutations = max(100, len(ind_in) // 10)
-    for i in range(nr_mutations):
-        mutant, = toolbox.mutate(mutant, initializing=True)
+def init_individual(toolbox, ind_in):  # swaps: ['speed', 'insert', 'move', 'delete']
+    cum_weights = [7, 14, 21, 100]
+    mutant, = toolbox.mutate(toolbox.clone(ind_in), cum_weights=cum_weights,
+                             initializing=True)
     return mutant

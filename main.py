@@ -12,6 +12,7 @@ import pandas as pd
 import pickle
 import random
 import rtree
+import time
 
 from datetime import datetime
 from deap import base, creator, tools, algorithms
@@ -31,8 +32,8 @@ class Vessel:
 Nbar = 50
 # GEN = 250
 # N = 100
-N = 40
-GEN = 2
+N = 200
+GEN = 2000
 CXPB = 0.9
 MUTPB = 0.9
 
@@ -100,16 +101,16 @@ class RoutePlanner:
                                                           self.rtree_idx,
                                                           self.tb,
                                                           self.gc)
-            self.tb.register("init_routes", self.initializer.get_init_inds,
+            self.tb.register("get_shortest_paths",
+                             self.initializer.get_shortest_paths,
                              creator.Individual)
         else:
             print('No start and endpoint given')
 
         # Initialize "Operator" and register it's functions
-        self.operators = operations.Operators(self.tb, self.vessel,
-                                              width_ratio=3, radius=5)
+        self.operators = operations.Operators(self.tb, self.vessel)
         self.tb.register("mutate", self.operators.mutate)
-        self.tb.register("mate", self.operators.crossover)
+        self.tb.register("mate", self.operators.cx_one_point)
 
         self.tb.register("population", tools.initRepeat, list)
 
@@ -127,18 +128,19 @@ class RoutePlanner:
         mstats.register("min", np.min, axis=0)
         mstats.register("max", np.max, axis=0)
 
-        init_routes = self.tb.init_routes()
+        print('Get shortest paths on graph... ', end='')
+        shortest_paths = self.tb.get_shortest_paths()
+        print('done')
 
         paths, path_logs = {}, {}
-        for p_idx, init_route in enumerate(init_routes):
-            print('Path {0}/{1}'.format(p_idx+1, len(init_routes)))
+        for p_idx, shortest_path in enumerate(shortest_paths):
+            print('Path {0}/{1}'.format(p_idx+1, len(shortest_paths)))
             sub_paths, sub_path_logs = {}, {}
-            for sp_idx, sub_route in enumerate(init_route):
-                print('Sub path {0}/{1}'.format(sp_idx+1, len(init_route)))
+            for sp_idx, sub_sp in enumerate(shortest_path):
+                print('Sub path {0}/{1}'.format(sp_idx+1, len(shortest_path)))
 
-                self.tb.register("individual",
-                                 initialization.init_individual,
-                                 self.tb, sub_route)
+                self.tb.register("individual", initialization.init_individual,
+                                 self.tb, sub_sp)
 
                 log = tools.Logbook()
                 log.header = "gen", "evals", "fitness", "size"
@@ -146,9 +148,11 @@ class RoutePlanner:
                 log.chapters["size"].header = "min", "avg", "max"
 
                 # Step 1: Initialization
+                print('Initializing population from shortest path... ', end='')
                 pop = self.tb.population(self.tb.individual, N)
                 archive = []
                 curr_gen = 1
+                print('done')
 
                 if self.incl_curr:
                     self.evaluator.current_data = ocean_current.CurrentData(
@@ -183,8 +187,7 @@ class RoutePlanner:
                     mating_pool = tools.selTournament(archive, k=N, tournsize=2)
 
                     # Step 6: Variation
-                    pop = algorithms.varAnd(mating_pool, self.tb, CXPB,
-                                            MUTPB)
+                    pop = algorithms.varAnd(mating_pool, self.tb, CXPB, MUTPB)
 
                     # Step 2: Fitness assignment
                     # Population
@@ -204,8 +207,7 @@ class RoutePlanner:
 
             paths[p_idx] = sub_paths
             path_logs[p_idx] = sub_path_logs
-
-        return paths, path_logs, init_routes
+        return paths, path_logs, shortest_paths
 
     def nsga2(self, seed=None):
         # Register NSGA2 selection function
@@ -221,33 +223,42 @@ class RoutePlanner:
         mstats.register("min", np.min, axis=0)
         mstats.register("max", np.max, axis=0)
 
-        init_routes = self.tb.init_routes()
+        print('Get shortest paths on graph... ', end='')
+        shortest_paths = self.tb.get_shortest_paths()
+        print('done')
 
         paths, path_logs = {}, {}
-        for p_idx, init_route in enumerate(init_routes):
-            print('Path {0}/{1}'.format(p_idx + 1, len(init_routes)))
+        for p_idx, shortest_path in enumerate(shortest_paths):
+            print('Path {0}/{1}'.format(p_idx + 1, len(shortest_paths)))
             sub_paths, sub_path_logs = {}, {}
-            for sp_idx, sub_route in enumerate(init_route):
-                print('Sub path {0}/{1}'.format(sp_idx + 1, len(init_route)))
+            for sp_idx, sub_sp in enumerate(shortest_path):
+                print('Sub path {0}/{1}'.format(sp_idx + 1, len(shortest_path)))
 
-                self.tb.register("individual",
-                                 initialization.init_individual,
-                                 self.tb, sub_route)
+                self.tb.register("individual", initialization.init_individual,
+                                 self.tb, sub_sp)
 
                 log = tools.Logbook()
                 log.header = "gen", "evals", "fitness", "size"
                 log.chapters["fitness"].header = "min", "avg", "max"
                 log.chapters["size"].header = "min", "avg", "max"
 
-                # Step 1 Initialization
+                # Step 1: Initialization
+                print('Initializing population from shortest path... ', end='')
                 pop = self.tb.population(self.tb.individual, N)
                 offspring = []
                 curr_gen = 1
+                print('done')
+
+                if self.incl_curr:
+                    self.evaluator.current_data = ocean_current.CurrentData(
+                        self.start_date, self.get_n_days(pop))
 
                 # Step 2: Fitness assignment
+                print('Fitness assignment... ', end='')
                 fits = self.tb.map(self.tb.evaluate, pop)
                 for ind, fit in zip(pop, fits):
                     ind.fitness.values = fit
+                print('assigned')
 
                 # Begin the generational process
                 while True:
@@ -267,22 +278,19 @@ class RoutePlanner:
                         break
 
                     # Step 5: Variation
-                    offspring = algorithms.varAnd(pop, self.tb, CXPB,
-                                                  MUTPB)
+                    offspring = algorithms.varAnd(pop, self.tb, CXPB, MUTPB)
 
                     # Step 2: Fitness assignment
-                    inv_inds = [ind for ind in offspring
-                                if not ind.fitness.valid]
+                    inv_inds = [ind for ind in offspring if not ind.fitness.valid]
                     fits = self.tb.map(self.tb.evaluate, inv_inds)
                     for ind, fit in zip(inv_inds, fits):
                         ind.fitness.values = fit
 
                     curr_gen += 1
-
             paths[p_idx] = sub_paths
             path_logs[p_idx] = sub_path_logs
 
-        return paths, path_logs, init_routes
+        return paths, path_logs, shortest_paths
 
     def get_n_days(self, pop):
         boat_speed = min(self.vessel.speeds)
@@ -304,6 +312,7 @@ class RoutePlanner:
 
 
 if __name__ == "__main__":
+    start_time = time.time()
     # Gulf of Guinea, Gulf of Mexico
     _start, _end = (3.14516, 4.68508), (-94.5968, 26.7012)
     # South Atlantic (Brazil), Caribbean Sea
@@ -320,7 +329,7 @@ if __name__ == "__main__":
     # _start, _end = (3.891292, 60.088472), (-7.562237, 47.403357)
 
     _route_planner = RoutePlanner(_start, _end, seca_factor=1.2, incl_curr=True)
-    _paths, _path_logs, _init_routes = _route_planner.spea2(seed=1)
+    _paths, _path_logs, _init_routes = _route_planner.nsga2(seed=1)
 
     # Save parameters
     timestamp = datetime.now()
@@ -343,35 +352,7 @@ if __name__ == "__main__":
         pickle.dump(_paths, file)
     print('Saved paths to "output/paths/{}"'.format(paths_fn))
 
-    # Plot statistics
-    for p, path_log in enumerate(_path_logs.values()):
-        for sp, sub_path_log in enumerate(path_log.values()):
-            _gen = sub_path_log.select("gen")
-            fit_mins = sub_path_log.chapters["fitness"].select("min")
-            time_mins = [fit_min[0] for fit_min in fit_mins]
-            fuel_mins = [fit_min[1] for fit_min in fit_mins]
-            path_time_min = fit_mins[time_mins.index(min(time_mins))]
-            path_fuel_min = fit_mins[fuel_mins.index(min(fuel_mins))]
-            print('P{0} SP{1}: Min Time {2}'.format(p, sp, path_time_min))
-            print('P{0} SP{1}: Min Fuel {2}'.format(p, sp, path_fuel_min))
-            size_avgs = sub_path_log.chapters["size"].select("avg")
-
-            fig, ax1 = plt.subplots()
-            line1 = ax1.plot(_gen, fit_mins, "b-", label="Minimum Fitness")
-            ax1.set_xlabel("Generation")
-            ax1.set_ylabel("Fitness", color="b")
-            for tl in ax1.get_yticklabels():
-                tl.set_color("b")
-
-            ax2 = ax1.twinx()
-            line2 = ax2.plot(_gen, size_avgs, "r-", label="Average Size")
-            ax2.set_ylabel("Size", color="r")
-            for tl in ax2.get_yticklabels():
-                tl.set_color("r")
-
-            lines = line1 + line2
-            labs = [line.get_label() for line in lines]
-            ax1.legend(lines, labs, loc="center right")
+    print("--- %s seconds ---" % (time.time() - start_time))
 
     # front = np.array([_ind.fitness.values for _ind in sub_path_pop])
     # plt.scatter(front[:, 0], front[:, 1], c="b")

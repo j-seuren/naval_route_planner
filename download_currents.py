@@ -94,10 +94,7 @@ def load(t_start, n_days):
     ds_fp = os.path.join(ds_dir, ds_fn)
 
     if os.path.exists(ds_fp):
-        # return xr.open_dataset(ds_fp)
-        return xr.open_dataset(ds_fp,
-                               chunks={'time': 'auto',
-                                       'lon': 'auto', 'lat': 'auto'})
+        return xr.open_dataset(ds_fp, engine='h5netcdf')
 
     # Get path list
     local_paths = []
@@ -115,7 +112,7 @@ def load(t_start, n_days):
 
     # Try opening current data locally, otherwise download from FTP server
     try:
-        print('Trying to load ocean current data locally... ', end='')
+        print('Trying to load %d netCDF files locally... ' % (8*n_days), end='')
         ds = xr.open_mfdataset(local_paths, parallel=True,
                                combine='by_coords', preprocess=to_kts)
         print('success')
@@ -141,10 +138,7 @@ def load(t_start, n_days):
                                combine='by_coords', preprocess=to_kts)
         print('done')
     ds.to_netcdf(ds_fp)
-    # return xr.open_dataset(ds_fp)
-    return xr.open_dataset(ds_fp,
-                           chunks={'time': 'auto',
-                                   'lon': 'auto', 'lat': 'auto'})
+    return xr.open_dataset(ds_fp, engine='h5netcdf')
 
 
 if __name__ == "__main__":
