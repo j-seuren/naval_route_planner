@@ -1,13 +1,42 @@
+import datetime
 import math
 import matplotlib.pyplot as plt
 import numpy as np
+import ocean_current
 import pickle
 
 from matplotlib import cm
 from mpl_toolkits.basemap import Basemap
 
 
-class Plotter:
+def plot_stats(path_logs, name):
+    for p, path_log in enumerate(path_logs.values()):
+        for sp, sub_path_log in enumerate(path_log.values()):
+            _gen = sub_path_log.select("gen")
+            fit_mins = sub_path_log.chapters["fitness"].select("min")
+            size_avgs = sub_path_log.chapters["size"].select("avg")
+
+            fig, ax1 = plt.subplots()
+            fig.suptitle(name)
+            line1 = ax1.plot(_gen, fit_mins, "b-", label="Minimum Fitness")
+            ax1.set_xlabel("Generation")
+            ax1.set_ylabel("Fitness", color="b")
+            for tl in ax1.get_yticklabels():
+                tl.set_color("b")
+
+            ax2 = ax1.twinx()
+            line2 = ax2.plot(_gen, size_avgs, "r-", label="Average Size")
+            ax2.set_ylabel("Size", color="r")
+            for tl in ax2.get_yticklabels():
+                tl.set_color("r")
+
+            lines = line1 + line2
+            labs = [line.get_label() for line in lines]
+            ax1.legend(lines, labs, loc="center right")
+            print('{} - final avg size'.format(name), size_avgs[-1])
+
+
+class RoutePlotter:
     def __init__(self,
                  paths,
                  vessel,
@@ -35,16 +64,19 @@ class Plotter:
             plot_currents = False
 
         # Set extent
-        all_wps = []
-        for sub_paths in paths.values():
-            for pop in sub_paths.values():
-                for ind in pop:
-                    all_wps.extend([item[0] for item in ind])
-        min_x, min_y = min(all_wps, key=lambda t: t[0])[0], min(all_wps, key=lambda t: t[1])[1]
-        max_x, max_y = max(all_wps, key=lambda t: t[0])[0], max(all_wps, key=lambda t: t[1])[1]
+        all_wps = [wp[0] for sp in paths.values()
+                   for pop in sp.values()
+                   for ind in pop
+                   for wp in ind]
+        minx = int(min(all_wps, key=lambda t: t[0])[0])
+        miny = int(min(all_wps, key=lambda t: t[1])[1])
+        maxx = int(max(all_wps, key=lambda t: t[0])[0])
+        maxy = int(max(all_wps, key=lambda t: t[1])[1])
         margin = 5
-        left, right = max(math.floor(min_x) - margin, -180), min(math.ceil(max_x) + margin, 180)
-        bottom, top = max(math.floor(min_y) - margin, -90), min(math.ceil(max_y) + margin, 90)
+        lef = max(minx - margin, -180)
+        rig = min(maxx + margin, 180)
+        bot = max(miny - margin, -90)
+        top = min(maxy + margin, 90)
 
         rows = round(math.sqrt(n_plots))
         columns = math.ceil(math.sqrt(n_plots))
@@ -63,16 +95,19 @@ class Plotter:
 
             self.ax[i].set_title("{}".format(list(self.ID_dict.keys())[i]))
             self.m[i] = Basemap(projection='merc', resolution='c',
-                                llcrnrlat=bottom, urcrnrlat=top, llcrnrlon=left, urcrnrlon=right, ax=self.ax[i])
-            self.m[i].drawparallels(np.arange(-90., 90., 10.), labels=[1, 0, 0, 0], fontsize=10)
-            self.m[i].drawmeridians(np.arange(-180., 180., 10.), labels=[0, 0, 0, 1], fontsize=10)
+                                llcrnrlat=bot, urcrnrlat=top,
+                                llcrnrlon=lef, urcrnrlon=rig, ax=self.ax[i])
+            self.m[i].drawparallels(np.arange(-90., 90., 10.),
+                                    labels=[1, 0, 0, 0], fontsize=10)
+            self.m[i].drawmeridians(np.arange(-180., 180., 10.),
+                                    labels=[0, 0, 0, 1], fontsize=10)
             self.m[i].drawcoastlines()
             self.m[i].fillcontinents()
 
             if plot_currents:
                 # Transform vector and coordinate data
-                vec_lon = int(uin.shape[1] / (2 * 360 / (right - left)))
-                vec_lat = int(uin.shape[0] / (2 * 180 / (top - bottom)))
+                vec_lon = int(uin.shape[1] / (2 * 360 / (rig - lef)))
+                vec_lat = int(uin.shape[0] / (2 * 180 / (top - bot)))
                 u_rot, v_rot, x, y = self.m[i].transform_vector(uin, vin, lons, lats, vec_lon, vec_lat, returnxy=True)
 
                 vec_plot = self.m[i].quiver(x, y, u_rot, v_rot, color='darkgray', scale=50, width=.002)
@@ -132,8 +167,10 @@ if __name__ == "__main__":
                                       vessel_name='Fairmaster',
                                       incl_curr=True)
 
-    _ID_dict = {'SPEA2': '20_07_23',
-                'NSGA2': '20_04_27'}
+    _ID_dict = {'1    current': '16_57_02',
+                '1 no current': '17_46_15',
+                '2 1,200    current': '',
+                '2 1,200 no current': '21_31_13'}
 
     # # Brazil -> Caribbean Sea
     # _ID_dict = {'   Currents -    SECA': '',
@@ -159,14 +196,19 @@ if __name__ == "__main__":
         first_paths = pickle.load(f)
 
     _n_plots = len(_ID_dict)
-    plotter = Plotter(first_paths, route_planner.vessel, _secas, _n_plots, _ID_dict)
+    plotter = RoutePlotter(first_paths, route_planner.vessel, _secas, _n_plots, _ID_dict)
 
     for _i, key in enumerate(_ID_dict.keys()):
         with open('output/paths/{}_paths'.format(_ID_dict[key]), 'rb') as f:
             _paths = pickle.load(f)
 
+        with open('output/logs/{}_logs'.format(_ID_dict[key]), 'rb') as f:
+            _path_logs = pickle.load(f)
+
         with open('output/glob_routes/{}_init_routes'.format(_ID_dict[key]), 'rb') as f:
             _global_routes = pickle.load(f)
+
+        plot_stats(_path_logs, key)
 
         best_inds = {}
         for _sub_paths in _paths.values():
@@ -187,6 +229,12 @@ if __name__ == "__main__":
 
         plotter.plot_individuals(best_inds.values(), _i)
         plotter.plot_global_routes(_global_routes, _i)
+
+        _n_days = math.ceil(max([ind.fitness.values[0] for ind in best_inds.values()]))
+        print('n_days:', _n_days)
+        _start_date = datetime.datetime(2016, 1, 1)
+        route_planner.evaluator.current_data = ocean_current.CurrentData(
+            _start_date, _n_days)
 
         for k, _ind in best_inds.items():
             fit = route_planner.tb.evaluate(_ind)
