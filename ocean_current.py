@@ -1,10 +1,10 @@
 import collections
-import datetime
-import download_currents
+import ocean_current_data
 import functools
 import math
 import matplotlib.pyplot as plt
 import numpy as np
+import xarray as xr
 
 from dask.cache import Cache
 from mpl_toolkits import basemap
@@ -40,29 +40,27 @@ class Memoized(object):
         return functools.partial(self.__call__, obj)
 
 
-def round_to_3h(t):
-    # Rounds to nearest hour by adding a timedelta hour if minute >= 30
-    t_out = t.replace(second=0, microsecond=0, minute=0, hour=t.hour) \
-            + datetime.timedelta(hours=t.minute // 30)
-    if t_out.hour % 3 == 1:
-        return t_out - datetime.timedelta(hours=1)
-    elif t_out.hour % 3 == 2:
-        return t_out + datetime.timedelta(hours=1)
-    return t_out
-
-
-class CurrentData:
-    def __init__(self, start_date, n_days):
-        self.start_date = round_to_3h(start_date)
+class CurrentOperator:
+    def __init__(self, t_s, n_days):
+        self.t_s = t_s.replace(second=0, microsecond=0, minute=0, hour=0)
         self.n_days = n_days
-        self.ds = download_currents.load(self.start_date, self.n_days).compute()
-        print('Loaded data into memory')
+
+        # Initialize CurrentDataRetriever class instance
+        downloader = ocean_current_data.CurrentDataRetriever(self.t_s, self.n_days)
+        downloader.store_combined_nc()
+
+        fp = downloader.ds_fp
+        print('Opening and loading combined netCDF into memory:'.format(fp), end=' ')
+        with xr.open_dataset(fp, engine='h5netcdf') as ds:
+            self.ds = ds.compute()
+        print('done')
+
         cache = Cache(2e9)  # Leverage two gigabytes of memory
         cache.register()  # Turn cache on globally
 
     @Memoized
     def get_grid_pt_current(self, date_in, lon_idx, lat_idx):
-        delta = date_in - self.start_date
+        delta = date_in - self.t_s
         if delta.days < self.n_days:
             day_idx = delta.seconds // 3600 // 3
             vals = self.ds.isel(time=day_idx, lat=lat_idx, lon=lon_idx).load()
@@ -75,13 +73,6 @@ class CurrentData:
             u_pt = v_pt = 0.0
 
         return u_pt, v_pt
-
-
-class Vessel:
-    def __init__(self, name, _speeds, _fuel_rates):
-        self.name = name
-        self.speeds = _speeds
-        self.fuel_rates = _fuel_rates
 
 
 def plot_current_field(uin, vin, lons, lats):
@@ -104,13 +95,6 @@ def plot_current_field(uin, vin, lons, lats):
     # Create vector plot on map
     vec_plot = m.quiver(x, y, u_rot, v_rot, scale=50, width=0.002)
     plt.quiverkey(vec_plot, 0.2, -0.2, 1, '1 knot', labelpos='W')
-
-
-def bilinear_interpolation(x, y, z, xi, yi):
-    a = np.array([x[1] - xi, xi - x[0]])
-    b = np.array([y[1] - yi, yi - y[0]])
-
-    return a.dot(z.dot(b)) / ((x[1] - x[0]) * (y[1] - y[0]))
 
 
 if __name__ == '__main__':
