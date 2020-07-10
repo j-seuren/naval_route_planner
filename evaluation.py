@@ -45,7 +45,9 @@ class Evaluator:
                  vessel,
                  prep_polys,
                  rtree_idx,
-                 seca_factor,
+                 ecas,
+                 rtree_idx_eca,
+                 eca_f,
                  start_date,
                  gc,
                  incl_curr=True,
@@ -54,19 +56,14 @@ class Evaluator:
         self.vessel = vessel            # Vessel class instance
         self.prep_polys = prep_polys    # Prepared land polygons
         self.rtree_idx = rtree_idx      # prep_polys' R-tree spatial index
-        self.seca_factor = seca_factor  # Multiplication factor for SECA fuel
+        self.ecas = ecas                # ECA polygons
+        self.rtree_idx_eca = rtree_idx_eca  # ecas' R-tree spatial index
+        self.eca_f = eca_f              # Multiplication factor for ECA fuel
         self.start_date = start_date    # Start date of voyage
         self.del_sf = del_sf            # Max segment length (for feasibility)
         self.del_sc = del_sc            # Max segment length (for currents)
         self.incl_curr = incl_curr      # Boolean for including currents
         self.gc = gc                    # Geod class instance
-
-        with open('C:/dev/data/seca_areas_csv', 'rb') as f:
-            self.secas = pickle.load(f)
-
-        self.rtree_idx_seca = rtree.index.Index()
-        for idx, seca in enumerate(self.secas):
-            self.rtree_idx_seca.insert(idx, seca.bounds)
         self.current_data = None
 
     def evaluate(self, ind):
@@ -84,9 +81,9 @@ class Evaluator:
             # Compute fuel consumption over edge
             e_fc = self.vessel.fuel_rates[boat_speed] * e_tt  # Tons
 
-            # If edge intersects SECA increase fuel consumption by seca_factor
-            if edge_x_geos(p1, p2, self.rtree_idx_seca, self.secas):
-                e_fc *= self.seca_factor
+            # If edge intersects SECA increase fuel consumption by eca_f
+            if edge_x_geos(p1, p2, self.rtree_idx_eca, self.ecas):
+                e_fc *= self.eca_f
 
             # Increment objective values
             tt += e_tt
@@ -105,11 +102,28 @@ class Evaluator:
     def e_feasible(self, p1, p2):
         dist = self.gc.distance(p1, p2)
         lons, lats = self.gc.points(p1, p2, dist, self.del_sf)
-        for i in range(len(lons) - 1):
-            # Compute line bounds
-            q1, q2 = (lons[i], lats[i]), (lons[i + 1], lats[i + 1])
-            if edge_x_geos(q1, q2, self.rtree_idx, self.prep_polys):
-                return False
+        vertices = np.stack([lons, lats]).T
+
+        # since we know the difference between any two points, we can use this to find wrap arounds on the plot
+        max_dist = self.del_sf * 10 / 60
+
+        # calculate distances and compare with max allowable distance
+        dists = np.abs(np.diff(lons))
+        cuts = np.where(dists > max_dist)[0]
+
+        # if there are any cut points, cut them and begin again at the next point
+        for i, cut in enumerate(cuts):
+            # create new vertices with a nan inbetween and set those as the path's vertices
+            verts = np.concatenate([vertices[:cut+1, :],
+                                    [[np.nan, np.nan]],
+                                    vertices[cut+1:, :]]
+                                   )
+            vertices = verts
+        for i in range(len(vertices)-1):
+            if not np.isnan(np.sum(vertices[i:i+2, :])):
+                q1, q2 = tuple(vertices[i, :]), tuple(vertices[i+1, :])
+                if edge_x_geos(q1, q2, self.rtree_idx, self.prep_polys):
+                    return False
         return True
 
     def e_tt(self, p1, p2, tt, boat_speed):
