@@ -37,12 +37,16 @@ class HexagraphBuilder:
                  var_dens,
                  res,
                  prep_polys,
-                 rtree_idx):
+                 rtree_idx,
+                 ecas,
+                 rtree_idx_eca):
         self.dens = dens
         self.var_dens = var_dens
         self.res = res
         self.prep_polys = prep_polys
         self.rtree_idx = rtree_idx
+        self.rtree_idx_eca = rtree_idx_eca
+        self.ecas = ecas
         self.G = nx.Graph()
         self.index = 0
         self.mp_cache = {}
@@ -106,27 +110,27 @@ class HexagraphBuilder:
         self.mp_cache[key] = idx
         return idx
 
-    def remove_nodes_x_polys(self):
-        cnt, nr_edges = 0, len(self.G.edges)
-        sys.stdout.write(
-            "removing nodes from graph:  {}%".format(int(100 * cnt / nr_edges)))
-        sys.stdout.flush()
-        graph2 = self.G.copy()
-        for n_data in self.G.nodes(data=True):
-            # Printing progress
-            cnt += 1
-            if cnt % 100 == 0:
-                sys.stdout.write("\rremoving nodes from graph:  {}%".format(
-                    int(100 * cnt / nr_edges)))
-                sys.stdout.flush()
-
-            # If node is in polygon, remove from graph
-            p_n = n_data[1]['deg']
-            if edge_x_geos(p_n, p_n, self.rtree_idx, self.prep_polys):
-                graph2.remove_node(n_data[0])
-        sys.stdout.write("\rremoving nodes from graph: 100%\n")
-        sys.stdout.flush()
-        return graph2
+    # def remove_nodes_x_polys(self):
+    #     cnt, nr_edges = 0, len(self.G.edges)
+    #     sys.stdout.write(
+    #         "removing nodes from graph:  {}%".format(int(100 * cnt / nr_edges)))
+    #     sys.stdout.flush()
+    #     graph2 = self.G.copy()
+    #     for n_data in self.G.nodes(data=True):
+    #         # Printing progress
+    #         cnt += 1
+    #         if cnt % 100 == 0:
+    #             sys.stdout.write("\rremoving nodes from graph:  {}%".format(
+    #                 int(100 * cnt / nr_edges)))
+    #             sys.stdout.flush()
+    #
+    #         # If node is in polygon, remove from graph
+    #         p_n = n_data[1]['deg']
+    #         if edge_x_geos(p_n, p_n, self.rtree_idx, self.prep_polys):
+    #             graph2.remove_node(n_data[0])
+    #     sys.stdout.write("\rremoving nodes from graph: 100%\n")
+    #     sys.stdout.flush()
+    #     return graph2
 
     def remove_edges_x_polys(self):
         cnt, nr_edges = 0, len(self.G.edges)
@@ -294,8 +298,8 @@ class HexagraphBuilder:
         for n in self.G.nodes:
             del self.G.nodes[n]['point']
 
-        # Remove nodes and edges crossing polygons
-        self.G = self.remove_nodes_x_polys()
+        # Remove edges crossing polygons
+        # self.G = self.remove_nodes_x_polys()
         self.G = self.remove_edges_x_polys()
 
         for canal in self.canals:
@@ -323,21 +327,35 @@ class HexagraphBuilder:
             for nn in nsmallest(3, dist2, key=dist2.get):
                 self.G.add_edge(n2, nn, miles=dist2[nn])
 
-        # Set edge weights to arc length (nautical miles)
-        for e in self.G.edges():
-            xyz1 = self.G.nodes[e[0]]['xyz']
-            xyz2 = self.G.nodes[e[1]]['xyz']
-            self.G[e[0]][e[1]]['miles'] = arc_length(xyz1, xyz2)
+        # Set edge attributes
+        for n1, n2 in self.G.edges():
+            xyz1 = self.G.nodes[n1]['xyz']
+            xyz2 = self.G.nodes[n2]['xyz']
+            miles = arc_length(xyz1, xyz2)
+            self.G[n1][n2]['miles'] = miles
+
+            p1, p2 = self.G.nodes[n1]['deg'], self.G.nodes[n2]['deg']
+            if edge_x_geos(p1, p2, self.rtree_idx_eca, self.ecas):
+                self.G[n1][n2]['eca_weight'] = miles * 2
+            else:
+                self.G[n1][n2]['eca_weight'] = miles
 
         # Set canal edge weights to predefined weights
         for canal in self.canals:
             n1, n2 = (n for n in self.canals[canal]['nodes'])
             self.G[n1][n2]['miles'] = self.canals[canal]['dist']
 
+        print('Removing isolates... ', end='')
+        nx.isolates(self.G)
+        self.G.remove_nodes_from(list(nx.isolates(self.G)))
+        print('done')
+
         # Remove all connected components but the largest
+        print('Removing isolate connected components... ', end='')
         for cc in sorted(nx.connected_components(self.G),
                          key=len, reverse=True)[1:]:
             self.G.remove_nodes_from(cc)
+        print('done')
 
         return self.G
 
@@ -376,12 +394,16 @@ class Hexagraph:
                  vd,
                  res,
                  prep_polys,
-                 rtree_idx):
+                 rtree_idx,
+                 ecas,
+                 rtree_idx_eca):
         self.d = d
         self.vd = vd
         self.res = res
         self.prep_polys = prep_polys
         self.rtree_idx = rtree_idx
+        self.ecas = ecas
+        self.rtree_idx_eca = rtree_idx_eca
 
         # Get Graph
         G_dir = "output/variable_density_geodesic_grids/"
@@ -393,7 +415,8 @@ class Hexagraph:
         except FileNotFoundError:
             # Initialize "HexaGraphBuilder"
             builder = HexagraphBuilder(self.d, self.vd, self.res,
-                                       self.prep_polys, self.rtree_idx)
+                                       self.prep_polys, self.rtree_idx,
+                                       self.ecas, self.rtree_idx_eca)
             self.graph = builder.build_hexa_graph()
 
             # Save graph to file
@@ -433,9 +456,12 @@ if __name__ == '__main__':
     for _poly_idx, split_poy in enumerate(split_polys):
         _rtree_idx.insert(_poly_idx, split_poy.bounds)
 
+
+
     # Initialize "HexagraphBuilder"
     hexagraph = Hexagraph(graph_d, graph_vd, resolution,
-                          _prep_polys, _rtree_idx)
+                          _prep_polys, _rtree_idx,
+                          _ecas, _rtree_idx_eca)
     hexagraph.plot_graph()
 
     plt.show()
