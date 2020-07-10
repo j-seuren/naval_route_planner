@@ -339,16 +339,16 @@ if __name__ == "__main__":
     # Mediterranean Sea, Gulf of Aden
     # _start, _end = (29.188952, 32.842985), (48.1425, 12.5489)
     # Normandy, Canada
-    # _start, _end = (-5.352121, 48.021295), (-53.306878, 46.423969)
+    _start, _end = (-5.352121, 48.021295), (-53.306878, 46.423969)
     # Normandy, Canada
     # _start, _end = (-95, 10), (89, 9)
     # Gulf of Bothnia, Gulf of Mexico
     # _start, _end = (20.891193, 58.464147), (-85.063585, 29.175463)
     # North UK, South UK
-    _start, _end = (3.891292, 60.088472), (-7.562237, 47.403357)
+    # _start, _end = (3.891292, 60.088472), (-7.562237, 47.403357)
 
     _route_planner = RoutePlanner(_start, _end, eca_f=1.2, incl_curr=True)
-    _paths, _path_logs, _path_hofs, _init_routes = _route_planner.nsga2(seed=1)
+    _paths, _path_logs, _hofs, _init_routes = _route_planner.nsga2(seed=1)
 
     # Save parameters
     timestamp = datetime.now()
@@ -370,6 +370,12 @@ if __name__ == "__main__":
     with open('output/paths/' + paths_fn, 'wb') as file:
         pickle.dump(_paths, file)
     print('Saved paths to "output/paths/{}"'.format(paths_fn))
+
+    # Save Hall-of-Fames
+    hofs_fn = '{0:%H_%M_%S}_hofs'.format(timestamp)
+    with open('output/hofs/' + hofs_fn, 'wb') as file:
+        pickle.dump(_hofs, file)
+    print('Saved hofs to "output/hofs/{}"'.format(hofs_fn))
 
     print("--- %s seconds ---" % (time.time() - start_time))
 

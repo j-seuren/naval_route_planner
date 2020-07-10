@@ -183,7 +183,7 @@ if __name__ == "__main__":
                                       vessel_name='Fairmaster',
                                       incl_curr=True)
 
-    _ID_dict = {'eca test': '14_44_57'}
+    _ID_dict = {'hof test': '19_44_34'}
 
     # # Brazil -> Caribbean Sea
     # _ID_dict = {'   Currents -    ECA': '',
@@ -221,23 +221,26 @@ if __name__ == "__main__":
         with open('output/logs/{}_logs'.format(_ID_dict[key]), 'rb') as f:
             _path_logs = pickle.load(f)
 
+        with open('output/hofs/{}_hofs'.format(_ID_dict[key]), 'rb') as f:
+            _hofs = pickle.load(f)
+
         with open('output/glob_routes/{}_init_routes'.format(_ID_dict[key]), 'rb') as f:
             _global_routes = pickle.load(f)
 
         plot_stats(_path_logs, key)
 
         best_inds = {}
-        for _sub_paths in _paths.values():
-            for _pop in _sub_paths.values():
+        for _path in _hofs.values():
+            for _hof in _path.values():
                 min_tt, min_fc = math.inf, math.inf
                 tt_ind, fc_ind = None, None
-                for min_ind in _pop:
-                    tt, fc = min_ind.fitness.values
+                for i, _fit in enumerate(_hof.keys):
+                    tt, fc = _fit.values
                     if tt < min_tt:
-                        tt_ind = min_ind
+                        tt_ind = _hof.items[i]
                         min_tt = tt
                     if fc < min_fc:
-                        fc_ind = min_ind
+                        fc_ind = _hof.items[i]
                         min_fc = fc
 
                 best_inds['Minimal fuel: '] = fc_ind
