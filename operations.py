@@ -39,7 +39,7 @@ class Operators:
     def mutate(self, ind, cum_weights=None, initializing=False):
         if initializing:
             sample_ops = random.choices(self.ops, cum_weights=cum_weights,
-                                        k=random.randint(1, 10))
+                                        k=random.randint(1, 8))
         else:
             sample_ops = random.sample(self.ops, k=1)
         while sample_ops:
@@ -146,7 +146,7 @@ class Operators:
                             not self.tb.e_feasible(new_wp, ind[i + 1][0])):
                         trials += 1
                         if trials > 100:
-                            print('exceeded move trials')
+                            print('exceeded move trials', end='\n ')
                             break
                         else:
                             continue
@@ -174,7 +174,7 @@ class Operators:
         for i in tbd:
             del ind[i]
             while ind[i-1][0] == ind[i][0]:
-                print('deleted next similar waypoint')
+                print('deleted next similar waypoint', end='\n ')
                 assert i < len(ind) - 1, 'last waypoint cannot be deleted'
                 del ind[i]
 
@@ -198,7 +198,7 @@ class Operators:
                 cx_pt1, cx_pt2 = random.randint(1, size-1), random.randint(1, size-1)
                 trials += 1
                 if trials > 100:
-                    print('exceeded crossover trials')
+                    print('exceeded crossover trials', end='\n ')
                     return ind1, ind2
 
             # Check feasibility
@@ -208,5 +208,5 @@ class Operators:
 
             assert len(ind1) > 2 and len(ind2) > 2, 'crossover children length < 3'
         else:
-            print('skipped crossover')
+            print('skipped crossover', end='\n ')
         return ind1, ind2
