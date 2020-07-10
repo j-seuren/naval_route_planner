@@ -7,6 +7,8 @@ import os
 from haversine import haversine
 from math import cos, sin
 
+import matplotlib.pyplot as plt
+
 
 class Initializer:
     def __init__(self,
@@ -16,6 +18,8 @@ class Initializer:
                  res,
                  prep_polys,
                  rtree_idx,
+                 ecas,
+                 rtree_idx_eca,
                  toolbox,
                  gc,
                  dens=6,
@@ -26,6 +30,8 @@ class Initializer:
         self.res = res                # Resolution of shorelines
         self.prep_polys = prep_polys  # Prepared land polygons
         self.rtree_idx = rtree_idx    # prep_polys' R-tree spatial index
+        self.ecas = ecas            # ECA polygons
+        self.rtree_idx_eca = rtree_idx_eca  # ecas' R-tree spatial index
         self.toolbox = toolbox        # Function toolbox
         self.gc = gc                  # Geod class instance
         self.dens = dens              # Density recursion number, graph
@@ -40,8 +46,13 @@ class Initializer:
             self.G = nx.read_gpickle(os.path.join(graph_dir, graph_fn))
         except FileNotFoundError:
             # Initialize "Hexagraph"
-            hex_graph = hexagraph.Hexagraph(dens, var_dens, res, prep_polys,
-                                            rtree_idx)
+            hex_graph = hexagraph.Hexagraph(dens,
+                                            var_dens,
+                                            res,
+                                            prep_polys,
+                                            rtree_idx,
+                                            ecas,
+                                            rtree_idx_eca)
             self.G = hex_graph.get_g()
 
         # Compute distances to start and end locations
@@ -100,38 +111,50 @@ class Initializer:
              x_cpairs: list of tuples of crossed canal nodes
                        in order of crossing
         """
-        # Calculate shortest path on graph from 'start' to 'end'
-        path = [nx.astar_path(self.G, 'start', 'end',
-                              heuristic=self.dist_heuristic,
-                              weight='miles')]
-        # path = [nx.shortest_path(self.graph, 'start', 'end', weight='miles',
-        #                          method='dijkstra')]
+        # Compute time shortest path on graph from 'start' to 'end'
+        time_path = nx.astar_path(self.G, 'start', 'end',
+                                  heuristic=self.dist_heuristic,
+                                  weight='miles')
+
+        # shortest_path = nx.shortest_path(self.graph, 'start', 'end', weight='miles',
+        #                          method='dijkstra')
 
         # Get crossed canal nodes in path
-        x_cnodes = [wp for wp in path[0] if wp in self.canal_nodes]
-        if x_cnodes:
-            # Zip crossed canal nodes to crossed canal pairs
-            x_cpairs = list(zip(x_cnodes[::2], x_cnodes[1::2]))
-            pairs_reversed = x_cpairs[::-1]
-            while pairs_reversed:
-                # Get sub path in which canal node is found
-                x_canal_pair = pairs_reversed.pop()
-                sp = path.pop()
+        x_cnodes = [wp for wp in time_path if wp in self.canal_nodes]
 
-                # Split sub path at canal, and extend to path
-                i = sp.index(x_canal_pair[0])
-                path.extend([sp[:i+1], sp[i+1:]])
-                print('Crossing canal {}'.format(x_canal_pair))
+        if x_cnodes:
+            print('Crossing canals {}'.format(x_cnodes), end='\n ')
+
+            cuts = [time_path.index(i) for i in x_cnodes[1::2]]
+            sp = [time_path[:cuts[0]]]
+            sp.extend([time_path[cuts[i]:cuts[i + 1]] for i in range(len(cuts) - 1)])
+            sp.append(time_path[cuts[-1]:])
+            path = {i: {'time': sp} for i, sp in enumerate(sp)}
+
+            # Compute ECA shortest path for each sub path
+            for k in path:
+                start = path[k]['time'][0]
+                end = path[k]['time'][-1]
+                path[k]['eca'] = nx.astar_path(self.G, start, end,
+                                               heuristic=self.dist_heuristic,
+                                               weight='eca_weight')
         else:
-            x_cpairs = []
-        return path, x_cpairs
+            path = {0: {'time': time_path,
+                        'eca': nx.astar_path(self.G, 'start', 'end',
+                                             heuristic=self.dist_heuristic,
+                                             weight='eca_weight')
+                        }
+                    }
+
+        return path, list(zip(x_cnodes[::2], x_cnodes[1::2]))
 
     def get_shortest_paths(self, container):
         path, x_cpairs = self.get_path()
-        paths = [path]
+        paths = {0: path}
         if x_cpairs:
             # Calculate route combinations
             rcs = itertools.product(*[(True, False)] * len(x_cpairs))
+            p_key = 0
             for rc in rcs:
                 # Get list of canal pairs to be removed from graph
                 excl_cs = [c for i, c in enumerate(x_cpairs) if rc[i]]
@@ -142,26 +165,65 @@ class Initializer:
                 except nx.exception.NetworkXNoPath:
                     self.G.add_edges_from(excl_cs)
                     continue
-                if alternative_path not in paths:
-                    paths.append(alternative_path)
+                if alternative_path not in paths.values():
+                    p_key += 1
+                    paths[p_key] = alternative_path
 
         # Create individual of each sub path
-        init_inds = []
-        for path in paths:
-            path_inds = []
-            for sp in path:
-                wps = [self.G.nodes[n]['deg'] for n in sp]
+        init_inds = {}
+        for p_key, path in paths.items():
+            init_inds[p_key] = {}
+            for sp_key, sp in path.items():
+                init_inds[p_key][sp_key] = {}
+                for spo_key, sp_obj in sp.items():
+                    wps = [self.G.nodes[n]['deg'] for n in sp_obj]
 
-                # Set initial boat speed to max boat speed
-                speeds = [self.vessel.speeds[0]] * (len(sp) - 1) + [None]
-                ind = [list(tup) for tup in zip(wps, speeds)]
-                path_inds.append(container(ind))
-            init_inds.append(path_inds)
+                    # Set initial boat speed to max boat speed
+                    speeds = [self.vessel.speeds[0]] * (len(sp_obj)-1) + [None]
+                    ind = [list(tup) for tup in zip(wps, speeds)]
+                    init_inds[p_key][sp_key][spo_key] = container(ind)
         return init_inds
 
 
-def init_individual(toolbox, ind_in):  # swaps: ['speed', 'insert', 'move', 'delete']
-    cum_weights = [7, 14, 21, 100]
-    mutant, = toolbox.mutate(toolbox.clone(ind_in), cum_weights=cum_weights,
-                             initializing=True)
-    return mutant
+def init_individual(toolbox, inds_in, i):  # swaps: ['speed', 'insert', 'move', 'delete']
+    mutants = []
+    if i == 0:
+        return list(inds_in.values())
+    for ind_in in inds_in.values():
+        cum_weights = [10, 20, 30, 100]
+        mutant, = toolbox.mutate(toolbox.clone(ind_in), cum_weights=cum_weights,
+                                 initializing=True)
+        mutants.append(mutant)
+
+    return mutants
+
+
+def init_repeat_list(func, n):
+    """Call a list with a generator function corresponding
+    to the calling *n* times the function *func*.
+
+    :param func: The function that will be called n times to fill the
+                 container.
+    :param n: The number of times to repeat func.
+    :returns: A list filled with data from returned list of func.
+    """
+    return [el for i in range(n) for el in func(i=i)]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
