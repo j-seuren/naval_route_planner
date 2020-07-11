@@ -191,22 +191,29 @@ class Operators:
     def cx_one_point(self, ind1, ind2):
         size = min(len(ind1), len(ind2))
         if size > 2:
-            cx_pt1, cx_pt2 = random.randint(1, size-1), random.randint(1, size-1)
-            trials = 0
-            while ind2[cx_pt2-1][0] == ind1[cx_pt1][0] \
-                    or ind1[cx_pt1-1][0] == ind2[cx_pt2][0]:
-                cx_pt1, cx_pt2 = random.randint(1, size-1), random.randint(1, size-1)
-                trials += 1
-                if trials > 100:
-                    print('exceeded crossover trials', end='\n ')
+            trials1 = 0
+            while trials1 < 100:
+                cx_pt1, cx_pt2 = random.randrange(1, size-1), random.randrange(1, size-1)
+
+                # Draw again if consecutive duplicate waypoints exist in children
+                trials2 = 0
+                while ind2[cx_pt2-1][0] == ind1[cx_pt1][0] or ind1[cx_pt1-1][0] == ind2[cx_pt2][0]:
+                    cx_pt1, cx_pt2 = random.randrange(1, size-1), random.randrange(1, size-1)
+                    trials2 += 1
+                    if trials2 > 100:
+                        print('exceeded crossover trials2', end='\n ')
+                        return ind1, ind2
+
+                # Check feasibility
+                if self.tb.e_feasible(ind1[cx_pt1-1][0], ind2[cx_pt2][0]) \
+                        and self.tb.e_feasible(ind2[cx_pt2-1][0], ind1[cx_pt1][0]):
+                    ind1[cx_pt1:], ind2[cx_pt2:] = ind2[cx_pt2:], ind1[cx_pt1:]
+
+                    assert len(ind1) > 2 and len(ind2) > 2, 'crossover children length < 3'
                     return ind1, ind2
+                trials1 += 1
 
-            # Check feasibility
-            if self.tb.e_feasible(ind1[cx_pt1-1][0], ind2[cx_pt2][0]) \
-                    and self.tb.e_feasible(ind2[cx_pt2-1][0], ind1[cx_pt1][0]):
-                ind1[cx_pt1:], ind2[cx_pt2:] = ind2[cx_pt2:], ind1[cx_pt1:]
-
-            assert len(ind1) > 2 and len(ind2) > 2, 'crossover children length < 3'
+            print('exceeded crossover trials1', end='\n ')
         else:
             print('skipped crossover', end='\n ')
         return ind1, ind2
