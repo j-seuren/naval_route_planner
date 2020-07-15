@@ -1,44 +1,31 @@
-import collections
-import functools
 import pyproj
 
+from functools import lru_cache, wraps
 
-class Memoized(object):
-    """Decorator. Caches a function's return value each time it is called.
-    If called later with the same arguments, the cached value is returned
-    (not reevaluated).
+
+def np_cache(function):
     """
-    def __init__(self, func):
-        self.func = func
-        self.cache = {}
+    Cache decorator for numpy arrays
+    """
+    @lru_cache(maxsize=None)
+    def cached_wrapper(gc, p1, p2):
+        return function(gc, p1, p2)
 
-    def __call__(self, *args):
-        if not isinstance(args, collections.Hashable):
-            # uncacheable. a list, for instance.
-            # better to not cache than blow up.
-            print(args, 'not hashable')
-            return self.func(*args)
-        if args in self.cache:
-            return self.cache[args]
-        else:
-            value = self.func(*args)
-            self.cache[args] = value
-            return value
+    @wraps(function)
+    def wrapper(gc, p1, p2):
+        if p1 is not tuple and p2 is not tuple:
+            p1 = tuple(p1)
+            p2 = tuple(p2)
+        return cached_wrapper(gc, p1, p2)
 
-    def __repr__(self):
-        """Return the function's docstring."""
-        return self.func.__doc__
-
-    def __get__(self, obj, objtype):
-        """Support instance methods."""
-        return functools.partial(self.__call__, obj)
+    return wrapper
 
 
 class GreatCircle:
     def __init__(self):
         self.geod = pyproj.Geod(a=3443.918467, f=0.0033528106647475126)
 
-    @Memoized
+    @np_cache
     def distance(self, p1, p2):
         """
             Get great circle distance from the longitude-latitude
@@ -50,7 +37,7 @@ class GreatCircle:
 
         return dist
 
-    @Memoized
+    @lru_cache(maxsize=None)
     def points(self, p1, p2, dist, del_s):
         """
         Get great circle points from the longitude-latitude
