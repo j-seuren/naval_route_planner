@@ -1,43 +1,10 @@
-import collections
-import functools
 import numpy as np
 import operator
-import pickle
-import rtree
 
 from datetime import timedelta
+from functools import lru_cache
 from math import copysign, sqrt
 from shapely.geometry import LineString
-
-
-class Memoized(object):
-    """Decorator. Caches a function's return value each time it is called.
-    If called later with the same arguments, the cached value is returned
-    (not reevaluated).
-    """
-    def __init__(self, func):
-        self.func = func
-        self.cache = {}
-
-    def __call__(self, *args):
-        if not isinstance(args, collections.Hashable):
-            # uncacheable: better to not cache than blow up.
-            print(args, 'not hashable')
-            return self.func(*args)
-        if args in self.cache:
-            return self.cache[args]
-        else:
-            value = self.func(*args)
-            self.cache[args] = value
-            return value
-
-    def __repr__(self):
-        """Return the function's docstring."""
-        return self.func.__doc__
-
-    def __get__(self, obj, objtype):
-        """Support instance methods."""
-        return functools.partial(self.__call__, obj)
 
 
 class Evaluator:
@@ -48,11 +15,12 @@ class Evaluator:
                  ecas,
                  rtree_idx_eca,
                  eca_f,
+                 vlsfo_price,
                  start_date,
                  gc,
                  incl_curr=True,
                  del_sf=100,
-                 del_sc=15, ):
+                 del_sc=15):
         self.vessel = vessel            # Vessel class instance
         self.prep_polys = prep_polys    # Prepared land polygons
         self.rtree_idx = rtree_idx      # prep_polys' R-tree spatial index
@@ -65,6 +33,7 @@ class Evaluator:
         self.incl_curr = incl_curr      # Boolean for including currents
         self.gc = gc                    # Geod class instance
         self.current_data = None
+        self.vlsfo_price = vlsfo_price
 
     def evaluate(self, ind):
         # Initialize variables
@@ -79,7 +48,7 @@ class Evaluator:
             e_tt = self.e_tt(p1, p2, tt, boat_speed)
 
             # Compute fuel consumption over edge
-            e_fc = self.vessel.fuel_rates[boat_speed] * e_tt  # Tons
+            e_fc = self.vessel.fuel_rates[boat_speed] * e_tt * self.vlsfo_price
 
             # If edge intersects SECA increase fuel consumption by eca_f
             if edge_x_geos(p1, p2, self.rtree_idx_eca, self.ecas):
@@ -98,7 +67,7 @@ class Evaluator:
                 return False
         return True
 
-    @Memoized
+    @lru_cache(maxsize=None)
     def e_feasible(self, p1, p2):
         dist = self.gc.distance(p1, p2)
         lons, lats = self.gc.points(p1, p2, dist, self.del_sf)
@@ -113,7 +82,7 @@ class Evaluator:
 
         # if there are any cut points, cut them and begin again at the next point
         for i, cut in enumerate(cuts):
-            # create new vertices with a nan inbetween and set those as the path's vertices
+            # create new vertices with a nan in between and set those as the path's vertices
             verts = np.concatenate([vertices[:cut+1, :],
                                     [[np.nan, np.nan]],
                                     vertices[cut+1:, :]]
@@ -213,9 +182,12 @@ def calc_sog(p1, p2, c_u, c_v, boat_speed):
 
 def edge_x_geos(p1, p2, rtree_idx, geos):
     line = LineString([p1, p2])
+    minx, maxx = sorted([p1[0], p2[0]])
+    miny, maxy = sorted([p1[1], p2[1]])
+    bounds = (minx, miny, maxx, maxy)
     # Returns the geometry indices of the minimum bounding rectangles
     # of polygons that intersect the edge bounds
-    mbr_intersections = list(rtree_idx.intersection(line.bounds))
+    mbr_intersections = list(rtree_idx.intersection(bounds))
     if mbr_intersections:
         # For every mbr intersection
         # check if its polygon is actually intersect by the edge
