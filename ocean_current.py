@@ -1,43 +1,12 @@
-import collections
 import ocean_current_data
-import functools
 import math
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
 
 from dask.cache import Cache
+from functools import lru_cache
 from mpl_toolkits import basemap
-
-
-class Memoized(object):
-    """Decorator. Caches a function's return value each time it is called.
-    If called later with the same arguments, the cached value is returned
-    (not reevaluated).
-    """
-    def __init__(self, func):
-        self.func = func
-        self.cache = {}
-
-    def __call__(self, *args):
-        if not isinstance(args, collections.Hashable):
-            # uncacheable: better to not cache than blow up.
-            print(args, 'not hashable')
-            return self.func(*args)
-        if args in self.cache:
-            return self.cache[args]
-        else:
-            value = self.func(*args)
-            self.cache[args] = value
-            return value
-
-    def __repr__(self):
-        """Return the function's docstring."""
-        return self.func.__doc__
-
-    def __get__(self, obj, objtype):
-        """Support instance methods."""
-        return functools.partial(self.__call__, obj)
 
 
 class CurrentOperator:
@@ -58,7 +27,7 @@ class CurrentOperator:
         cache = Cache(2e9)  # Leverage two gigabytes of memory
         cache.register()  # Turn cache on globally
 
-    @Memoized
+    @lru_cache(maxsize=None)
     def get_grid_pt_current(self, date_in, lon_idx, lat_idx):
         delta = date_in - self.t_s
         if delta.days < self.n_days:
