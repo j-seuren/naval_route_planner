@@ -1,6 +1,8 @@
 <component name="ProjectDictionaryState">
   <dictionary name="JobS">
     <words>
+      <w>asdict</w>
+      <w>autovivification</w>
       <w>avgs</w>
       <w>bilinear</w>
       <w>bothnia</w>
@@ -28,6 +30,7 @@
       <w>haversine</w>
       <w>hexa</w>
       <w>hexagraph</w>
+      <w>hofer</w>
       <w>hofs</w>
       <w>ifremer</w>
       <w>inds</w>
@@ -37,6 +40,7 @@
       <w>maxx</w>
       <w>memoized</w>
       <w>mins</w>
+      <w>mpaes</w>
       <w>mstats</w>
       <w>mutpb</w>
       <w>nbar</w>
@@ -45,11 +49,15 @@
       <w>ncdump</w>
       <w>ndays</w>
       <w>netcdf</w>
+      <w>nobj</w>
       <w>nsga</w>
       <w>objtype</w>
+      <w>paes</w>
       <w>passwd</w>
       <w>polys</w>
       <w>proj</w>
+      <w>recomb</w>
+      <w>recombinations</w>
       <w>retr</w>
       <w>reul</w>
       <w>rmtree</w>
@@ -62,6 +70,9 @@
       <w>sqrt</w>
       <w>uncacheable</w>
       <w>vals</w>
+      <w>verts</w>
+      <w>vivification</w>
+      <w>vlsfo</w>
       <w>waypoint</w>
       <w>waypoints</w>
       <w>xformatter</w>
