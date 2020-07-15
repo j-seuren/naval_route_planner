@@ -3,11 +3,10 @@ import heapq
 import itertools
 import networkx as nx
 import os
+import random
 
 from haversine import haversine
 from math import cos, sin
-
-import matplotlib.pyplot as plt
 
 
 class Initializer:
@@ -191,8 +190,9 @@ def init_individual(toolbox, inds_in, i):  # swaps: ['speed', 'insert', 'move', 
         return list(inds_in.values())
     for ind_in in inds_in.values():
         cum_weights = [10, 20, 30, 100]
-        mutant, = toolbox.mutate(toolbox.clone(ind_in), cum_weights=cum_weights,
-                                 initializing=True)
+        k = random.randint(1, 8)
+        mutant, = toolbox.mutate(toolbox.clone(ind_in), initializing=True,
+                                 cum_weights=cum_weights, k=k)
         mutants.append(mutant)
 
     return mutants
