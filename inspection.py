@@ -185,9 +185,9 @@ def plot_fronts(front):
 
 
 if __name__ == "__main__":
-    _ID_dict = {'spea2': '13_35_43',
-                'nsga2': '13_35_12',
-                'm-paes': '17_49_42'}
+    _ID_dict = {'spea2': '15_45_00',  # 31.47 s
+                'nsga2': '15_46_16',  # 29.79 s
+                'm-paes': '15_43_41'}  # 33.67 s
     incl_curr = False
     _start_date = datetime.datetime(2016, 1, 1)
     planner = main.RoutePlanner(incl_curr=incl_curr)
