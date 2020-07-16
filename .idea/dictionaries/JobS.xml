@@ -33,6 +33,7 @@
       <w>hofer</w>
       <w>hofs</w>
       <w>ifremer</w>
+      <w>impr</w>
       <w>inds</w>
       <w>laccadive</w>
       <w>lightgray</w>
@@ -51,6 +52,7 @@
       <w>netcdf</w>
       <w>nobj</w>
       <w>nsga</w>
+      <w>nsgaii</w>
       <w>objtype</w>
       <w>paes</w>
       <w>passwd</w>

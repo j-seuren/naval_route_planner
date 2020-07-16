@@ -177,7 +177,6 @@ class Operators:
         for i in tbd:
             del ind[i]
             while ind[i-1][0] == ind[i][0]:
-                print('deleted next similar waypoint', end='\n ')
                 assert i < len(ind) - 1, 'last waypoint cannot be deleted'
                 del ind[i]
 
