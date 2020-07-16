@@ -1,8 +1,7 @@
 output/
-oud/
 current_netCDF/
-profiles/
 test.py
+test.profile
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
