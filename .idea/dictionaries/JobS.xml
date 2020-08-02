@@ -21,6 +21,7 @@
       <w>evals</w>
       <w>fairmaster</w>
       <w>fames</w>
+      <w>folium</w>
       <w>geod</w>
       <w>globcurrent</w>
       <w>gpickle</w>
@@ -40,6 +41,7 @@
       <w>lons</w>
       <w>maxx</w>
       <w>memoized</w>
+      <w>minmax</w>
       <w>mins</w>
       <w>mpaes</w>
       <w>mstats</w>
@@ -62,6 +64,7 @@
       <w>recombinations</w>
       <w>retr</w>
       <w>reul</w>
+      <w>rhumb</w>
       <w>rmtree</w>
       <w>seca</w>
       <w>secas</w>
