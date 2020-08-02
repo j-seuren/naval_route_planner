@@ -1,5 +1,4 @@
 import dask.array as da
-from dask.diagnostics import ProgressBar
 import netCDF4
 import numpy as np
 import xarray as xr
@@ -69,9 +68,6 @@ def ncdump(nc_fid, verb=True):
                 print_ncattr(var)
     return nc_attrs, nc_dims, nc_vars
 
-x = da.array(np.int8([0.2, 6.4, 3.0, 1.6]))
-
-print(x)
 
 # Open data as read-only
 fp = 'C:/dev/data/gebco_2020_netcdf/' + 'GEBCO_2020.nc'

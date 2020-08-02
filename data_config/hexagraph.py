@@ -1,20 +1,17 @@
 # http://blog.andreaskahler.com/2009/06/creating-icosphere-mesh-in-code.html
-import fiona
-import katana
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
-import os
-import pickle
-import rtree
+import support
 import sys
 
-from evaluation import edge_x_geos
+from evaluation.route_evaluation import edge_x_geos
 from mpl_toolkits.mplot3d import Axes3D
 from math import atan2, degrees, acos, sqrt, radians, cos, sin
-from shapely.geometry import shape
-from shapely.prepared import prep
+from pathlib import Path
 from heapq import nsmallest
+from matplotlib import rc
+from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
 
 class Triangle:
@@ -36,17 +33,13 @@ class HexagraphBuilder:
                  dens,
                  var_dens,
                  res,
-                 prep_polys,
-                 rtree_idx,
-                 ecas,
-                 rtree_idx_eca):
+                 tree,
+                 eca_tree):
         self.dens = dens
         self.var_dens = var_dens
         self.res = res
-        self.prep_polys = prep_polys
-        self.rtree_idx = rtree_idx
-        self.rtree_idx_eca = rtree_idx_eca
-        self.ecas = ecas
+        self.tree = tree
+        self.eca_tree = eca_tree
         self.G = nx.Graph()
         self.index = 0
         self.mp_cache = {}
@@ -110,28 +103,6 @@ class HexagraphBuilder:
         self.mp_cache[key] = idx
         return idx
 
-    # def remove_nodes_x_polys(self):
-    #     cnt, nr_edges = 0, len(self.G.edges)
-    #     sys.stdout.write(
-    #         "removing nodes from graph:  {}%".format(int(100 * cnt / nr_edges)))
-    #     sys.stdout.flush()
-    #     graph2 = self.G.copy()
-    #     for n_data in self.G.nodes(data=True):
-    #         # Printing progress
-    #         cnt += 1
-    #         if cnt % 100 == 0:
-    #             sys.stdout.write("\rremoving nodes from graph:  {}%".format(
-    #                 int(100 * cnt / nr_edges)))
-    #             sys.stdout.flush()
-    #
-    #         # If node is in polygon, remove from graph
-    #         p_n = n_data[1]['deg']
-    #         if edge_x_geos(p_n, p_n, self.rtree_idx, self.prep_polys):
-    #             graph2.remove_node(n_data[0])
-    #     sys.stdout.write("\rremoving nodes from graph: 100%\n")
-    #     sys.stdout.flush()
-    #     return graph2
-
     def remove_edges_x_polys(self):
         cnt, nr_edges = 0, len(self.G.edges)
         sys.stdout.write(
@@ -156,7 +127,7 @@ class HexagraphBuilder:
                 continue
 
             # If edge intersects polygons, remove from graph
-            if edge_x_geos(deg1, deg2, self.rtree_idx, self.prep_polys):
+            if edge_x_geos(deg1, deg2, self.tree):
                 graph_copy.remove_edge(p1, p2)
         sys.stdout.write("\rremoving edges from graph: 100%\n")
         sys.stdout.flush()
@@ -218,15 +189,10 @@ class HexagraphBuilder:
 
         # Refine graph near shorelines
         # Get polygon exteriors and populate R-tree
-        gshhg_dir = 'C:/dev/data/gshhg-shp-2.3.7/GSHHS_shp'
-        gshhg_fp = '{0}/GSHHS_{0}_L1.shp'.format(self.res)
-        gshhg = fiona.open(os.path.join(gshhg_dir, gshhg_fp))
-        polys = [shape(poly_shape['geometry']) for poly_shape in iter(gshhg)]
-        exteriors = [poly.exterior for poly in polys]
-        prep_exteriors = [prep(exterior) for exterior in exteriors]
-        exterior_rtree_idx = rtree.index.Index()
-        for pos, exterior in enumerate(exteriors):
-            exterior_rtree_idx.insert(pos, exterior.bounds)
+        gshhg_dir = Path('data/gshhg-shp-2.3.7/GSHHS_shp')
+        gshhg_fp = Path('{0}/GSHHS_{0}_L1.shp'.format(self.res))
+        gshhg_fp = gshhg_dir / gshhg_fp
+        exteriors, extRtreeIdx = support.populate_rtree(gshhg_fp)
 
         G_copy = self.G.copy()
         for edge in G_copy.edges():
@@ -240,7 +206,7 @@ class HexagraphBuilder:
                 continue
 
             # If edge crosses a polygon exterior, refine two adjacent triangles
-            if edge_x_geos(deg1, deg2, exterior_rtree_idx, prep_exteriors):
+            if edge_x_geos(deg1, deg2, extRtreeIdx):
                 # Get adjacent triangles of intersected edge
                 n3s = [e1[1] for e1 in G_copy.edges(n1) for e2 in
                        G_copy.edges(n2) if e1[1] == e2[1]]
@@ -335,7 +301,7 @@ class HexagraphBuilder:
             self.G[n1][n2]['miles'] = miles
 
             p1, p2 = self.G.nodes[n1]['deg'], self.G.nodes[n2]['deg']
-            if edge_x_geos(p1, p2, self.rtree_idx_eca, self.ecas):
+            if edge_x_geos(p1, p2, self.eca_tree):
                 self.G[n1][n2]['eca_weight'] = miles * 2
             else:
                 self.G[n1][n2]['eca_weight'] = miles
@@ -359,29 +325,6 @@ class HexagraphBuilder:
 
         return self.G
 
-    def plot_sphere(self):
-        # 3D plot of unit sphere nodes
-        fig = plt.figure()
-        ax = Axes3D(fig)
-        xyz = nx.get_node_attributes(self.G, 'xyz')
-        xyz = np.array([val for val in xyz.values()])
-        ax.scatter(xyz[:, 0], xyz[:, 1], xyz[:, 2], s=1, color='black')
-
-    def plot_sphere_edges(self):
-        # 3D plot of unit sphere edges
-        fig = plt.figure()
-        ax = Axes3D(fig)
-        xyz = nx.get_node_attributes(self.G, 'xyz')
-        cnt = 0
-        for edge in self.G.edges:
-            cnt += 1
-            print('plotting sphere edges', round(cnt / len(self.G.edges), 2))
-            u, v = xyz[edge[0]], xyz[edge[1]]
-            x = np.array([u[0], v[0]])
-            y = np.array([u[1], v[1]])
-            z = np.array([u[2], v[2]])
-            ax.plot(x, y, z, color='black', linewidth=1)
-
 
 # Distance function
 def arc_length(xyz1, xyz2):
@@ -393,38 +336,30 @@ class Hexagraph:
                  d,
                  vd,
                  res,
-                 prep_polys,
-                 rtree_idx,
-                 ecas,
-                 rtree_idx_eca):
+                 tree,
+                 eca_tree):
         self.d = d
         self.vd = vd
         self.res = res
-        self.prep_polys = prep_polys
-        self.rtree_idx = rtree_idx
-        self.ecas = ecas
-        self.rtree_idx_eca = rtree_idx_eca
+        self.tree = tree
+        self.eca_tree = eca_tree
 
         # Get Graph
-        G_dir = "output/variable_density_geodesic_grids/"
-        G_fn = "res_{}_d{}_vd{}.gpickle".format(self.res, self.d, self.vd)
-        G_fp = os.path.join(G_dir, G_fn)
+        G_dir = Path("output/variable_density_geodesic_grids/")
+        G_fn = Path("res_{}_d{}_vd{}.gpickle".format(self.res, self.d, self.vd))
+        G_fp = G_dir / G_fn
         try:
             self.graph = nx.read_gpickle(G_fp)
             print('Loaded graph from: ', G_fp)
         except FileNotFoundError:
             # Initialize "HexaGraphBuilder"
             builder = HexagraphBuilder(self.d, self.vd, self.res,
-                                       self.prep_polys, self.rtree_idx,
-                                       self.ecas, self.rtree_idx_eca)
+                                       self.tree, self.eca_tree)
             self.graph = builder.build_hexa_graph()
 
             # Save graph to file
             nx.write_gpickle(self.graph, G_fp)
             print('Built and saved graph to: ', G_fp)
-
-    def get_g(self):
-        return self.graph
 
     def plot_graph(self):
         pos = nx.get_node_attributes(self.graph, 'deg')
@@ -432,36 +367,73 @@ class Hexagraph:
         nx.draw(self.graph, pos=pos, node_size=2, ax=ax)
         ax.tick_params(left=True, bottom=True, labelleft=True, labelbottom=True)
 
+    def plot_sphere(self):
+        # 3D plot of unit sphere nodes
+        fig = plt.figure()
+        ax = Axes3D(fig)
+        xyz = nx.get_node_attributes(self.graph, 'xyz')
+        xyz = np.array([val for val in xyz.values()])
+        ax.scatter(xyz[:, 0], xyz[:, 1], xyz[:, 2], s=1, color='black')
+
+    def plot_sphere_edges(self):
+        # !python numbers=disable
+        fig_width_pt = 345.0  # Get this from LaTeX using \showthe\columnwidth
+        inches_per_pt = 1.0 / 72.27  # Convert pt to inches
+        golden_mean = (sqrt(5) - 1.0) / 2.0  # Aesthetic ratio
+        fig_width = fig_width_pt * inches_per_pt  # width in inches
+        fig_height = fig_width * golden_mean  # height in inches
+        fig_size = [fig_width, fig_height]
+
+        rc('text', usetex=True)
+        rc('font', **{'family': 'serif',
+                      'serif': 'Computer Modern Roman',
+                      'size': 9})
+        rc('figure', figsize=fig_size, dpi=600)
+        rc('axes', titlesize=9, labelsize=9)
+        rc('legend', fontsize=9)
+        rc('xtick', labelsize=9)
+        rc('ytick', labelsize=9)
+
+        xyz = nx.get_node_attributes(self.graph, 'xyz')
+        edges = np.array(self.graph.edges)
+        lines = np.empty([len(edges), 2, 3])
+        for idx, edge in enumerate(edges):
+            try:
+                e1, e2 = int(edge[0]), int(edge[1])
+            except ValueError:
+                continue
+            lines[idx] = [np.asarray(xyz[e1]), np.asarray(xyz[e2])]
+
+        fig = plt.figure()
+        ax = fig.gca(projection='3d')
+        ax.add_collection(Line3DCollection(lines, colors='black',
+                                           linewidths=0.5))
+
+        minmax = [-.55, .55]
+        ax.set_xlim(minmax)
+        ax.set_ylim(minmax)
+        ax.set_zlim(minmax)
+
+        # Remove whitespace
+        plt.axis('off')
+        plt.savefig('output/hexagraph_sphere1.pgf', bbox_inches='tight', pad_inches=.01)
+
 
 if __name__ == '__main__':
     resolution = 'c'
-    max_poly_size = 4
-    graph_d = 5
-    graph_vd = 4
+    spl_th = 4
+    graph_d = 4
+    graph_vd = 2
 
-    split_polys_dir = 'output/split_polygons/'
-    split_polys_fn = 'res_{0}_threshold_{1}'.format(resolution, max_poly_size)
-    split_polys_fp = os.path.join(split_polys_dir, split_polys_fn)
-
-    # Get split polys and prepare
-    try:
-        with open(split_polys_fp, 'rb') as f:
-            split_polys = pickle.load(f)
-    except FileNotFoundError:
-        split_polys = katana.get_split_polygons(resolution, max_poly_size)
-    _prep_polys = [prep(poly) for poly in split_polys]
-
-    # Populate R-tree index with bounds of polygons
-    _rtree_idx = rtree.index.Index()
-    for _poly_idx, split_poy in enumerate(split_polys):
-        _rtree_idx.insert(_poly_idx, split_poy.bounds)
-
-
+    # Load and pre-process shoreline and ECA polygons
+    fp = 'output/split_polygons/res_{0}_threshold_{1}'.format(resolution,
+                                                              spl_th)
+    _tree = support.populate_rtree(fp, resolution, spl_th)
+    fp = 'C:/dev/data/seca_areas_csv'
+    _eca_tree = support.populate_rtree(fp)
 
     # Initialize "HexagraphBuilder"
-    hexagraph = Hexagraph(graph_d, graph_vd, resolution,
-                          _prep_polys, _rtree_idx,
-                          _ecas, _rtree_idx_eca)
-    hexagraph.plot_graph()
+    hexagraph = Hexagraph(graph_d, graph_vd, resolution, _tree, _eca_tree)
+    hexagraph.plot_sphere_edges()
 
-    plt.show()
+    # plt.show()

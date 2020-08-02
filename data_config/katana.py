@@ -1,12 +1,13 @@
-from shapely.geometry import (box, Polygon, MultiPolygon,
-                              GeometryCollection, shape)
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
-from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 import fiona
 import os
 import pickle
 
+from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
+from pathlib import Path
+from shapely.geometry import (box, Polygon, MultiPolygon,
+                              GeometryCollection, shape)
 
 def split_polygon(geo, threshold, cnt=0):
     """Split a Polygon into two parts across it's shortest dimension"""
@@ -64,55 +65,36 @@ def plot_geometries(geometries):
                       edgecolor='black')
 
 
-def get_split_polygons(res, threshold):
-    gshhg_dir = 'C:/dev/data/gshhg-shp-2.3.7/GSHHS_shp'
-    gshhg_fp = '{0}/GSHHS_{0}_L1.shp'.format(res)
+def get_split_polygons(res, thr):
+    proj_dir = Path(os.getcwd()).parent
+    gshhg_dir = Path(proj_dir / 'data/gshhg-shp-2.3.7/GSHHS_shp')
+    gshhg_fp = gshhg_dir(gshhg_dir / '{0}/GSHHS_{0}_L1.shp'.format(res))
     geos = [shape(shoreline['geometry']) for shoreline in
-            iter(fiona.open(os.path.join(gshhg_dir, gshhg_fp)))]
+            iter(fiona.open(gshhg_fp))]
+
+    # Add Arctic and Antarctic circles as polygon
+    arctic_circle = Polygon([(-180, 66), (180, 66), (180, 89), (-180, 89)])
+    antarctic_circle = Polygon([(-180, -66), (180, -66), (180, -89), (-180, -89)])
+    geos.extend([arctic_circle, antarctic_circle])
 
     # Compute split polygons
-    split_polys = split_polygons(geos, threshold)
+    split_polys = split_polygons(geos, thr)
 
     # Save result
-    result_dir = 'output/split_polygons'
-    result_fn = 'res_{0}_threshold_{1}'.format(res, threshold)
-    result_fp = os.path.join(result_dir, result_fn)
-    try:
-        with open(result_fp, 'wb') as f:
-            pickle.dump(split_polys, f)
-    except FileNotFoundError:
-        os.mkdir('output/split_polygons')
-        with open(result_fp, 'wb') as f:
-            pickle.dump(split_polys, f)
+    result_dir = Path(proj_dir / 'output/split_polygons')
+    result_fp = Path(result_dir / 'res_{0}_threshold_{1}'.format(res, thr))
+    with open(result_fp, 'wb') as f:
+        pickle.dump(split_polys, f)
     print('Saved to: ', result_fp)
 
     return split_polys
 
 
 if __name__ == '__main__':
+    # Get polygons
     resolution = 'c'
     max_poly_size = 9
-
-    # Get polygons
-    _gshhg_dir = 'C:/dev/data/gshhg-shp-2.3.7/GSHHS_shp'
-    _gshhg_fp = '{0}/GSHHS_{0}_L1.shp'.format(resolution)
-    _geos = [shape(shoreline['geometry']) for shoreline in
-             iter(fiona.open(os.path.join(_gshhg_dir, _gshhg_fp)))]
-    # Compute split polygons
-    _result = split_polygons(_geos, threshold=max_poly_size)
-
-    # Save result
-    _result_dir = 'output/split_polygons'
-    _result_fn = 'res_{0}_threshold_{1}'.format(resolution, max_poly_size)
-    _result_fp = os.path.join(_result_dir, _result_fn)
-    try:
-        with open(_result_fp, 'wb') as _f:
-            pickle.dump(_result, _f)
-    except FileNotFoundError:
-        os.mkdir('output/split_polygons')
-        with open(_result_fp, 'wb') as _f:
-            pickle.dump(_result, _f)
-    print('Saved to: ', _result_fp)
+    _result = get_split_polygons(resolution, max_poly_size)
 
     # Plot result
     # plot_geometries(result)
