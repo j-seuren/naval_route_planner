@@ -1,32 +1,17 @@
-import evaluation
-import great_circle
 import initialization
-import katana
 import ocean_current
 import operations
-import os
 import math
 import numpy as np
-import pandas as pd
 import pickle
 import random
 import support
-import rtree
 import time
 
+from copy import deepcopy
 from datetime import datetime
 from deap import base, creator, tools, algorithms
-from shapely.prepared import prep
-
-
-class Vessel:
-    def __init__(self, name='Fairmaster'):
-        self.name = name
-        table = pd.read_excel('C:/dev/data/speed_table.xlsx',
-                              sheet_name=self.name)
-        self.speeds = [round(speed, 1) for speed in table['Speed']]
-        self.fuel_rates = {speed: round(table['Fuel'][i], 1)
-                           for i, speed in enumerate(self.speeds)}
+from evaluation import route_evaluation, geodesic
 
 
 class RoutePlanner:
@@ -34,77 +19,71 @@ class RoutePlanner:
                  start=None,
                  end=None,
                  start_date=datetime(2016, 1, 1),
-                 eca_f=1.2,
-                 vlsfo_price=0.304,
-                 res='c',
-                 spl_th=4,
                  vessel_name='Fairmaster',
-                 incl_curr=True
-                 ):
+                 incl_curr=False,
+                 eca_f=1.05,
+                 vlsfo_price=0.3,
+                 par=None):
+
+        if par is None:
+            par = {'res': 'c',
+                   'spl_th': 4,
+                   'n_bar': 50,
+                   'gen': 200,
+                   'n': 250,
+                   'cxpb': 0.9,
+                   'mutpb': 0.9,
+                   'recomb': 5,
+                   'l_fails': 5,
+                   'l_moves': 10,
+                   'width_ratio': 0.5,
+                   'radius': 1,
+                   'shape': 3,
+                   'scale_factor': 0.1,
+                   'del_factor': 2
+                   }
 
         # Create Fitness and Individual types
-        creator.create("FitnessMin", base.Fitness, weights=(-1.0, -1.0))
+        creator.create("FitnessMin", base.Fitness, weights=(-10.0, -1.0))
         creator.create("Individual", list, fitness=creator.FitnessMin)
         self.creator = creator
 
-        self.tb = base.Toolbox()              # Function toolbox
-        self.start = start                    # Start point
-        self.end = end                        # End point
-        self.start_date = start_date          # Start date of voyage
-        self.eca_f = eca_f                    # Multiplication factor ECA fuel
-        self.vlsfo_price = vlsfo_price        # VLSFO price [1000 dollars / mt]
-        self.vessel = Vessel(vessel_name)     # Vessel class instance
-        self.res = res                        # Resolution of shorelines
-        self.spl_th = spl_th                  # Threshold for split_polygon
-        self.incl_curr = incl_curr            # Boolean for including currents
-        self.gc = great_circle.GreatCircle()  # GreatCircle class instance
+        self.tb = base.Toolbox()                # Function toolbox
+        self.start = start                      # Start point
+        self.end = end                          # End point
+        self.start_date = start_date            # Start date of voyage
+        self.vessel = support.Vessel(vessel_name)  # Vessel class instance
+        self.incl_curr = incl_curr              # Boolean for including currents
+        self.eca_f = eca_f                      # Multiplication factor ECA fuel
+        self.vlsfo_price = vlsfo_price          # VLSFO price [1000 dollars / mt]
+        self.res = par['res']                   # Resolution of shorelines
+        self.spl_th = par['spl_th']             # Threshold for split_polygon
+        self.geod = geodesic.Geodesic()         # Geodesic class instance
 
         # Parameter settings
-        self.Nbar = 50                        # Local archive size (M-PAES, SPEA2)
-        self.GEN = 20                        # Number of generations
-        self.N = 24                          # Population size
-        self.CXPB = 0.9                       # Crossover probability (NSGAII, SPEA2)
-        self.MUTPB = 0.9                      # Mutation probability (NSGAII, SPEA2)
-        self.RECOMB = 5                       # Max recombination trials (M-PAES)
+        self.n_bar = par['n_bar']      # Local archive size (M-PAES, SPEA2)
+        self.gen = par['gen']         # Number of generations
+        self.n = par['n']             # Population size
+        self.cxpb = par['cxpb']       # Crossover probability (NSGAII, SPEA2)
+        self.mutpb = par['mutpb']     # Mutation probability (NSGAII, SPEA2)
+        self.recomb = par['recomb']   # Max recombination trials (M-PAES)
 
-        # Import land obstacles as polygons
-        try:
-            spl_dir = 'output/split_polygons/'
-            spl_fn = 'res_{0}_threshold_{1}'.format(res, spl_th)
-            spl_fp = os.path.join(spl_dir, spl_fn)
-            with open(spl_fp, 'rb') as f:
-                spl_polys = pickle.load(f)
-        except FileNotFoundError:
-            spl_polys = katana.get_split_polygons(self.res, self.spl_th)
-
-        # Prepared and split land polygons
-        self.prep_polys = [prep(poly) for poly in spl_polys]
-
-        # Populate R-tree index with bounds of polygons
-        self.rtree_idx = rtree.index.Index()
-        for idx, poly in enumerate(spl_polys):
-            self.rtree_idx.insert(idx, poly.bounds)
-
-        # Load eca polygons
-        with open('C:/dev/data/seca_areas_csv', 'rb') as f:
-            self.ecas = pickle.load(f)
-
-        # Populate R-tree index with bounds of ECA polygons
-        self.rtree_idx_eca = rtree.index.Index()
-        for idx, eca in enumerate(self.ecas):
-            self.rtree_idx_eca.insert(idx, eca.bounds)
+        # Load and pre-process shoreline and ECA polygons
+        fp = 'output/split_polygons/res_{0}_threshold_{1}'.format(par['res'],
+                                                                  par['spl_th'])
+        self.tree = support.populate_rtree(fp, par['res'], par['spl_th'])
+        fp = 'data/seca_areas'
+        self.eca_tree = support.populate_rtree(fp)
 
         # Initialize "Evaluator" and register it's functions
-        self.evaluator = evaluation.Evaluator(self.vessel,
-                                              self.prep_polys,
-                                              self.rtree_idx,
-                                              self.ecas,
-                                              self.rtree_idx_eca,
-                                              eca_f,
-                                              self.vlsfo_price,
-                                              start_date,
-                                              self.gc,
-                                              incl_curr)
+        self.evaluator = route_evaluation.Evaluator(self.vessel,
+                                                    self.tree,
+                                                    self.eca_tree,
+                                                    eca_f,
+                                                    self.vlsfo_price,
+                                                    start_date,
+                                                    self.geod,
+                                                    incl_curr)
         self.tb.register("e_feasible", self.evaluator.e_feasible)
         self.tb.register("feasible", self.evaluator.feasible)
         self.tb.register("evaluate", self.evaluator.evaluate)
@@ -114,13 +93,12 @@ class RoutePlanner:
         # Initialize "Initializer" and register it's functions
         if start and end:
             self.initializer = initialization.Initializer(start, end,
-                                                          self.vessel, res,
-                                                          self.prep_polys,
-                                                          self.rtree_idx,
-                                                          self.ecas,
-                                                          self.rtree_idx_eca,
+                                                          self.vessel,
+                                                          par['res'],
+                                                          self.tree,
+                                                          self.eca_tree,
                                                           self.tb,
-                                                          self.gc)
+                                                          self.geod)
             self.tb.register("get_shortest_paths",
                              self.initializer.get_shortest_paths,
                              creator.Individual)
@@ -128,26 +106,16 @@ class RoutePlanner:
             print('No start and endpoint given')
 
         # Initialize "Operator" and register it's functions
-        self.operators = operations.Operators(self.tb, self.vessel, self.gc)
+        self.operators = operations.Operators(self.tb, self.vessel, self.geod,
+                                              par)
         self.tb.register("mutate", self.operators.mutate)
         self.tb.register("mate", self.operators.cx_one_point)
 
         self.tb.register("population", initialization.init_repeat_list)
 
-        # Initialize Statistics
-        stats_fit = tools.Statistics(lambda _ind: _ind.fitness.values)
-        stats_size = tools.Statistics(key=len)
-        self.mstats = tools.MultiStatistics(fitness=stats_fit, size=stats_size)
-        self.mstats.register("avg", np.mean, axis=0)
-        self.mstats.register("std", np.std, axis=0)
-        self.mstats.register("min", np.min, axis=0)
-        self.mstats.register("max", np.max, axis=0)
-
-        # Initialize Logbook
-        self.log = tools.Logbook()
-        self.log.header = "gen", "evals", "fitness", "size"
-        self.log.chapters["fitness"].header = "min", "avg", "max"
-        self.log.chapters["size"].header = "min", "avg", "max"
+        # Initialize Statistics and logbook
+        self.mstats = support.statistics()
+        self.log = support.logbook()
 
         # Initialize ParetoFront
         self.front = tools.ParetoFront()
@@ -155,16 +123,13 @@ class RoutePlanner:
         # Initialize algorithm classes
         self.mpaes = self.MPAES(self.tb, self.evaluator, self.mstats, self.log,
                                 self.front, self.incl_curr, self.start_date,
-                                self.get_n_days, self.GEN, self.N, self.Nbar,
-                                self.RECOMB)
+                                self.get_n_days, par)
         self.spea2 = self.SPEA2(self.tb, self.evaluator, self.mstats, self.log,
                                 self.front, self.incl_curr, self.start_date,
-                                self.get_n_days, self.GEN, self.N, self.Nbar,
-                                self.CXPB, self.MUTPB)
+                                self.get_n_days, par)
         self.nsgaii = self.NSGAII(self.tb, self.evaluator, self.mstats,
-                                  self.log, self.front, self.incl_curr,
-                                  self.start_date, self.get_n_days, self.GEN,
-                                  self.N, self.CXPB, self.MUTPB)
+                                  self.front, self.incl_curr, self.start_date,
+                                  self.get_n_days, par)
 
     class MPAES:
         def __init__(self,
@@ -176,12 +141,7 @@ class RoutePlanner:
                      incl_curr,
                      start_date,
                      get_n_days,
-                     gen,
-                     n,
-                     n_bar,
-                     recomb,
-                     l_fails=5,
-                     l_moves=10):
+                     params):
 
             self.tb = tb
             self.evaluator = evaluator
@@ -193,21 +153,20 @@ class RoutePlanner:
             self.start_date = start_date
             self.get_n_days = get_n_days
 
-            # Parameter settings
-            self.GEN = gen
-            self.N = n
-            self.Nbar = n_bar
-            self.RECOMB = recomb
-            self.Nm = int(self.N / 2 / (self.RECOMB + 1))
+            # Parameters
+            self.gen = params['gen']
+            self.n = params['n']
+            self.nbar = params['n_bar']
+            self.recomb = params['recomb']
+            self.n_m = int(self.n / 2 / (self.recomb + 1))
+            self.l_fails = params['l_fails']
+            self.l_moves = params['l_moves']
 
             self.evals = 0
 
-            self.l_fails = l_fails
-            self.l_moves = l_moves
-
         def test(self, c, m, H):
             # If the archive is not full
-            if len(H) < self.Nbar:
+            if len(H) < self.nbar:
                 H.append(m)
                 support.assign_crowding_dist(H)
                 if m.fitness.crowding_dist < c.fitness.crowding_dist:
@@ -298,7 +257,7 @@ class RoutePlanner:
                     # Step 1: Initialization
                     print('Initializing population from shortest path:', end=' ')
                     pop = self.tb.population(self.tb.individual,
-                                             int(self.Nm / len(sub_sp_dict.values()))
+                                             int(self.n_m / len(sub_sp_dict.values()))
                                              )
 
                     curr_gen = 1
@@ -345,9 +304,9 @@ class RoutePlanner:
 
                         # Step 5: Recombination
                         pop_i = []  # Initialize intermediate population
-                        for g in range(self.Nm):
+                        for g in range(self.n_m):
                             child = c_dominated = None
-                            for r in range(self.RECOMB):
+                            for r in range(self.recomb):
                                 # Randomly choose two parents from P + G
                                 mom, dad = tools.selRandom(pop + self.G.items, 2)
                                 mom, dad = self.tb.clone(mom), self.tb.clone(dad)
@@ -388,7 +347,7 @@ class RoutePlanner:
                             pop_i.extend(self.tb.clone(child))
 
                         # Step 4: Termination
-                        if curr_gen >= self.GEN:
+                        if curr_gen >= self.gen:
                             result['logs'][sp_key][sub_sp_key] = self.log[:]
                             result['fronts'][sp_key][sub_sp_key] = self.G[:]
                             self.tb.unregister("individual")
@@ -405,19 +364,14 @@ class RoutePlanner:
                      tb,
                      evaluator,
                      mstats,
-                     log,
                      front,
                      incl_curr,
                      start_date,
                      get_n_days,
-                     gen,
-                     n,
-                     cxpb,
-                     mutpb):
+                     params):
             self.tb = tb
             self.evaluator = evaluator
             self.mstats = mstats
-            self.log = log
             self.front = front
 
             self.incl_curr = incl_curr
@@ -425,10 +379,10 @@ class RoutePlanner:
             self.get_n_days = get_n_days
 
             # Parameter settings
-            self.GEN = gen
-            self.N = n
-            self.CXPB = cxpb
-            self.MUTPB = mutpb
+            self.gen = params['gen']
+            self.n = params['n']
+            self.cxpb = params['cxpb']
+            self.mutpb = params['mutpb']
 
             # Register NSGA2 selection function
             self.tb.register("select", tools.selNSGA2)
@@ -450,12 +404,12 @@ class RoutePlanner:
                     # Reset functions and caches
                     self.tb.register("individual", initialization.init_individual, self.tb, sub_sp_dict)
                     self.front.clear()
-                    self.log.clear()
+                    log = support.logbook()
 
                     # Step 1: Initialization
                     print('Initializing population from shortest path:', end='\n ')
                     pop = self.tb.population(self.tb.individual,
-                                             int(self.N / len(sub_sp_dict.values())))
+                                             int(self.n / len(sub_sp_dict.values())))
                     offspring = []
                     curr_gen = 1
                     print('done')
@@ -475,23 +429,23 @@ class RoutePlanner:
                     # Begin the generational process
                     while True:
                         # Step 3: Environmental selection (and update HoF)
-                        pop = self.tb.select(pop + offspring, self.N)
+                        pop = self.tb.select(pop + offspring, self.n)
                         self.front.update(pop)
 
                         # Record statistics
                         record = self.mstats.compile(self.front)
-                        self.log.record(gen=curr_gen, evals=evals, **record)
-                        print('\r', self.log.stream)
+                        log.record(gen=curr_gen, evals=evals, **record)
+                        print('\r', log.stream)
 
                         # Step 4: Termination
-                        if curr_gen >= self.GEN:
-                            result['logs'][sp_key][sub_sp_key] = self.log[:]
-                            result['fronts'][sp_key][sub_sp_key] = self.front[:]
+                        if curr_gen >= self.gen:
+                            result['logs'][sp_key][sub_sp_key] = deepcopy(log)
+                            result['fronts'][sp_key][sub_sp_key] = deepcopy(self.front)
                             self.tb.unregister("individual")
                             break
 
                         # Step 5: Variation
-                        offspring = algorithms.varAnd(pop, self.tb, self.CXPB, self.MUTPB)
+                        offspring = algorithms.varAnd(pop, self.tb, self.cxpb, self.mutpb)
 
                         # Step 2: Fitness assignment
                         inv_inds = [ind for ind in offspring if not ind.fitness.valid]
@@ -515,11 +469,7 @@ class RoutePlanner:
                      incl_curr,
                      start_date,
                      get_n_days,
-                     gen,
-                     n,
-                     n_bar,
-                     cxpb,
-                     mutpb):
+                     params):
             self.tb = tb
             self.evaluator = evaluator
             self.mstats = mstats
@@ -531,11 +481,11 @@ class RoutePlanner:
             self.get_n_days = get_n_days
 
             # Parameter settings
-            self.GEN = gen
-            self.N = n
-            self.Nbar = n_bar
-            self.CXPB = cxpb
-            self.MUTPB = mutpb
+            self.gen = params['gen']
+            self.n = params['n']
+            self.n_bar = params['n_bar']
+            self.cxpb = params['cxpb']
+            self.mutpb = params['mutpb']
 
             # Register SPEA2 selection function
             self.tb.register("select", tools.selSPEA2)
@@ -560,7 +510,7 @@ class RoutePlanner:
                     # Step 1: Initialization
                     print('Initializing population from shortest path:', end=' ')
                     pop = self.tb.population(self.tb.individual,
-                                             int(self.N / len(sub_sp_dict.values()))
+                                             int(self.n / len(sub_sp_dict.values()))
                                              )
                     archive = []
                     curr_gen = 1
@@ -580,7 +530,7 @@ class RoutePlanner:
                     # Begin the generational process
                     while True:
                         # Step 3: Environmental selection
-                        archive = self.tb.select(pop + archive, k=self.Nbar)
+                        archive = self.tb.select(pop + archive, k=self.n_bar)
                         self.front.update(archive)
 
                         # Record statistics
@@ -589,17 +539,17 @@ class RoutePlanner:
                         print('\r', self.log.stream)
 
                         # Step 4: Termination
-                        if curr_gen >= self.GEN:
-                            result['logs'][sp_key][sub_sp_key] = self.log[:]
+                        if curr_gen >= self.gen:
+                            result['logs'][sp_key][sub_sp_key] = self.log
                             result['fronts'][sp_key][sub_sp_key] = self.front[:]
                             self.tb.unregister("individual")
                             break
 
                         # Step 5: Mating Selection
-                        mating_pool = tools.selTournament(archive, k=self.N, tournsize=2)
+                        mating_pool = tools.selTournament(archive, k=self.n, tournsize=2)
 
                         # Step 6: Variation
-                        pop = algorithms.varAnd(mating_pool, self.tb, self.CXPB, self.MUTPB)
+                        pop = algorithms.varAnd(mating_pool, self.tb, self.cxpb, self.mutpb)
 
                         # Step 2: Fitness assignment
                         # Population
@@ -631,7 +581,7 @@ class RoutePlanner:
             travel_time = 0.0
             for e in range(len(ind) - 1):
                 p1, p2 = sorted((ind[e][0], ind[e + 1][0]))
-                e_dist = self.gc.distance(p1, p2)
+                e_dist = self.geod.distance(p1, p2)
                 e_travel_time = e_dist / boat_speed
                 travel_time += e_travel_time
             if travel_time > max_travel_time:
@@ -648,7 +598,7 @@ if __name__ == "__main__":
     # South Atlantic (Brazil), Caribbean Sea
     # _start, _end = (-23.4166, -7.2574), (-72.3352, 12.8774)
     # Mediterranean Sea, Gulf of Aden
-    _start, _end = (29.188952, 32.842985), (48.1425, 12.5489)
+    # _start, _end = (29.188952, 32.842985), (48.1425, 12.5489)
     # Normandy, Canada
     # _start, _end = (-5.352121, 48.021295), (-53.306878, 46.423969)
     # Normandy, Canada
@@ -656,12 +606,16 @@ if __name__ == "__main__":
     # Gulf of Bothnia, Gulf of Mexico
     # _start, _end = (20.891193, 58.464147), (-85.063585, 29.175463)
     # North UK, South UK
-    # _start, _end = (3.891292, 60.088472), (-7.562237, 47.403357)
+    _start, _end = (3.3, 60), (-7.5, 47)
+    # Sri Lanka, Yemen
+    # _start, _end = (78, 5), (49, 12)
+    # # Rotterdam, Tokyo
+    # _start, _end = (3.79, 51.98), (139.53, 34.95)
+    # # Rotterdam, Tokyo
+    # _start, _end = (3.79, 51.98), (103.60, 1.08)
 
-    _route_planner = RoutePlanner(_start, _end, eca_f=1.2, incl_curr=False)
-    # _result = _route_planner.mpaes.compute(seed=1)
-    # _result = _route_planner.spea2.compute(seed=1)
-    _result = _route_planner.nsgaii.compute(seed=1)
+    planner = RoutePlanner(_start, _end, incl_curr=False)
+    _result = planner.nsgaii.compute(seed=1)
 
     # Save parameters
     timestamp = datetime.now()
