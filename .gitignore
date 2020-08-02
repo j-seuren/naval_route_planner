@@ -1,5 +1,5 @@
 output/
-current_netCDF/
+data/
 test.py
 test.profile
 
