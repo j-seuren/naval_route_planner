@@ -1,4 +1,4 @@
-import ocean_current_data
+from data_config import ocean_current_data
 import math
 import matplotlib.pyplot as plt
 import numpy as np
@@ -45,6 +45,7 @@ class CurrentOperator:
 
 
 def plot_current_field(uin, vin, lons, lats):
+    plt.subplot()
     # Create map
     m = basemap.Basemap(projection='cyl', resolution='c',
                         llcrnrlat=-90., urcrnrlat=90.,
@@ -67,4 +68,22 @@ def plot_current_field(uin, vin, lons, lats):
 
 
 if __name__ == '__main__':
-    print(None)
+    import datetime
+    t_start = datetime.datetime(2016, 1, 1)
+    nr_days = 10
+    data_retr = ocean_current_data.CurrentDataRetriever(t_start, nr_days)
+    data_retr.store_combined_nc()
+
+    fp = data_retr.ds_fp
+    with xr.open_dataset(fp, engine='h5netcdf') as ds:
+        ds = ds.compute()
+
+    for i in range(nr_days):
+        day_idx = i // 8
+        ds2 = ds.isel(time=day_idx).load()
+        u = ds2['u_knot']
+        v = ds2['v_knot']
+        lons = ds2['lon']
+        lats = ds2['lat']
+
+        plot_current_field(u, v, lons, lats)

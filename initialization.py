@@ -1,4 +1,4 @@
-import hexagraph
+from data_config import hexagraph
 import heapq
 import itertools
 import networkx as nx
@@ -15,10 +15,8 @@ class Initializer:
                  pt_e,
                  vessel,
                  res,
-                 prep_polys,
-                 rtree_idx,
-                 ecas,
-                 rtree_idx_eca,
+                 tree,
+                 eca_tree,
                  toolbox,
                  gc,
                  dens=6,
@@ -27,10 +25,8 @@ class Initializer:
         self.pt_e = pt_e              # End point
         self.vessel = vessel          # Vessel class
         self.res = res                # Resolution of shorelines
-        self.prep_polys = prep_polys  # Prepared land polygons
-        self.rtree_idx = rtree_idx    # prep_polys' R-tree spatial index
-        self.ecas = ecas            # ECA polygons
-        self.rtree_idx_eca = rtree_idx_eca  # ecas' R-tree spatial index
+        self.tree = tree              # R-tree spatial index for shorelines
+        self.eca_tree = eca_tree      # R-tree spatial index for ECAs
         self.toolbox = toolbox        # Function toolbox
         self.gc = gc                  # Geod class instance
         self.dens = dens              # Density recursion number, graph
@@ -48,11 +44,9 @@ class Initializer:
             hex_graph = hexagraph.Hexagraph(dens,
                                             var_dens,
                                             res,
-                                            prep_polys,
-                                            rtree_idx,
-                                            ecas,
-                                            rtree_idx_eca)
-            self.G = hex_graph.get_g()
+                                            tree,
+                                            eca_tree)
+            self.G = hex_graph.graph
 
         # Compute distances to start and end locations
         d_s = {n: haversine(self.pt_s, n_deg, unit='nmi')
@@ -192,7 +186,7 @@ def init_individual(toolbox, inds_in, i):  # swaps: ['speed', 'insert', 'move', 
         cum_weights = [10, 20, 30, 100]
         k = random.randint(1, 8)
         mutant, = toolbox.mutate(toolbox.clone(ind_in), initializing=True,
-                                 cum_weights=cum_weights, k=k)
+                                 weights=cum_weights, k=k)
         mutants.append(mutant)
 
     return mutants

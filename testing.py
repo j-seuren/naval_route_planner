@@ -119,12 +119,12 @@ plt.axis('equal')
 print('Initialize route planner')
 
 planner = main.RoutePlanner(eca_f=1.2, incl_curr=False)
-planner.evaluator.rtree_idx = _rtree_idx
-planner.evaluator.prep_polys = polys
+planner.evaluator.tree = _rtree_idx
+planner.evaluator.polys = polys
 planner.evaluator.ecas = ecas
-planner.evaluator.rtree_idx_eca = rtree.index.Index()
+planner.evaluator.eca_tree = rtree.index.Index()
 for idx, eca in enumerate(planner.evaluator.ecas):
-    planner.evaluator.rtree_idx_eca.insert(idx, eca.bounds)
+    planner.evaluator.eca_tree.insert(idx, eca.bounds)
 planner.tb.register("evaluate", planner.evaluator.evaluate)
 planner.tb.decorate("evaluate", tools.DeltaPenalty(planner.tb.feasible, [1e+20, 1e+20]))
 

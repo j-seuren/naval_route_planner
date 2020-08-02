@@ -19,19 +19,19 @@ class Operators:
                  tb,
                  vessel,
                  gc,
-                 radius=1,
-                 width_ratio=0.5,
+                 par,
                  mutation_ops=None
                  ):
-        self.tb = tb                    # Function toolbox
-        self.vessel = vessel            # Vessel class instance
-        self.gc = gc                    # GreatCircle class instance
-        self.radius = radius            # Move radius
-        self.cov = [[radius, 0],        # Covariance matrix (move)
-                    [0, radius]]
-        self.width_ratio = width_ratio  # Insert width ratio
-        self.shape = 3
-        self.scale_factor = 0.1
+        self.tb = tb                            # Function toolbox
+        self.vessel = vessel                    # Vessel class instance
+        self.gc = gc                            # GreatCircle class instance
+        self.radius = par['radius']             # Move radius
+        self.cov = [[self.radius, 0],           # Covariance matrix (move)
+                    [0, self.radius]]
+        self.width_ratio = par['width_ratio']  # Insert width ratio
+        self.shape = par['shape']
+        self.scale_factor = par['scale_factor']
+        self.del_f = par['del_factor']
 
         # Mutation operators list
         if mutation_ops is None:
@@ -39,10 +39,10 @@ class Operators:
         else:
             self.ops = mutation_ops
 
-    def mutate(self, ind, initializing=False, cum_weights=None, k=1):
-        if cum_weights is None:
-            cum_weights = [10, 20, 30, 50]  # Two times higher prob choosing del
-        sample_ops = random.choices(self.ops, cum_weights=cum_weights, k=k)
+    def mutate(self, ind, initializing=False, weights=None, k=1):
+        if weights is None:
+            weights = [1, 1, 1, self.del_f]
+        sample_ops = random.choices(self.ops, cum_weights=weights, k=k)
         while sample_ops:
             op = sample_ops.pop()
             if op == 'move' and len(ind) > 2:
@@ -140,7 +140,7 @@ class Operators:
                         x, y = wp + r * np.array([cos(phi), sin(phi)])
 
                     x -= np.int(x / 180) * 360
-                    y = np.clip(y, -90, 90)
+                    y = np.clip(y, -89.9, 89.9)
                     new_wp = (x, y)
 
                     # Ensure feasibility during initialization
