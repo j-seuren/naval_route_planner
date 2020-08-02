@@ -1,5 +1,7 @@
 output/
 data/
+api/routes_OUT/*
+api/routes_IN/*
 test.py
 test.profile
 
