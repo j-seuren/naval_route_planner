@@ -94,7 +94,6 @@ class CurrentDataRetriever:
 
         # Get dataset file path and download and save directories
         d = Path(os.getcwd() + '/data/currents/netcdf_OUT/')
-        print(d)
         f = 'Y%d_YDAY%03d_NDAYS%03d.nc' % (t_s.year,
                                            t_s.timetuple().tm_yday,
                                            n_days)
@@ -123,8 +122,6 @@ class CurrentDataRetriever:
                                ) as ds:
             print('done')
             print("Storing combined netCDF to '{}' :".format(self.ds_fp), end=' ')
-            print(os.getcwd())
-            print(self.ds_fp)
             ds.to_netcdf(self.ds_fp)
             print('done')
 
@@ -175,6 +172,15 @@ class CurrentDataRetriever:
                     with open(fp_save, 'wb') as fh:
                         ftp.retrbinary('RETR %s' % f, fh.write)
         print('done')
+
+    def get_ds(self):
+        self.store_combined_nc()
+        print('Opening and loading combined netCDF into memory:'.format(self.ds_fp), end=' ')
+        with xr.open_dataset(self.ds_fp, engine='h5netcdf') as ds:
+            ds = ds.compute()
+            print('done')
+
+            return ds
 
 
 def to_kts(ds):

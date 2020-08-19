@@ -1,5 +1,6 @@
 import numpy as np
 import operator
+import weather
 
 from datetime import timedelta
 from functools import lru_cache
@@ -11,50 +12,59 @@ class Evaluator:
     def __init__(self,
                  vessel,
                  tree,
-                 eca_tree,
-                 eca_f,
-                 vlsfo_price,
-                 start_date,
-                 gc,
-                 incl_curr=True,
-                 del_sf=100,
-                 del_sc=15):
+                 ecaTree,
+                 ecaFactor,
+                 fuelPrice,
+                 geod,
+                 startDate=None,
+                 segLengthF=100,
+                 segLengthC=15):
         self.vessel = vessel            # Vessel class instance
         self.tree = tree                # R-tree spatial index for shorelines
-        self.eca_tree = eca_tree        # R-tree spatial index for ECAs
-        self.eca_f = eca_f              # Multiplication factor for ECA fuel
-        self.start_date = start_date    # Start date of voyage
-        self.del_sf = del_sf            # Max segment length (for feasibility)
-        self.del_sc = del_sc            # Max segment length (for currents)
-        self.incl_curr = incl_curr      # Boolean for including currents
-        self.gc = gc                    # Geod class instance
-        self.current_data = None
-        self.vlsfo_price = vlsfo_price
+        self.ecaTree = ecaTree          # R-tree spatial index for ECAs
+        self.ecaFactor = ecaFactor      # Multiplication factor for ECA fuel
+        self.startDate = startDate      # Start date of voyage
+        self.segLengthF = segLengthF    # Max segment length (for feasibility)
+        self.segLengthC = segLengthC    # Max segment length (for currents)
+        self.geod = geod                # Geod class instance
+        self.currentOperator = None
+        self.weatherOperator = None
+        self.fuelPrice = fuelPrice
+        self.inclWeather = None
+        self.inclCurrent = None
+
+    def set_classes(self, inclCurr, inclWeather, startDate, nDays):
+        self.inclWeather = inclWeather
+        self.inclCurrent = inclCurr
+        if inclCurr:
+            self.currentOperator = weather.CurrentOperator(startDate, nDays)
+        if inclWeather:
+            self.weatherOperator = weather.WeatherOperator(startDate, nDays)
 
     def evaluate(self, ind):
         # Initialize variables
-        tt = fc = 0.0
+        TT = FC = 0.0
 
         for e in range(len(ind) - 1):
             # Get edge waypoints and edge boat speed
             p1, p2 = sorted((ind[e][0], ind[e + 1][0]))
-            boat_speed = ind[e][1]
+            boatSpeed = ind[e][1]
 
             # Compute travel time over edge
-            e_tt = self.e_tt(p1, p2, tt, boat_speed)
+            edgeTT = self.e_tt(p1, p2, TT, boatSpeed)
 
             # Compute fuel consumption over edge
-            e_fc = self.vessel.fuel_rates[boat_speed] * e_tt * self.vlsfo_price
+            edgeFC = self.vessel.fuel_rates[boatSpeed] * edgeTT * self.fuelPrice
 
-            # If edge intersects SECA increase fuel consumption by eca_f
-            if edge_x_geos(p1, p2, self.eca_tree):
-                e_fc *= self.eca_f
+            # If edge intersects SECA increase fuel consumption by ecaFactor
+            if edge_x_geos(p1, p2, self.ecaTree):
+                edgeFC *= self.ecaFactor
 
             # Increment objective values
-            tt += e_tt
-            fc += e_fc
+            TT += edgeTT
+            FC += edgeFC
 
-        return tt, fc
+        return TT, FC
 
     def feasible(self, ind):
         for i in range(len(ind)-1):
@@ -65,16 +75,16 @@ class Evaluator:
 
     @lru_cache(maxsize=None)
     def e_feasible(self, p1, p2):
-        dist = self.gc.distance(p1, p2)
-        lons, lats = self.gc.points(p1, p2, dist, self.del_sf)
+        dist = self.geod.distance(p1, p2)
+        lons, lats = self.geod.points(p1, p2, dist, self.segLengthF)
         vertices = np.stack([lons, lats]).T
 
         # since we know the difference between any two points, we can use this to find wrap arounds on the plot
-        max_dist = self.del_sf * 10 / 60
+        maxDist = self.segLengthF * 10 / 60
 
         # calculate distances and compare with max allowable distance
         dists = np.abs(np.diff(lons))
-        cuts = np.where(dists > max_dist)[0]
+        cuts = np.where(dists > maxDist)[0]
 
         # if there are any cut points, cut them and begin again at the next point
         for i, cut in enumerate(cuts):
@@ -91,41 +101,47 @@ class Evaluator:
                     return False
         return True
 
-    def e_tt(self, p1, p2, tt, boat_speed):
-        dist = self.gc.distance(p1, p2)
-        if self.incl_curr:
+    def e_tt(self, p1, p2, tt, boatSpeed):
+        dist = self.geod.distance(p1, p2)
+        if self.inclCurrent or self.inclWeather:
             # Split edge in segments (seg) of del_sc in nautical miles
-            lons, lats = self.gc.points(p1, p2, dist, self.del_sc)
-            e_tt = 0.0
+            lons, lats = self.geod.points(p1, p2, dist, self.segLengthC)
+            edgeTT = 0.0
             for i in range(len(lons) - 1):
                 q1, q2 = sorted(((lons[i], lats[i]), (lons[i+1], lats[i+1])))
-                tot_hours = tt + e_tt
-                seg_tt = self.seg_tt(q1, q2, boat_speed, tot_hours)
-                e_tt += seg_tt
+                currentTT = tt + edgeTT
+                segmentTT = self.seg_tt(q1, q2, boatSpeed, currentTT)
+                edgeTT += segmentTT
         else:
-            e_tt = dist / boat_speed
-        return e_tt / 24.0  # Travel time in days
+            edgeTT = dist / boatSpeed
+        return edgeTT / 24.0  # Travel time in days
 
-    def seg_tt(self, p1, p2, boat_speed, delta_hours):
-        now = self.start_date + timedelta(hours=delta_hours)
-        dist = self.gc.distance(p1, p2)
+    def seg_tt(self, p1, p2, boatSpeed, currentTT):
+        now = self.startDate + timedelta(hours=currentTT)
+        dist = self.geod.distance(p1, p2)
 
-        # Get current of nearest grid point to middle point of edge
-        x_m, y_m = (item / 2 for item in map(operator.add, p1, p2))
-        lon_idx = int(round((x_m + 179.875) / 0.25))
-        lat_idx = int(round((y_m + 89.875) / 0.25))
-        u_m, v_m = self.current_data.get_grid_pt_current(now, lon_idx, lat_idx)
+        # Coordinates of middle point of edge
+        lon, lat = (item / 2 for item in map(operator.add, p1, p2))
 
-        # Calculate speed over ground
-        sog = calc_sog(p1, p2, u_m, v_m, boat_speed)
+        bearing = calc_bearing(p1, p2)
+
+        if self.inclWeather:
+            # Beaufort number (BN) and true wind direction (TWD) at (lon, lat)
+            BN, TWD = self.weatherOperator.get_grid_pt_wind(now, lon, lat)
+            heading = bearing
+            boatSpeed = self.vessel.reduced_speed(boatSpeed, BN, TWD, heading)
+        if self.inclCurrent:
+            # Easting and Northing currents at (lon, lat)
+            u, v = self.currentOperator.get_grid_pt_current(now, lon, lat)
+
+            # Calculate speed over ground
+            sog = calc_sog(bearing, u, v, boatSpeed)
+        else:
+            sog = boatSpeed
         return dist / sog
 
 
-def calc_sog(p1, p2, Se, Sn, V):
-    """
-    Determine speed over ground (sog) between points p1 and p2 in knots.
-    see thesis section Ship Speed
-    """
+def calc_bearing(p1, p2):
     # Convert degrees to radians
     [(lam1, phi1), (lam2, phi2)] = np.radians([p1, p2])
 
@@ -136,15 +152,21 @@ def calc_sog(p1, p2, Se, Sn, V):
     if abs(dLam) > pi:  # take shortest route: dLam < PI
         dLam = dLam - copysign(2 * pi, dLam)
 
-    b = atan2(dLam, dPsi)  # Bearing
+    return atan2(dLam, dPsi)
+
+
+def calc_sog(bearing, Se, Sn, V):
+    """
+    Determine speed over ground (sog) between points p1 and p2 in knots.
+    see thesis section Ship Speed
+    """
 
     # Calculate speed over ground (sog)
-    sinB, cosB = sin(b), cos(b)
-    sog = Se * sinB + Sn * cosB + sqrt(V * V - (Se * cosB - Sn * sinB) ** 2)
-    return sog
+    sinB, cosB = sin(bearing), cos(bearing)
+    return Se * sinB + Sn * cosB + sqrt(V * V - (Se * cosB - Sn * sinB) ** 2)
 
 
-def edge_x_geos(p1, p2, tree):
+def edge_x_geos(p1, p2, tree, xExterior=False):
     line = LineString([p1, p2])
 
     # Return a list of all geometries in the R-tree whose extents
@@ -153,15 +175,8 @@ def edge_x_geos(p1, p2, tree):
     if extent_intersections:
         # Check if any geometry in extent_intersections actually intersects line
         for geom in extent_intersections:
-            if geom.intersects(line):
+            if xExterior and geom.exterior.intersects(line):
+                return True
+            elif geom.intersects(line):
                 return True
     return False
-
-
-if __name__ == '__main__':
-    _p1, _p2 = (0.5, 4), (4.5, 1)
-    _Sx, _Sy = -1, -0.5
-    _V = 2.015564437
-
-    sog2 = calc_sog(_p1, _p2, _Sx, _Sy, _V)
-    print(sog2)
