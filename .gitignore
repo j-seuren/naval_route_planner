@@ -2,7 +2,7 @@ output/
 data/
 api/routes_OUT/*
 api/start_end_IN/*
-test.py
+bath_test.py
 test.profile
 
 # Byte-compiled / optimized / DLL files
