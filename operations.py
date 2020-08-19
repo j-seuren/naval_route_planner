@@ -18,30 +18,24 @@ class Operators:
     def __init__(self,
                  tb,
                  vessel,
-                 gc,
-                 par,
-                 mutation_ops=None
+                 geod,
+                 par
                  ):
         self.tb = tb                            # Function toolbox
         self.vessel = vessel                    # Vessel class instance
-        self.gc = gc                            # GreatCircle class instance
+        self.geod = geod                        # GreatCircle class instance
         self.radius = par['radius']             # Move radius
         self.cov = [[self.radius, 0],           # Covariance matrix (move)
                     [0, self.radius]]
-        self.width_ratio = par['width_ratio']  # Insert width ratio
+        self.widthRatio = par['widthRatio']     # Insert width ratio
         self.shape = par['shape']
-        self.scale_factor = par['scale_factor']
-        self.del_f = par['del_factor']
-
-        # Mutation operators list
-        if mutation_ops is None:
-            self.ops = ['speed', 'insert', 'move', 'delete']
-        else:
-            self.ops = mutation_ops
+        self.scaleFactor = par['scaleFactor']
+        self.delFactor = par['delFactor']
+        self.ops = par['mutationOperators']     # Mutation operators list
 
     def mutate(self, ind, initializing=False, weights=None, k=1):
         if weights is None:
-            weights = [1, 1, 1, self.del_f]
+            weights = [1, 1, 1, self.delFactor]
         sample_ops = random.choices(self.ops, cum_weights=weights, k=k)
         while sample_ops:
             op = sample_ops.pop()
@@ -58,18 +52,18 @@ class Operators:
 
     def insert_wps(self, ind, initializing=False, gauss=False, shape='rhombus'):
         # Draw gamma int for number of inserted waypoints
-        max_k = len(ind) - 1
-        scale = max_k * self.scale_factor
+        maxK = len(ind) - 1
+        scale = maxK * self.scaleFactor
         k = round(np.asscalar(np.random.gamma(self.shape, scale, 1)), 0)
-        while not 0 < k <= max_k:
+        while not 0 < k <= maxK:
             k = round(np.asscalar(np.random.gamma(self.shape, scale, 1)), 0)
-        e = random.sample(range(max_k), k=int(k))
+        e = random.sample(range(maxK), k=int(k))
         for e in sorted(e, reverse=True):
-            p1_tup, p2_tup = ind[e][0], ind[e+1][0]
-            p1, p2 = np.asarray(p1_tup), np.asarray(p2_tup)
+            p1Tup, p2Tup = ind[e][0], ind[e+1][0]
+            p1, p2 = np.asarray(p1Tup), np.asarray(p2Tup)
             ctr = (p1 + p2) / 2  # Edge centre
             width = np.linalg.norm(p1 - p2)  # Ellipse width
-            height = width * self.width_ratio  # Ellipse height
+            height = width * self.widthRatio  # Ellipse height
 
             trials = 0
             while trials < 100:
@@ -84,12 +78,12 @@ class Operators:
                         xy = sqrt(rho) * np.array([cos(phi), sin(phi)])
 
                     # Scale x and y to the dimensions of the ellipse
-                    pt_origin = xy * np.array([width, height]) / 2.0
+                    ptOrigin = xy * np.array([width, height]) / 2.0
                 elif shape == 'rhombus':
                     v1 = np.array([width / 2.0, - height / 2.0])
                     v2 = np.array([width / 2.0, height / 2.0])
                     offset = np.array([width / 2.0, 0.0])
-                    pt_origin = random.random() * v1 + random.random() * v2 - offset
+                    ptOrigin = random.random() * v1 + random.random() * v2 - offset
                 else:
                     raise ValueError("Shape argument invalid: "
                                      "try 'ellipse' or 'rhombus'")
@@ -98,29 +92,29 @@ class Operators:
                 dy, dx = p2[1] - p1[1], p2[0] - p1[0]
                 if dx != 0:
                     slope = dy / dx
-                    rot_x = 1 / sqrt(1 + slope ** 2)
-                    rot_y = slope * rot_x
+                    rotX = 1 / sqrt(1 + slope ** 2)
+                    rotY = slope * rotX
                 else:
-                    assert dy != 0, 'p1 and p2 are equal: {}{}'.format(p1_tup, p2_tup)
-                    rot_x = 0
-                    rot_y = 1
+                    assert dy != 0, 'p1 and p2 are equal: {}{}'.format(p1Tup, p2Tup)
+                    rotX = 0
+                    rotY = 1
 
-                cos_a, sin_a = rot_x, rot_y
-                rotation_matrix = np.array(((cos_a, -sin_a), (sin_a, cos_a)))
-                pt_rotated = np.dot(rotation_matrix, pt_origin)  # Rotate
-                x, y = ctr + pt_rotated  # Translate
+                cosA, sinA = rotX, rotY
+                rotation_matrix = np.array(((cosA, -sinA), (sinA, cosA)))
+                ptRotated = np.dot(rotation_matrix, ptOrigin)  # Rotate
+                x, y = ctr + ptRotated  # Translate
                 x -= np.int(x / 180) * 360
                 y = np.clip(y, -90, 90)
-                new_wp = (x, y)
+                newWP = (x, y)
 
                 if initializing:
-                    if self.tb.e_feasible(p1_tup, new_wp) and self.tb.e_feasible(new_wp, p2_tup):
-                        ind.insert(e+1, [new_wp, ind[e][1]])
+                    if self.tb.e_feasible(p1Tup, newWP) and self.tb.e_feasible(newWP, p2Tup):
+                        ind.insert(e+1, [newWP, ind[e][1]])
                         return
                     else:
                         trials += 1
                 else:
-                    ind.insert(e+1, [new_wp, ind[e][1]])
+                    ind.insert(e+1, [newWP, ind[e][1]])
                     return
             print('insert trials exceeded')
 
@@ -141,30 +135,30 @@ class Operators:
 
                     x -= np.int(x / 180) * 360
                     y = np.clip(y, -89.9, 89.9)
-                    new_wp = (x, y)
+                    newWP = (x, y)
 
                     # Ensure feasibility during initialization
                     if initializing and (
-                            not self.tb.e_feasible(ind[i - 1][0], new_wp) or
-                            not self.tb.e_feasible(new_wp, ind[i + 1][0])):
+                            not self.tb.e_feasible(ind[i - 1][0], newWP) or
+                            not self.tb.e_feasible(newWP, ind[i + 1][0])):
                         trials += 1
                         if trials > 100:
                             print('move trials exceeded', end='\n ')
                             break
                         else:
                             continue
-                    ind[i][0] = new_wp
+                    ind[i][0] = newWP
                     break
     
     def delete_wps(self, ind, initializing=False):
         # Draw gamma int for number of to be deleted (tbd) waypoints
-        max_k = len(ind) - 2
-        scale = max_k * self.scale_factor
+        maxK = len(ind) - 2
+        scale = maxK * self.scaleFactor
         k = round(np.asscalar(np.random.gamma(self.shape, scale, 1)), 0)
-        while not 0 < k <= max_k:
+        while not 0 < k <= maxK:
             k = round(np.asscalar(np.random.gamma(self.shape, scale, 1)), 0)
         # Draw tbd waypoints
-        tbd = sorted(random.sample(range(1, max_k+1), k=int(k)),
+        tbd = sorted(random.sample(range(1, maxK+1), k=int(k)),
                      reverse=True)
         if initializing:  # Ensure feasibility
             # Group consecutive tbd waypoints
@@ -185,18 +179,18 @@ class Operators:
         k = random.randrange(1, size)
         i = random.randrange(size-k)
         assert i+k < size
-        avg_curr_speed = sum([entry[1] for entry in ind[i:i+k]]) / k
-        new_speed = random.choice([s for s in self.vessel.speeds
-                                   if s != avg_curr_speed])
+        avgCurrentSpeed = sum([entry[1] for entry in ind[i:i+k]]) / k
+        newSpeed = random.choice([s for s in self.vessel.speeds
+                                   if s != avgCurrentSpeed])
         for e in ind[i:i+k]:
-            e[1] = new_speed
+            e[1] = newSpeed
 
     def cx_one_point(self, ind1, ind2):
         if min(len(ind1), len(ind2)) > 2:
             # Get waypoints of ind1 and ind2
             ps1 = [row[0] for row in ind1]
             ps2 = [row[0] for row in ind2]
-            p2_arr = np.asarray(ps2)
+            p2Array = np.asarray(ps2)
 
             # Shuffled list of indexes of ind1, excluding start and end
             c1s = random.sample(range(1, len(ind1)-1), k=len(ind1)-2)
@@ -205,9 +199,9 @@ class Operators:
                 tr += 1
                 c1 = c1s.pop()
                 # Calculate distance between c1 and each point of ind2
-                p1c_arr = np.asarray(ps1[c1]).reshape(1, -1)
-                distances = distance.cdist(p1c_arr, p2_arr,
-                                           metric=self.gc.distance)
+                p1cArray = np.asarray(ps1[c1]).reshape(1, -1)
+                distances = distance.cdist(p1cArray, p2Array,
+                                           metric=self.geod.distance)
 
                 # Indices of ind2 that would sort distances
                 c2s = distances.argsort()
@@ -224,9 +218,9 @@ class Operators:
                         continue
 
                     # Check feasibility
-                    new_ind1_feasible = self.tb.e_feasible(ps1[c1-1], ps2[c2])
-                    new_ind2_feasible = self.tb.e_feasible(ps2[c2-1], ps1[c1])
-                    if new_ind1_feasible and new_ind2_feasible:
+                    newInd1Feasible = self.tb.e_feasible(ps1[c1-1], ps2[c2])
+                    newInd2Feasible = self.tb.e_feasible(ps2[c2-1], ps1[c1])
+                    if newInd1Feasible and newInd2Feasible:
                         ind1[c1:], ind2[c2:] = ind2[c2:], ind1[c1:]
                     else:  # If new edges not feasible, discard c2
                         continue
@@ -243,22 +237,22 @@ class Operators:
         if size > 2:
             trials1 = 0
             while trials1 < 100:
-                cx_pt1, cx_pt2 = random.randrange(1, size-1), random.randrange(1, size-1)
+                cxPt1, cxPt2 = random.randrange(1, size-1), random.randrange(1, size-1)
 
                 # Draw again if consecutive duplicate waypoints exist in children
                 trials2 = 0
-                while ind2[cx_pt2-1][0] == ind1[cx_pt1][0] or ind1[cx_pt1-1][0] == ind2[cx_pt2][0]:
-                    cx_pt1, cx_pt2 = random.randrange(1, size-1), random.randrange(1, size-1)
+                while ind2[cxPt2-1][0] == ind1[cxPt1][0] or ind1[cxPt1-1][0] == ind2[cxPt2][0]:
+                    cxPt1, cxPt2 = random.randrange(1, size-1), random.randrange(1, size-1)
                     trials2 += 1
                     if trials2 > 100:
                         print('exceeded crossover trials2', end='\n ')
                         return ind1, ind2
 
                 # Check feasibility
-                new_ind1_feasible = self.tb.e_feasible(ind1[cx_pt1-1][0], ind2[cx_pt2][0])
-                new_ind2_feasible = self.tb.e_feasible(ind2[cx_pt2-1][0], ind1[cx_pt1][0])
-                if new_ind1_feasible and new_ind2_feasible:
-                    ind1[cx_pt1:], ind2[cx_pt2:] = ind2[cx_pt2:], ind1[cx_pt1:]
+                newInd1Feasible = self.tb.e_feasible(ind1[cxPt1-1][0], ind2[cxPt2][0])
+                newInd2Feasible = self.tb.e_feasible(ind2[cxPt2-1][0], ind1[cxPt1][0])
+                if newInd1Feasible and newInd2Feasible:
+                    ind1[cxPt1:], ind2[cxPt2:] = ind2[cxPt2:], ind1[cxPt1:]
                 else:
                     trials1 += 1
                     continue
