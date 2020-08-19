@@ -1,8 +1,7 @@
-from data_config import ocean_current_data
+from data_config import ocean_current_data, weather_data
 import math
 import matplotlib.pyplot as plt
 import numpy as np
-import xarray as xr
 
 from dask.cache import Cache
 from functools import lru_cache
@@ -15,20 +14,16 @@ class CurrentOperator:
         self.n_days = n_days
 
         # Initialize CurrentDataRetriever class instance
-        downloader = ocean_current_data.CurrentDataRetriever(self.t_s, self.n_days)
-        downloader.store_combined_nc()
-
-        fp = downloader.ds_fp
-        print('Opening and loading combined netCDF into memory:'.format(fp), end=' ')
-        with xr.open_dataset(fp, engine='h5netcdf') as ds:
-            self.ds = ds.compute()
-        print('done')
+        retriever = ocean_current_data.CurrentDataRetriever(self.t_s, self.n_days)
+        self.ds = retriever.get_ds()
 
         cache = Cache(2e9)  # Leverage two gigabytes of memory
         cache.register()  # Turn cache on globally
 
     @lru_cache(maxsize=None)
-    def get_grid_pt_current(self, date_in, lon_idx, lat_idx):
+    def get_grid_pt_current(self, date_in, lon, lat):
+        lon_idx = int(round((lon + 179.875) / 0.25))
+        lat_idx = int(round((lat + 89.875) / 0.25))
         delta = date_in - self.t_s
         if delta.days < self.n_days:
             day_idx = delta.seconds // 3600 // 3
@@ -67,23 +62,38 @@ def plot_current_field(uin, vin, lons, lats):
     plt.quiverkey(vec_plot, 0.2, -0.2, 1, '1 knot', labelpos='W')
 
 
+class WeatherOperator:
+    def __init__(self, tStart, nDays):
+        self.tStart = tStart.replace(second=0, microsecond=0, minute=0, hour=0)
+        assert nDays * 8 < 384, 'Estimated travel days exceeds weather forecast period'
+
+        # Initialize CurrentDataRetriever class instance
+        retriever = weather_data.WeatherDataRetriever(self.tStart)
+        self.ds = retriever.get_ds()
+
+        cache = Cache(2e9)  # Leverage two gigabytes of memory
+        cache.register()  # Turn cache on globally
+
+    @lru_cache(maxsize=None)
+    def get_grid_pt_wind(self, time, lon, lat):
+        lon, lat = round(lon), round(lat)
+        lon_idx = int(lon + 180)
+        lat_idx = int(90 - lat)
+        delta = time - self.tStart
+        step_idx = delta.seconds // 3600 // 3
+        vals = self.ds.isel(step=step_idx, latitude=lat_idx, longitude=lon_idx).load()
+        BN = int(vals['BN'])
+        windDir = float(vals['windDir'])
+
+        if math.isnan(BN) or math.isnan(windDir):
+            BN, windDir = 0, 0.0
+
+        return BN, windDir
+
+
 if __name__ == '__main__':
-    import datetime
-    t_start = datetime.datetime(2016, 1, 1)
-    nr_days = 10
-    data_retr = ocean_current_data.CurrentDataRetriever(t_start, nr_days)
-    data_retr.store_combined_nc()
-
-    fp = data_retr.ds_fp
-    with xr.open_dataset(fp, engine='h5netcdf') as ds:
-        ds = ds.compute()
-
-    for i in range(nr_days):
-        day_idx = i // 8
-        ds2 = ds.isel(time=day_idx).load()
-        u = ds2['u_knot']
-        v = ds2['v_knot']
-        lons = ds2['lon']
-        lats = ds2['lat']
-
-        plot_current_field(u, v, lons, lats)
+    from datetime import datetime, timedelta
+    t_start = datetime.today() - timedelta(days=1)
+    nr_days = 7
+    windOp = WeatherOperator(t_start, nr_days)
+    print(windOp.get_grid_pt_wind(t_start, 54.4, 2.3))
