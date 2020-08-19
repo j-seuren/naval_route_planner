@@ -118,17 +118,13 @@ class HexagraphBuilder:
                 sys.stdout.flush()
 
             # Get indices and positions of nodes from current edge
-            p1, p2 = edge_data[0], edge_data[1]
-            deg1, deg2 = self.G.nodes[p1]['deg'], self.G.nodes[p2]['deg']
+            n1, n2 = edge_data[0], edge_data[1]
+            p1, p2 = self.G.nodes[n1]['deg'], self.G.nodes[n2]['deg']
 
-            # Skip border edges
-            # since they always intersect polygons in a 2D grid map
-            if abs(deg1[0] - deg2[0]) > 340:
-                continue
-
-            # If edge intersects polygons, remove from graph
-            if edge_x_geos(deg1, deg2, self.tree):
-                graph_copy.remove_edge(p1, p2)
+            # Remove edges intersecting land, but skip border edges
+            # since they always intersect polygons if projected on 2D
+            if abs(p1[0] - p2[0]) < 340 and edge_x_geos(p1, p2, self.tree):
+                graph_copy.remove_edge(n1, n2)
         sys.stdout.write("\rremoving edges from graph: 100%\n")
         sys.stdout.flush()
         return graph_copy
@@ -138,32 +134,18 @@ class HexagraphBuilder:
         # Create 12 vertices of the icosahedron
         t = (1 + sqrt(5)) / 2
 
-        self.add_vertex(Point3D(-1, t, 0))
-        self.add_vertex(Point3D(1, t, 0))
-        self.add_vertex(Point3D(-1, -t, 0))
-        self.add_vertex(Point3D(1, -t, 0))
-
-        self.add_vertex(Point3D(0, -1, t))
-        self.add_vertex(Point3D(0, 1, t))
-        self.add_vertex(Point3D(0, -1, -t))
-        self.add_vertex(Point3D(0, 1, -t))
-
-        self.add_vertex(Point3D(t, 0, -1))
-        self.add_vertex(Point3D(t, 0, 1))
-        self.add_vertex(Point3D(-t, 0, -1))
-        self.add_vertex(Point3D(-t, 0, 1))
+        [self.add_vertex(Point3D(i, j, 0)) for i in [1, -1] for j in [t, -t]]
+        [self.add_vertex(Point3D(0, i, j)) for i in [1, -1] for j in [t, -t]]
+        [self.add_vertex(Point3D(j, 0, i)) for i in [1, -1] for j in [t, -t]]
 
         # Create 20 triangles of the icosahedron
-        tris = [Triangle(0, 11, 5), Triangle(0, 5, 1),
-                Triangle(0, 1, 7), Triangle(0, 7, 10),
-                Triangle(0, 10, 11), Triangle(1, 5, 9),
-                Triangle(5, 11, 4), Triangle(11, 10, 2),
-                Triangle(10, 7, 6), Triangle(7, 1, 8),
-                Triangle(3, 9, 4), Triangle(3, 4, 2),
-                Triangle(3, 2, 6), Triangle(3, 6, 8),
-                Triangle(3, 8, 9), Triangle(4, 9, 5),
-                Triangle(2, 4, 11), Triangle(6, 2, 10),
-                Triangle(8, 6, 7), Triangle(9, 8, 1)]
+        tris = [Triangle(0, 11,  5), Triangle(0,  5,   1), Triangle(0,  1,  7),
+                Triangle(0, 7,  10), Triangle(0,  10, 11), Triangle(1,  5,  9),
+                Triangle(5, 11,  4), Triangle(11, 10,  2), Triangle(10, 7,  6),
+                Triangle(7, 1,   8), Triangle(3,  9,   4), Triangle(3,  4,  2),
+                Triangle(3, 2,   6), Triangle(3,  6,   8), Triangle(3,  8,  9),
+                Triangle(4, 9,   5), Triangle(2,  4,  11), Triangle(6,  2, 10),
+                Triangle(8, 6,   7), Triangle(9,  8,   1)]
 
         # Refine triangles
         for i in range(self.dens):
@@ -192,21 +174,21 @@ class HexagraphBuilder:
         gshhg_dir = Path('data/gshhg-shp-2.3.7/GSHHS_shp')
         gshhg_fp = Path('{0}/GSHHS_{0}_L1.shp'.format(self.res))
         gshhg_fp = gshhg_dir / gshhg_fp
-        exteriors, extRtreeIdx = support.populate_rtree(gshhg_fp)
+        tree = support.populate_rtree(gshhg_fp)
 
         G_copy = self.G.copy()
         for edge in G_copy.edges():
             # Get indices and long/lat positions of nodes from current edge
             n1, n2 = edge[0], edge[1]
-            deg1, deg2 = self.G.nodes[n1]['deg'], self.G.nodes[n2]['deg']
+            p1, p2 = self.G.nodes[n1]['deg'], self.G.nodes[n2]['deg']
 
             # Skip border edges
             # since they always intersect polygons in a 2D grid map
-            if abs(deg1[0] - deg2[0]) > 340:
+            if abs(p1[0] - p2[0]) > 340:
                 continue
 
             # If edge crosses a polygon exterior, refine two adjacent triangles
-            if edge_x_geos(deg1, deg2, extRtreeIdx):
+            if edge_x_geos(p1, p2, tree, xExterior=True):
                 # Get adjacent triangles of intersected edge
                 n3s = [e1[1] for e1 in G_copy.edges(n1) for e2 in
                        G_copy.edges(n2) if e1[1] == e2[1]]

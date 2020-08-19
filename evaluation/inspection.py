@@ -4,7 +4,7 @@ import main
 import math
 import matplotlib.pyplot as plt
 import numpy as np
-import ocean_current
+import weather
 import os
 import pickle
 import support
@@ -94,7 +94,7 @@ class RoutePlotter:
 
             ax = plt.subplot2grid((self.rows, self.columns), (r, c))
             ax.set_title("{}".format(self.titles[i]), fontsize=10)
-            m = Basemap(projection='merc', resolution='h', llcrnrlat=self.bot, urcrnrlat=self.top, llcrnrlon=self.lef,
+            m = Basemap(projection='merc', resolution='c', llcrnrlat=self.bot, urcrnrlat=self.top, llcrnrlon=self.lef,
                         urcrnrlon=self.rig, ax=ax)
             m.drawparallels(np.arange(-90., 90., 10.), labels=[1, 0, 0, 0], fontsize=8)
             m.drawmeridians(np.arange(-180., 180., 10.), labels=[0, 0, 0, 1], fontsize=8)
@@ -198,11 +198,11 @@ def plot_interactive_route(path, path_key, obj_key):
 
 if __name__ == "__main__":
     os.chdir('..')
-    _ID_dict = {'gc': '16_07_59'}
+    _ID_dict = {'Cruisje naar Sydney': '21_21_46'}
 
-    incl_curr = False
-    _start_date = datetime.datetime(2016, 1, 1)
-    planner = main.RoutePlanner(incl_curr=incl_curr)
+    # _start_date = datetime.datetime(2016, 1, 1)
+    _start_date = None
+    planner = main.RoutePlanner()
 
     with open('C:/dev/data/seca_areas_csv', 'rb') as file:
         _ecas = pickle.load(file)
@@ -211,7 +211,7 @@ if __name__ == "__main__":
     _minx, _miny, _maxx, _maxy = 180, 90, -180, -90
     for file_id in _ID_dict.values():
         with open('output/result/{}'.format(file_id), 'rb') as f:
-            _result = pickle.load(f)
+            _result = pickle.load(f)[0]
 
         for _p in _result['fronts'].values():
             for _front in _p.values():
@@ -231,7 +231,7 @@ if __name__ == "__main__":
     # Inspect best individuals for every ID dict key
     for f_idx, f_title in enumerate(_ID_dict.keys()):
         with open('output/result/{}'.format(_ID_dict[f_title]), 'rb') as f:
-            _result = pickle.load(f)
+            _result = pickle.load(f)[0]
 
         # Initialize pareto_fig
         pareto_fig, axs = plt.subplots(squeeze=False)
@@ -272,8 +272,8 @@ if __name__ == "__main__":
 
         print('n_days:', max_days)
 
-        if incl_curr:
-            planner.evaluator.current_data = ocean_current.CurrentOperator(_start_date, max_days)
+        if _start_date:
+            planner.evaluator.currentOperator = weather.CurrentOperator(_start_date, max_days)
 
         for _p, _path in best_inds.items():
             for _k, _ind_list in _path.items():
@@ -298,7 +298,7 @@ if __name__ == "__main__":
 
     for f_idx, f_title in enumerate(_ID_dict.keys()):
         with open('output/result/{}'.format(_ID_dict[f_title]), 'rb') as f:
-            _result = pickle.load(f)
+            _result = pickle.load(f)[0]
 
         plot_stats(_result['logs'], f_title)
     plt.show()

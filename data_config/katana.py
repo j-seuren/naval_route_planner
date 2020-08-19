@@ -9,6 +9,7 @@ from pathlib import Path
 from shapely.geometry import (box, Polygon, MultiPolygon,
                               GeometryCollection, shape)
 
+
 def split_polygon(geo, threshold, cnt=0):
     """Split a Polygon into two parts across it's shortest dimension"""
     (minx, miny, maxx, maxy) = geo.bounds
@@ -65,7 +66,8 @@ def plot_geometries(geometries):
                       edgecolor='black')
 
 
-def get_split_polygons(res, thr):
+def get_split_polygons(par):
+    res, thr = par['res'], par['splits']
     proj_dir = Path(os.getcwd()).parent
     gshhg_dir = Path(proj_dir / 'data/gshhg-shp-2.3.7/GSHHS_shp')
     gshhg_fp = gshhg_dir(gshhg_dir / '{0}/GSHHS_{0}_L1.shp'.format(res))
@@ -94,7 +96,7 @@ if __name__ == '__main__':
     # Get polygons
     resolution = 'c'
     max_poly_size = 9
-    _result = get_split_polygons(resolution, max_poly_size)
+    _result = get_split_polygons({'res': resolution, 'splits': max_poly_size})
 
     # Plot result
     # plot_geometries(result)
