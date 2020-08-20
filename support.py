@@ -165,6 +165,41 @@ def assign_crowding_dist(individuals):
         individuals[i].fitness.crowding_dist = dist
 
 
+# Function to be replaced in Pareto front class
+def update(front, population, prevNonDomPop):
+    nonDominatedInds = []
+    nDominated = nDominates = 0
+    for ind in population:
+        is_dominated = False
+        dominates_one = False
+        has_twin = False
+        to_remove = []
+        for i, hofer in enumerate(front):  # hofer = hall of famer
+            add = hofer in prevNonDomPop
+            if not dominates_one and hofer.fitness.dominates(ind.fitness):
+                is_dominated = True
+                if add:
+                    nDominated += 1
+                    prevNonDomPop.remove(hofer)
+                break
+            elif ind.fitness.dominates(hofer.fitness):
+                dominates_one = True
+                if add:
+                    nDominates += 1
+                to_remove.append(i)
+            elif ind.fitness == hofer.fitness and front.similar(ind, hofer):
+                has_twin = True
+                break
+
+        for i in reversed(to_remove):  # Remove the dominated hofer
+            front.remove(i)
+        if not is_dominated and not has_twin:
+            nonDominatedInds.append(ind)
+            front.insert(ind)
+
+    return nonDominatedInds, nDominates, nDominated
+
+
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
 
