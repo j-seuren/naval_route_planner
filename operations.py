@@ -32,21 +32,22 @@ class Operators:
         self.scaleFactor = par['scaleFactor']
         self.delFactor = par['delFactor']
         self.ops = par['mutationOperators']     # Mutation operators list
+        self.gauss = par['gauss']
 
-    def mutate(self, ind, initializing=False, weights=None, k=1):
-        if weights is None:
-            weights = [1, 1, 1, self.delFactor]
-        sample_ops = random.choices(self.ops, cum_weights=weights, k=k)
+    def mutate(self, ind, initializing=False, cumWeights=None, k=1):
+        if cumWeights is None:
+            cumWeights = [1, 1, 1, self.delFactor]
+        sample_ops = random.choices(self.ops, cum_weights=cumWeights, k=k)
         while sample_ops:
             op = sample_ops.pop()
             if op == 'move' and len(ind) > 2:
-                self.move_wp(ind, initializing, gauss=False)
+                self.move_wp(ind, initializing, self.gauss)
             elif op == 'delete' and len(ind) > 2:
                 self.delete_wps(ind, initializing)
             elif op == 'speed':
                 self.change_speeds(ind)
             else:
-                self.insert_wps(ind, initializing, gauss=False)
+                self.insert_wps(ind, initializing, self.gauss)
         del ind.fitness.values
         return ind,
 
