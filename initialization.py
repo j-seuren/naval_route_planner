@@ -161,8 +161,8 @@ class Initializer:
                     ind = [list(tup) for tup in zip(wps, speeds)]
                     initInds[pathKey][spKey][objKey] = self.container(ind)
 
-        # Remove start and end nodes from graph for future usage
-        self.G.remove_nodes_from(points.keys())
+        # Delete graph from memory
+        del self.G
 
         return initInds
 
@@ -175,7 +175,7 @@ def init_individual(toolbox, indsIn, i):  # swaps: ['speed', 'insert', 'move', '
         cumWeights = [10, 20, 30, 100]
         k = random.randint(1, 8)
         mutant, = toolbox.mutate(toolbox.clone(indIn), initializing=True,
-                                 weights=cumWeights, k=k)
+                                 cumWeights=cumWeights, k=k)
         mutants.append(mutant)
 
     return mutants
