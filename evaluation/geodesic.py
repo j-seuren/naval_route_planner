@@ -38,6 +38,14 @@ class Geodesic:
                 "No distance calculation method specified."
                 " Choose 'ellipsoidal', 'rhumb_line', or 'great_circle'.")
 
+    def total_distance(self, waypoints):
+        edges = zip(waypoints[:-1], waypoints[1:])
+        distance = 0
+        for edge in edges:
+            distance += self.distance(edge[0], edge[1])
+
+        return distance
+
     @np_cache
     def ellipsoidal(self, p1, p2):
         """

@@ -5,23 +5,24 @@ import weather
 from datetime import timedelta
 from functools import lru_cache
 from math import cos, sin, tan, atan2, sqrt, log, pi, copysign
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Point
 
 
 class Evaluator:
     def __init__(self,
                  vessel,
-                 tree,
-                 ecaTree,
+                 treeDict,
+                 ecaTreeDict,
                  ecaFactor,
                  fuelPrice,
                  geod,
+                 minTime,
                  startDate=None,
                  segLengthF=100,
                  segLengthC=15):
         self.vessel = vessel            # Vessel class instance
-        self.tree = tree                # R-tree spatial index for shorelines
-        self.ecaTree = ecaTree          # R-tree spatial index for ECAs
+        self.treeDict = treeDict        # R-tree spatial index dictionary for shorelines
+        self.ecaTreeDict = ecaTreeDict  # R-tree spatial index dictionary for ECAs
         self.ecaFactor = ecaFactor      # Multiplication factor for ECA fuel
         self.startDate = startDate      # Start date of voyage
         self.segLengthF = segLengthF    # Max segment length (for feasibility)
@@ -32,6 +33,7 @@ class Evaluator:
         self.fuelPrice = fuelPrice
         self.inclWeather = None
         self.inclCurrent = None
+        self.revertOutput = not minTime
 
     def set_classes(self, inclCurr, inclWeather, startDate, nDays):
         self.inclWeather = inclWeather
@@ -57,13 +59,15 @@ class Evaluator:
             edgeFC = self.vessel.fuel_rates[boatSpeed] * edgeTT * self.fuelPrice
 
             # If edge intersects SECA increase fuel consumption by ecaFactor
-            if edge_x_geos(p1, p2, self.ecaTree):
+            if geo_x_geos(self.ecaTreeDict, p1, p2):
                 edgeFC *= self.ecaFactor
 
             # Increment objective values
             TT += edgeTT
             FC += edgeFC
 
+        if self.revertOutput:
+            return FC, TT
         return TT, FC
 
     def feasible(self, ind):
@@ -97,7 +101,7 @@ class Evaluator:
         for i in range(len(vertices)-1):
             if not np.isnan(np.sum(vertices[i:i+2, :])):
                 q1, q2 = tuple(vertices[i, :]), tuple(vertices[i+1, :])
-                if edge_x_geos(q1, q2, self.tree):
+                if geo_x_geos(self.treeDict, q1, q2):
                     return False
         return True
 
@@ -166,17 +170,24 @@ def calc_sog(bearing, Se, Sn, V):
     return Se * sinB + Sn * cosB + sqrt(V * V - (Se * cosB - Sn * sinB) ** 2)
 
 
-def edge_x_geos(p1, p2, tree, xExterior=False):
-    line = LineString([p1, p2])
+def geo_x_geos(treeDict, p1, p2=None, xExterior=False):
+    if p2:
+        geo = LineString([p1, p2])
+    else:
+        geo = Point(p1)
 
     # Return a list of all geometries in the R-tree whose extents
     # intersect the extent of geom
-    extent_intersections = tree.query(line)
+    extent_intersections = treeDict['tree'].query(geo)
     if extent_intersections:
         # Check if any geometry in extent_intersections actually intersects line
         for geom in extent_intersections:
-            if xExterior and geom.exterior.intersects(line):
+            geomIdx = treeDict['indexByID'][id(geom)]
+            prepGeom = treeDict['polys'][geomIdx]
+            if p2:
+                if prepGeom.intersects(geo):
+                    return True
+            elif prepGeom.contains(geo):
                 return True
-            elif geom.intersects(line):
-                return True
+
     return False
