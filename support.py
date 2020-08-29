@@ -4,9 +4,10 @@ import os
 import pandas
 import pickle
 
-from data_config import katana
+from data_config import navigable_area
 from deap import tools
 from shapely.strtree import STRtree
+from shapely.prepared import prep
 
 
 class KwonsMethod:
@@ -116,26 +117,10 @@ def statistics():
     stats_size = tools.Statistics(key=len)
     mstats = tools.MultiStatistics(fitness=stats_fit, size=stats_size)
     mstats.register("avg", np.mean, axis=0)
-    mstats.register("std", np.std, axis=0)
+    mstats.register("var", np.var, axis=0)
     mstats.register("min", np.min, axis=0)
     mstats.register("max", np.max, axis=0)
     return mstats
-
-
-def populate_rtree(fp, par=None):
-    # Import land obstacles as polygons
-    if os.path.exists(fp):
-        with open(fp, 'rb') as f:
-            polys = pickle.load(f)
-    elif par:
-        polys = katana.get_split_polygons(par)
-    else:
-        raise FileNotFoundError
-
-    # Populate R-tree index with bounds of polygons
-    tree = STRtree(polys)
-
-    return tree
 
 
 def assign_crowding_dist(individuals):
@@ -166,38 +151,87 @@ def assign_crowding_dist(individuals):
 
 
 # Function to be replaced in Pareto front class
-def update(front, population, prevNonDomPop):
-    nonDominatedInds = []
-    nDominated = nDominates = 0
+def update(front, population, prevLocalFront):
+    """Updates Pareto front with individuals from population and extracts dominance relationships of
+     previous local Pareto front and current local Pareto front"""
+    dominatedInds, dominatedHofers, currLocalFront = [], [], []
+
+    # Create list of indices of hall-of-famers in prevParetoFront
+    indPrevHofers = [i for i, hofer in enumerate(front) if hofer in prevLocalFront]
+
     for ind in population:
-        is_dominated = False
-        dominates_one = False
-        has_twin = False
-        to_remove = []
-        for i, hofer in enumerate(front):  # hofer = hall of famer
-            add = hofer in prevNonDomPop
-            if not dominates_one and hofer.fitness.dominates(ind.fitness):
-                is_dominated = True
-                if add:
-                    nDominated += 1
-                    prevNonDomPop.remove(hofer)
-                break
-            elif ind.fitness.dominates(hofer.fitness):
-                dominates_one = True
-                if add:
-                    nDominates += 1
-                to_remove.append(i)
-            elif ind.fitness == hofer.fitness and front.similar(ind, hofer):
-                has_twin = True
+        isDominated = False
+        dominatesOne = False
+        hasTwin = False
+        toRemove = []
+
+        # # First, check dominance with global Pareto front.
+        # # If individual is non-dominated by global front,
+        # # then check dominance with local Pareto front (next loop)
+        for i, hofer in enumerate(front):
+            if i in indPrevHofers:  # Check only for global Pareto front
+                continue
+
+            # If the hofer dominates the individual,
+            # and the individual does not dominate another hofer,
+            # then the individual is marked as dominated
+            if not dominatesOne and hofer.fitness.dominates(ind.fitness):
+                isDominated = True
                 break
 
-        for i in reversed(to_remove):  # Remove the dominated hofer
+            # Else if, the individual dominates a hofer,
+            # then the hofer needs to be removed
+            elif ind.fitness.dominates(hofer.fitness):
+                dominatesOne = True
+                toRemove.append(i)
+
+            # Else if, the fitness of both are similar, we have a twin
+            elif ind.fitness == hofer.fitness and front.similar(ind, hofer):
+                hasTwin = True
+                break
+
+        # Individual is non-dominated by GLOBAL Pareto front,
+        # hence, we add individual to current LOCAL Pareto front.
+        currLocalFront.append(ind)
+
+        # # Checking dominance with LOCAL Pareto front
+        # Boolean indicating that individual dominates at least one in LOCAL Pareto Front
+        dominatesOnePrev = False
+        for i, hofer in enumerate(front):
+            if i not in indPrevHofers:  # Check only for local Pareto front
+                continue
+
+            # If individual does not dominate at least one hofer
+            # in LOCAL Pareto front, and hofer dominates individual,
+            # then append to dominated individuals list.
+            if not dominatesOnePrev and hofer.fitness.dominates(ind.fitness):
+                dominatedInds.append(ind)
+
+                # If individual does not dominate at least one hofer
+                # in GLOBAL Pareto front, it is dominated
+                if not dominatesOne:
+                    isDominated = True
+                break
+
+            # Else if individual dominates hofer in LOCAL Pareto front,
+            # List hofer for removal and append to dominated hofers list,
+            # if not already in list
+            elif ind.fitness.dominates(hofer.fitness):
+                dominatesOnePrev = True
+                # If not in dominated hofers list, append hofer
+                if hofer not in dominatedHofers:
+                    dominatedHofers.append(hofer)
+                toRemove.append(i)
+            elif ind.fitness == hofer.fitness and front.similar(ind, hofer):
+                hasTwin = True
+                break
+
+        for i in sorted(toRemove, reverse=True):  # Remove the dominated hofer
             front.remove(i)
-        if not is_dominated and not has_twin:
-            nonDominatedInds.append(ind)
+        if not isDominated and not hasTwin:
             front.insert(ind)
 
-    return nonDominatedInds, nDominates, nDominated
+    return currLocalFront, len(dominatedHofers), len(dominatedInds)
 
 
 if __name__ == '__main__':
