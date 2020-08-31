@@ -2,6 +2,7 @@ output/
 data/
 thesis/
 DEME/
+api/
 api/routes_OUT/*
 api/start_end_IN/*
 bath_test.py

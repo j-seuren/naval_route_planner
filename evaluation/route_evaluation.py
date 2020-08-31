@@ -112,7 +112,7 @@ class Evaluator:
             lons, lats = self.geod.points(p1, p2, dist, self.segLengthC)
             edgeTT = 0.0
             for i in range(len(lons) - 1):
-                q1, q2 = sorted(((lons[i], lats[i]), (lons[i+1], lats[i+1])))
+                q1, q2 = (lons[i], lats[i]), (lons[i+1], lats[i+1])
                 currentTT = tt + edgeTT
                 segmentTT = self.seg_tt(q1, q2, boatSpeed, currentTT)
                 edgeTT += segmentTT
@@ -170,11 +170,11 @@ def calc_sog(bearing, Se, Sn, V):
     return Se * sinB + Sn * cosB + sqrt(V * V - (Se * cosB - Sn * sinB) ** 2)
 
 
-def geo_x_geos(treeDict, p1, p2=None, xExterior=False):
-    if p2:
-        geo = LineString([p1, p2])
-    else:
+def geo_x_geos(treeDict, p1, p2=None):
+    if p2 is None:
         geo = Point(p1)
+    else:
+        geo = LineString([p1, p2])
 
     # Return a list of all geometries in the R-tree whose extents
     # intersect the extent of geom
@@ -184,10 +184,9 @@ def geo_x_geos(treeDict, p1, p2=None, xExterior=False):
         for geom in extent_intersections:
             geomIdx = treeDict['indexByID'][id(geom)]
             prepGeom = treeDict['polys'][geomIdx]
-            if p2:
-                if prepGeom.intersects(geo):
-                    return True
-            elif prepGeom.contains(geo):
+            if p2 is None and prepGeom.contains(geo):
+                return True
+            elif prepGeom.intersects(geo):
                 return True
 
     return False

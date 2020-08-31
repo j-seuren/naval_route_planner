@@ -21,6 +21,8 @@
       <w>eulerian</w>
       <w>evals</w>
       <w>fairmaster</w>
+      <w>famer</w>
+      <w>famers</w>
       <w>fames</w>
       <w>folium</w>
       <w>geod</w>
@@ -34,10 +36,12 @@
       <w>hexa</w>
       <w>hexagraph</w>
       <w>hofer</w>
+      <w>hofers</w>
       <w>hofs</w>
       <w>ifremer</w>
       <w>impr</w>
       <w>inds</w>
+      <w>kalman</w>
       <w>laccadive</w>
       <w>lightgray</w>
       <w>lons</w>
@@ -61,6 +65,8 @@
       <w>paes</w>
       <w>passwd</w>
       <w>polys</w>
+      <w>posteriori</w>
+      <w>priori</w>
       <w>proj</w>
       <w>recomb</w>
       <w>recombinations</w>

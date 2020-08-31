@@ -2,12 +2,8 @@ import math
 import numpy as np
 import os
 import pandas
-import pickle
 
-from data_config import navigable_area
 from deap import tools
-from shapely.strtree import STRtree
-from shapely.prepared import prep
 
 
 class KwonsMethod:
@@ -102,7 +98,7 @@ class Vessel:
 
     def reduced_speed(self, boat_speed, BN, TWD, heading):
         return self.speed_reduction.reduced_speed(TWD, heading, BN, boat_speed)
-        
+
 
 def logbook():
     log = tools.Logbook()

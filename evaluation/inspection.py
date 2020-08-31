@@ -198,7 +198,7 @@ def plot_interactive_route(path, path_key, obj_key):
 
 if __name__ == "__main__":
     os.chdir('..')
-    _ID_dict = {'Cruisje naar Sydney': '21_21_46'}
+    _ID_dict = {'Cruisje naar Sydney': '14_04_29'}
 
     # _start_date = datetime.datetime(2016, 1, 1)
     _start_date = None
@@ -244,7 +244,7 @@ if __name__ == "__main__":
         best_inds = {}
         max_days = 0
         for _p, p_val in _result['fronts'].items():
-            best_inds[_p] = {}
+            best_inds[_p] = {'fuel': [], 'time': [], 'fit': []}
             for sp_key, _front in p_val.items():
                 # Get min time, min fuel and min fitness individuals
                 fit_values = np.asarray([_ind.fitness.values for _ind in _front])
@@ -253,15 +253,10 @@ if __name__ == "__main__":
                 fuel_ind = _front[np.argmin(fit_values[:, 1])]
                 fit_ind = _front[0]
 
-                # Append best individuals to list
-                if sp_key == 0:
-                    best_inds[_p]['fuel'] = [fuel_ind]
-                    best_inds[_p]['time'] = [time_ind]
-                    best_inds[_p]['fit'] = [fit_ind]
-                else:
-                    best_inds[_p]['fuel'].append(fuel_ind)
-                    best_inds[_p]['time'].append(time_ind)
-                    best_inds[_p]['fit'].append(fit_ind)
+                best_inds[_p]['fuel'].append(fuel_ind)
+                best_inds[_p]['time'].append(time_ind)
+                best_inds[_p]['fit'].append(fit_ind)
+
 
                 # Get max days
                 max_days = math.ceil(max(max_days, max(
