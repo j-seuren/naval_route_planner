@@ -2,7 +2,6 @@ from data_config import hexagraph
 import heapq
 import itertools
 import networkx as nx
-import os
 import random
 
 from haversine import haversine
@@ -12,16 +11,16 @@ from math import cos, sin
 class Initializer:
     def __init__(self,
                  vessel,
-                 res,
                  tree,
                  ecaTree,
                  toolbox,
                  geod,
+                 parameters,
                  container,
                  dens=6,
                  varDens=4):
         self.vessel = vessel          # Vessel class
-        self.res = res                # Resolution of shorelines
+        self.res = parameters['res']  # Resolution of shorelines
         self.tree = tree              # R-tree spatial index for shorelines
         self.ecaTree = ecaTree        # R-tree spatial index for ECAs
         self.toolbox = toolbox        # Function toolbox
@@ -29,32 +28,11 @@ class Initializer:
         self.container = container    # Container for individual
         self.dens = dens              # Density recursion number, graph
         self.varDens = varDens        # Variable density recursion number, graph
-
-        # Load or build graph
-        graphDir = 'output/variable_density_geodesic_grids/'
-        graphFN = 'res_{}_d{}_vd{}.gpickle'.format(self.res,
-                                                   self.dens,
-                                                   self.varDens)
-        try:
-            self.G = nx.read_gpickle(os.path.join(graphDir, graphFN))
-        except FileNotFoundError:
-            # Initialize "Hexagraph"
-            hexGraph = hexagraph.Hexagraph(dens,
-                                           varDens,
-                                           res,
-                                           tree,
-                                           ecaTree)
-            self.G = hexGraph.graph
-
         self.canals = {'Panama': ['panama_south', 'panama_north'],
                        'Suez': ['suez_south', 'suez_north']}
-        self.canalNodes = [n for val in self.canals.values() for n in val]
+        self.hexagraph = hexagraph.Hexagraph(self.tree, self.ecaTree, parameters)
 
-    def dist_heuristic(self, n1, n2):
-        return self.geod.distance(self.G.nodes[n1]['deg'],
-                                  self.G.nodes[n2]['deg'])
-
-    def get_path(self):
+    def get_path(self, graph):
         """
         Calculate shortest path from 'start' to 'end' on self.G
         Returns:
@@ -62,13 +40,19 @@ class Initializer:
              x_cpairs: list of tuples of crossed canal nodes
                        in order of crossing
         """
+
+        def dist_heuristic(n1, n2):
+            return self.geod.distance(graph.nodes[n1]['deg'], graph.nodes[n2]['deg'])
+
         # Compute time shortest path on graph from 'start' to 'end'
-        timePath = nx.astar_path(self.G, 'start', 'end',
-                                 heuristic=self.dist_heuristic,
-                                 weight='miles')
+        timePath = nx.astar_path(graph, 'start', 'end', heuristic=dist_heuristic, weight='miles')
 
         # Get crossed canal nodes in path
-        xCanalNodes = [wp for wp in timePath if wp in self.canalNodes]
+        canalNodes = [n for val in self.canals.values() for n in val]
+        xCanalNodes = [wp for wp in timePath if wp in canalNodes]
+
+        canalNodeDict = {canalNodes[0]: canal for canal, canalNodes in self.canals.items()}
+        xCanals = [canalNodeDict[xCanalNode] for xCanalNode in xCanalNodes if xCanalNode in canalNodeDict]
 
         if xCanalNodes:
             print('Crossing canals {}'.format(xCanalNodes), end='\n ')
@@ -84,18 +68,14 @@ class Initializer:
             for k in path:
                 start = path[k]['time'][0]
                 end = path[k]['time'][-1]
-                path[k]['eca'] = nx.astar_path(self.G, start, end,
-                                               heuristic=self.dist_heuristic,
-                                               weight='eca_weight')
+                path[k]['eca'] = nx.astar_path(graph, start, end, heuristic=dist_heuristic, weight='eca_weight')
         else:
             path = {0: {'time': timePath,
-                        'eca': nx.astar_path(self.G, 'start', 'end',
-                                             heuristic=self.dist_heuristic,
-                                             weight='eca_weight')
+                        'eca': nx.astar_path(graph, 'start', 'end', heuristic=dist_heuristic, weight='eca_weight')
                         }
                     }
 
-        return path, list(zip(xCanalNodes[::2], xCanalNodes[1::2]))
+        return path, list(zip(xCanalNodes[::2], xCanalNodes[1::2])), xCanals
 
     def get_initial_paths(self, start, end):
         """
@@ -105,66 +85,83 @@ class Initializer:
         Return dictionary of initial paths.
         """
 
+        graph = self.hexagraph.get_graph()
+
         # Add start and end nodes to graph, and create edges to three nearest nodes.
         points = {'start': start, 'end': end}
-        for ptKey, pt in points.items():
-            # Compute distances to pt location
-            d = {n: haversine(pt, nDeg, unit='nmi') for n, nDeg in nx.get_node_attributes(self.G, 'deg').items()}
+        for ptKey, endPoint in points.items():
+            # Compute distances of points in neighborhood to pt location
+            neighborhood = {n: d['deg'] for n, d in graph.nodes(data=True)
+                            if abs(d['deg'][0] - endPoint[0]) < 1 and abs(d['deg'][1] - endPoint[1]) < 1}
+            assert len(neighborhood) > 0, 'No nearest graph point found for {} location {}'.format(ptKey, endPoint)
+            d = {n: haversine(endPoint, nDeg, unit='nmi') for n, nDeg in neighborhood.items()}
 
             # Add pt node to graph
-            lon, lat = pt
+            lon, lat = endPoint
             x, y, z = cos(lon) * cos(lat), sin(lon) * cos(lat), sin(lat)
 
-            self.G.add_node(ptKey, deg=pt, xyz=(x, y, z))
+            graph.add_node(ptKey, deg=endPoint, xyz=(x, y, z))
 
             # Add three shortest edges to  point
             # after checking feasibility
-            nrEdges = 0
-            distsToPt = iter(heapq.nsmallest(10, d, key=d.get))
-            while nrEdges < 3:
-                n = next(distsToPt)
-                neighbour = self.G.nodes[n]['deg']
-                if self.toolbox.e_feasible(pt, neighbour):
+            nrEdges = infEdge = 0
+            distsToPtList = heapq.nsmallest(100, d, key=d.get)
+            distsToPt = iter(distsToPtList)
+            nearestNeighbor = distsToPtList[0]
+            while nrEdges < 3 and infEdge < 6:
+                try:
+                    n = next(distsToPt)
+                except StopIteration:
+                    print('Too few points in neighborhood')
+                    break
+                neighbor = graph.nodes[n]['deg']
+                if self.toolbox.e_feasible(endPoint, neighbor):
                     nrEdges += 1
-                    self.G.add_edge(ptKey, n, miles=d[n])
+                    graph.add_edge(ptKey, n, miles=d[n])
                 else:
-                    print('Shortest edge to {} not feasible'.format(ptKey))
+                    infEdge += 1
+
+            # If no feasible nearest edges, set nearest neighbor as start/end location
+            if nrEdges == 0:
+                print('No feasible shortest edges to {} location'.format(ptKey))
+                graph.nodes[ptKey]['deg'] = tuple(x+.00001 for x in graph.nodes[nearestNeighbor]['deg'])
+                graph.add_edge(ptKey, nearestNeighbor, miles=0)
 
         # Get shortest path on graph, and node pairs of crossed canals in order of crossing
-        path, xCanalPairs = self.get_path()
-        paths = {0: path}
+        route, xCanalPairs, xCanals = self.get_path(graph)
+        routes = {0: {'path': route, 'xCanals': xCanals}}
         if xCanalPairs:
             # Calculate route combinations
             routeCombs = itertools.product(*[(True, False)] * len(xCanalPairs))
-            pathKey = 0
+            rKey = 0
+            print(list(routeCombs))
             for routeComb in routeCombs:
                 # Get list of canal pairs to be removed from graph
                 delCanals = [c for i, c in enumerate(xCanalPairs) if routeComb[i]]
-                self.G.remove_edges_from(delCanals)
-                alterPath, _ = self.get_path()
-                self.G.add_edges_from(delCanals)
-                if alterPath not in paths.values():
-                    pathKey += 1
-                    paths[pathKey] = alterPath
+                graph.remove_edges_from(delCanals)
+                alterPath, _, xCanals = self.get_path(graph)
+                graph.add_edges_from(delCanals)
+
+                paths = [route['path'] for route in routes.values()]
+                if alterPath not in paths:
+                    rKey += 1
+                    routes[rKey] = {'path': alterPath, 'xCanals': xCanals}
 
         # Create individual of each sub path
-        initInds = {}
-        for pathKey, path in paths.items():
-            initInds[pathKey] = {}
-            for spKey, subPath in path.items():
-                initInds[pathKey][spKey] = {}
+        initialRoutes = {}
+        for rKey, route in routes.items():
+            initialRoutes[rKey] = {'xCanals': route['xCanals'], 'path': {}}
+            for spKey, subPath in route['path'].items():
+                initialRoutes[rKey]['path'][spKey] = {}
                 for objKey, objPath in subPath.items():
-                    wps = [self.G.nodes[n]['deg'] for n in objPath]
-
                     # Set initial boat speed to max boat speed
+                    wps = [graph.nodes[n]['deg'] for n in objPath]
                     speeds = [self.vessel.speeds[0]] * (len(objPath)-1) + [None]
+
                     ind = [list(tup) for tup in zip(wps, speeds)]
-                    initInds[pathKey][spKey][objKey] = self.container(ind)
+                    initialRoutes[rKey]['path'][spKey][objKey] = self.container(ind)
 
-        # Delete graph from memory
-        del self.G
-
-        return initInds
+        return initialRoutes
 
 
 def init_individual(toolbox, indsIn, i):  # swaps: ['speed', 'insert', 'move', 'delete']
