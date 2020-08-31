@@ -58,9 +58,9 @@ class Operators:
         k = round(np.asscalar(np.random.gamma(self.shape, scale, 1)), 0)
         while not 0 < k <= maxK:
             k = round(np.asscalar(np.random.gamma(self.shape, scale, 1)), 0)
-        e = random.sample(range(maxK), k=int(k))
-        for e in sorted(e, reverse=True):
-            p1Tup, p2Tup = ind[e][0], ind[e+1][0]
+        edges = random.sample(range(maxK), k=int(k))
+        for i in sorted(edges, reverse=True):
+            p1Tup, p2Tup = ind[i][0], ind[i+1][0]
             p1, p2 = np.asarray(p1Tup), np.asarray(p2Tup)
             ctr = (p1 + p2) / 2  # Edge centre
             width = np.linalg.norm(p1 - p2)  # Ellipse width
@@ -110,38 +110,37 @@ class Operators:
 
                 if initializing:
                     if self.tb.e_feasible(p1Tup, newWP) and self.tb.e_feasible(newWP, p2Tup):
-                        ind.insert(e+1, [newWP, ind[e][1]])
+                        ind.insert(i+1, [newWP, ind[i][1]])
                         return
                     else:
                         trials += 1
                 else:
-                    ind.insert(e+1, [newWP, ind[e][1]])
+                    ind.insert(i+1, [newWP, ind[i][1]])
                     return
             print('insert trials exceeded')
 
     def move_wp(self, ind, initializing=False, indpb=0.2, gauss=False):
         for i in range(1, len(ind)-1):
             if random.random() < indpb:
-                wp = np.asarray(ind[i][0])
+                p = np.asarray(ind[i][0])
                 trials = 0
                 while True:
                     if gauss:
-                        x, y = np.random.multivariate_normal(wp, self.cov, 1).squeeze().T
+                        x, y = np.random.multivariate_normal(p, self.cov, 1).squeeze().T
                     else:
                         # Pick random location within a radius from the current waypoint
                         # Square root ensures a uniform distribution inside the circle.
                         r = self.radius * sqrt(random.random())
                         phi = random.random() * 2 * pi
-                        x, y = wp + r * np.array([cos(phi), sin(phi)])
+                        x, y = p + r * np.array([cos(phi), sin(phi)])
 
                     x -= np.int(x / 180) * 360
                     y = np.clip(y, -89.9, 89.9)
                     newWP = (x, y)
 
                     # Ensure feasibility during initialization
-                    if initializing and (
-                            not self.tb.e_feasible(ind[i - 1][0], newWP) or
-                            not self.tb.e_feasible(newWP, ind[i + 1][0])):
+                    if initializing and (not self.tb.e_feasible(ind[i-1][0], newWP) or
+                                         not self.tb.e_feasible(newWP, ind[i+1][0])):
                         trials += 1
                         if trials > 100:
                             print('move trials exceeded', end='\n ')
@@ -180,18 +179,16 @@ class Operators:
         k = random.randrange(1, size)
         i = random.randrange(size-k)
         assert i+k < size
-        avgCurrentSpeed = sum([entry[1] for entry in ind[i:i+k]]) / k
-        newSpeed = random.choice([s for s in self.vessel.speeds
-                                   if s != avgCurrentSpeed])
-        for e in ind[i:i+k]:
-            e[1] = newSpeed
+        avgCurrentSpeed = sum([wp[1] for wp in ind[i:i+k]]) / k
+        newSpeed = random.choice([s for s in self.vessel.speeds if s != avgCurrentSpeed])
+        for wp in ind[i:i+k]:
+            wp[1] = newSpeed
 
     def cx_one_point(self, ind1, ind2):
         if min(len(ind1), len(ind2)) > 2:
             # Get waypoints of ind1 and ind2
-            ps1 = [row[0] for row in ind1]
-            ps2 = [row[0] for row in ind2]
-            p2Array = np.asarray(ps2)
+            ps1 = np.array([row[0] for row in ind1])
+            ps2 = np.array([row[0] for row in ind2])
 
             # Shuffled list of indexes of ind1, excluding start and end
             c1s = random.sample(range(1, len(ind1)-1), k=len(ind1)-2)
@@ -200,9 +197,8 @@ class Operators:
                 tr += 1
                 c1 = c1s.pop()
                 # Calculate distance between c1 and each point of ind2
-                p1cArray = np.asarray(ps1[c1]).reshape(1, -1)
-                distances = distance.cdist(p1cArray, p2Array,
-                                           metric=self.geod.distance)
+                p1 = np.asarray(ps1[c1]).reshape(1, -1)
+                distances = distance.cdist(p1, ps2, metric=self.geod.great_circle)
 
                 # Indices of ind2 that would sort distances
                 c2s = distances.argsort()
@@ -214,53 +210,18 @@ class Operators:
                 for i in range(min(3, len(ind2)-2)):
                     c2 = c2s[i]
 
-                    # Discard c2 if consecutive duplicate waypoints exist in children
-                    if ps2[c2-1] == ps1[c1] or ps1[c1-1] == ps2[c2]:
+                    # If new edges not feasible, discard c2
+                    e1p1, e1p2 = tuple(ps2[c2-1]), tuple(ps1[c1])
+                    e2p1, e2p2 = tuple(ps1[c1-1]), tuple(ps2[c2])
+                    if e1p1 == e1p2 or e2p1 == e2p2 or not (self.tb.e_feasible(e1p1, e1p2) and
+                                                            self.tb.e_feasible(e2p1, e2p2)):
                         continue
-
-                    # Check feasibility
-                    newInd1Feasible = self.tb.e_feasible(ps1[c1-1], ps2[c2])
-                    newInd2Feasible = self.tb.e_feasible(ps2[c2-1], ps1[c1])
-                    if newInd1Feasible and newInd2Feasible:
+                    else:
                         ind1[c1:], ind2[c2:] = ind2[c2:], ind1[c1:]
-                    else:  # If new edges not feasible, discard c2
-                        continue
                     assert len(ind1) > 2 and len(ind2) > 2, 'crossover children length < 3'
                     del ind1.fitness.values
                     del ind2.fitness.values
                     return ind1, ind2
-        else:
-            print('skipped crossover', end='\n ')
-        return ind1, ind2
-
-    def cx_one_point_old(self, ind1, ind2):
-        size = min(len(ind1), len(ind2))
-        if size > 2:
-            trials1 = 0
-            while trials1 < 100:
-                cxPt1, cxPt2 = random.randrange(1, size-1), random.randrange(1, size-1)
-
-                # Draw again if consecutive duplicate waypoints exist in children
-                trials2 = 0
-                while ind2[cxPt2-1][0] == ind1[cxPt1][0] or ind1[cxPt1-1][0] == ind2[cxPt2][0]:
-                    cxPt1, cxPt2 = random.randrange(1, size-1), random.randrange(1, size-1)
-                    trials2 += 1
-                    if trials2 > 100:
-                        print('exceeded crossover trials2', end='\n ')
-                        return ind1, ind2
-
-                # Check feasibility
-                newInd1Feasible = self.tb.e_feasible(ind1[cxPt1-1][0], ind2[cxPt2][0])
-                newInd2Feasible = self.tb.e_feasible(ind2[cxPt2-1][0], ind1[cxPt1][0])
-                if newInd1Feasible and newInd2Feasible:
-                    ind1[cxPt1:], ind2[cxPt2:] = ind2[cxPt2:], ind1[cxPt1:]
-                else:
-                    trials1 += 1
-                    continue
-                assert len(ind1) > 2 and len(ind2) > 2, 'crossover children length < 3'
-                return ind1, ind2
-
-            print('exceeded crossover trials1', end='\n ')
         else:
             print('skipped crossover', end='\n ')
         return ind1, ind2
