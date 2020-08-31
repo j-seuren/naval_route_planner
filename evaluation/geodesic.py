@@ -38,15 +38,10 @@ class Geodesic:
                 "No distance calculation method specified."
                 " Choose 'ellipsoidal', 'rhumb_line', or 'great_circle'.")
 
-    def total_distance(self, waypoints):
-        edges = zip(waypoints[:-1], waypoints[1:])
-        distance = 0
-        for edge in edges:
-            distance += self.distance(edge[0], edge[1])
+    def total_distance(self, ind):
+        return sum([self.distance(wp1[0], wp2[0]) for wp1, wp2 in zip(ind[:-1], ind[1:])])
 
-        return distance
-
-    @np_cache
+    @lru_cache(maxsize=None)
     def ellipsoidal(self, p1, p2):
         """
             Get ellipsoidal distance from the longitude-latitude
@@ -58,7 +53,7 @@ class Geodesic:
 
         return dist / 1852.0  # To nautical miles
 
-    @np_cache
+    @lru_cache(maxsize=None)
     def rhumb_line(self, p1, p2):
         """
             Get rhumb line distance from the longitude-latitude
