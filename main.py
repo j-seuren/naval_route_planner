@@ -13,7 +13,7 @@ from copy import deepcopy
 from datetime import datetime
 from data_config.navigable_area import NavigableAreaGenerator
 from deap import base, creator, tools, algorithms
-from evaluation import route_evaluation, geodesic
+from evaluation import evaluation, geodesic
 from operations import Operators
 from os import listdir
 from pathlib import Path
@@ -26,17 +26,17 @@ class RoutePlanner:
                  ecaFactor=1.2,
                  fuelPrice=0.3,
                  inputParameters=None,
-                 objectives=None):
-        if objectives is None:
-            objectives = ['minTime', 'minFuel']
-        if 'minTime' in objectives and 'minFuel' in objectives:
+                 criteria=None):
+        if criteria is None:
+            criteria = {'minimalTime': True, 'minimalCost': True}
+        if criteria['minimalTime'] and criteria['minimalCost']:
             weights = (-5, -1)
-        elif 'minTime' in objectives or 'minFuel' in objectives:
+        elif criteria['minimalTime'] or criteria['minimalCost']:
             weights = (-1, )
         else:
-            raise Exception('Specify at least one objective to minimize')
+            raise Exception('Specify at least one criterion to minimize')
 
-        self.objectives = objectives
+        self.criteria = criteria
 
         defaultParameters = {'avoidAntarctic': True,
                              'avoidArctic': True,
@@ -73,7 +73,7 @@ class RoutePlanner:
         creator.create("Individual", list, fitness=creator.FitnessMin)
 
         self.tb = base.Toolbox()                # Function toolbox
-        self.vessel = support.Vessel(vesselName)  # Vessel class instance
+        self.vessel = evaluation.Vessel(vesselName)  # Vessel class instance
         self.ecaFactor = ecaFactor              # Multiplication factor ECA fuel
         self.fuelPrice = fuelPrice              # Fuel price [1000 dollars / mt]
         self.geod = geodesic.Geodesic()         # Geodesic class instance
@@ -111,13 +111,13 @@ class RoutePlanner:
                 self.initialPaths.append(pickle.load(file))
 
         # Initialize "Evaluator" and register it's functions
-        self.evaluator = route_evaluation.Evaluator(self.vessel,
-                                                    self.treeDict,
-                                                    self.ecaTreeDict,
-                                                    ecaFactor,
-                                                    self.fuelPrice,
-                                                    self.geod,
-                                                    'minTime' not in objectives)
+        self.evaluator = evaluation.Evaluator(self.vessel,
+                                              self.treeDict,
+                                              self.ecaTreeDict,
+                                              ecaFactor,
+                                              self.fuelPrice,
+                                              self.geod,
+                                              not criteria['minimalTime'])
         self.tb.register("e_feasible", self.evaluator.e_feasible)
         self.tb.register("feasible", self.evaluator.feasible)
         self.tb.register("evaluate", self.evaluator.evaluate)
@@ -743,9 +743,23 @@ class RoutePlanner:
 
         return False
 
+    def create_route_response(self, obj, bestWeighted, wps, objValue, fitValue, xCanals):
+        return {'optimizationCriterion': obj,
+                'bestWeighted': bestWeighted[obj],
+                'distance': round(self.geod.total_distance(wps), 2),
+                'fuelCost': round(objValue[1], 0),
+                'travelTime': round(objValue[0], 2),
+                'fitValues': fitValue.tolist(),
+                'waypoints': [{'lon': wp[0][0],
+                               'lat': wp[0][1],
+                               'speed': wp[1]} for wp in wps],
+                'crossedCanals': xCanals}
+
     def post_process(self, result, ID=None):
-        objKeys = self.objectives + ['bestWeighted']
-        processedResults = {'paths': [],
+        nFits = len([included for included in self.criteria.values() if included])
+        objKeys = [obj for obj, included in self.criteria.items() if included]
+        objIndices = {'minimalTime': 0, 'minimalCost': 1}
+        processedResults = {'routes': [],
                             'units': {'travelTime': 'days',
                                       'fuelCost': 'euros',
                                       'distance': 'nautical miles'}}
@@ -755,61 +769,67 @@ class RoutePlanner:
         # Get minimum fuel route and minimum time route for each path
         # Then create output dictionary
         for pathKey, path in result['fronts'].items():
-            # Initialize dictionaries
-            pathResult = {'crossedCanals': result['initialRoutes'][pathKey]['xCanals']}
-            bestInds = {key: [] for key in objKeys}
-            bestFitInds = {key: [] for key in objKeys}
-            objValue = {obj: np.zeros(2) for obj in objKeys}
-            fitValue = {obj: np.zeros(2) for obj in objKeys}
-            route = {obj: [] for obj in objKeys}
+            bestWeighted = {'bestWeighted': True}
+            xCanals = result['initialRoutes'][pathKey]['xCanals']
 
-            # A path is split into sub paths by canals, hence, we merge the sub path results
-            for frontKey, subFront in path.items():
+            # Get bestWeighted route
+            wps, bestWeightedObjValue, fitValue = [], np.zeros(2), np.zeros(nFits)
+            for spKey, subPath in path.items():
+                ind = subPath[0]
+                bestWeightedObjValue += self.tb.evaluate(ind, revert=False)
+                fitValue += ind.fitness.values
+                wps.extend(ind)
 
-                # Evaluate fuel and time for each individual in front
-                # NB: Using same parameter settings for Evaluator as in optimization
-                indObjVal = np.asarray([self.tb.evaluate(ind) for ind in subFront])
-                indFitVal = np.asarray([ind.fitness.values for ind in subFront])
-                if self.evaluator.revertOutput:
-                    indObjVal = indObjVal[:, [1, 0]]
+            bestWeightedResponse = self.create_route_response('bestWeighted',
+                                                              bestWeighted,
+                                                              wps,
+                                                              bestWeightedObjValue,
+                                                              fitValue,
+                                                              xCanals)
 
-                for i, obj in enumerate(objKeys):
-                    # Get best individual according to objective (obj)
-                    if obj == 'bestWeighted':
-                        minIdx = minFitIdx = 0
-                    else:
-                        minIdx, minFitIdx = np.argmin(indObjVal[:, i]), np.argmin(indFitVal[:, i])
-                    bestInd, bestFitInd = subFront[minIdx], subFront[minFitIdx]
-                    bestInds[obj].append(bestInd)
-                    bestFitInds[obj].append(bestFitInd)
-
-                    objValue[obj] += indObjVal[minIdx, :]
-                    fitValue[obj] += indFitVal[minIdx, :]
-
-                    route[obj].extend([wp for wp in bestInd])
-
-            substituteBestWeighted = False
             for obj in objKeys:
-                # Check whether 'best weighted' route is equal to other best individuals
-                if obj != 'bestWeighted' and np.array_equal(objValue[obj], objValue['bestWeighted']):
-                    print("Substituted 'best weighted' route with the '{}' route".format(obj))
-                    substituteBestWeighted = obj
+                i = objIndices[obj]
 
-                # If 'best weighted' route is equal to other best routes, create reference
-                if obj == 'bestWeighted' and substituteBestWeighted:
-                    routeResponse = obj
+                # Initialize lists and arrays
+                wps, objValue, fitValue = [], np.zeros(2), np.zeros(nFits)
+
+                # A path is split into sub paths by canals, so we merge the sub path results
+                for spKey, subPath in path.items():
+                    # Evaluate fuel and time for each individual in front
+                    # NB: Using same parameter settings for Evaluator as in optimization
+                    subObjValues = np.asarray([self.tb.evaluate(ind, revert=False) for ind in subPath])
+
+                    # Get best individual
+                    idx = np.argmin(subObjValues[:, i])
+                    ind = subPath[idx]
+                    wps.extend(ind)
+                    objValue += subObjValues[idx]
+                    fitValue += ind.fitness.values
+
+                # Check whether 'best weighted' route is equal to other best routes
+                if np.array_equal(objValue, bestWeightedObjValue):
+                    print("'{}' is best weighted route".format(obj))
+                    bestWeighted[obj] = True
+                    bestWeighted['bestWeighted'] = False
                 else:
-                    print(pathKey, objValue[obj])
-                    routeResponse = {'fuelCost': objValue[obj][1],
-                                     'travelTime': objValue[obj][0],
-                                     'fitValues': fitValue[obj],
-                                     'distance': self.geod.total_distance(route[obj]),
-                                     'waypoints': [{'lon': wp[0][0], 'lat': wp[0][1], 'speed': wp[1]}
-                                                   for i, wp in enumerate(route[obj])]}
+                    bestWeighted[obj] = False
 
-                pathResult[obj] = routeResponse
+                routeResponse = {'optimizationCriterion': obj,
+                                 'bestWeighted': bestWeighted[obj],
+                                 'distance': round(self.geod.total_distance(wps), 2),
+                                 'fuelCost': round(objValue[1], 0),
+                                 'travelTime': round(objValue[0], 2),
+                                 'fitValues': fitValue.tolist(),
+                                 'waypoints': [{'lon': wp[0][0],
+                                                'lat': wp[0][1],
+                                                'speed': wp[1]} for i, wp in enumerate(wps)],
+                                 'crossedCanals': xCanals}
 
-            processedResults['paths'].append(pathResult)
+                processedResults['routes'].append(routeResponse)
+
+            # If 'best weighted' route is not equal to other best routes, append its response
+            if bestWeighted['bestWeighted']:
+                processedResults['routes'].append(bestWeightedResponse)
 
         return processedResults
 
@@ -830,26 +850,24 @@ if __name__ == "__main__":
     # Gulf of Bothnia, Gulf of Mexico
     # _start, _end = (20.89, 58.46), (-85.06, 29.18)
     # North UK, South UK
-    # _start, _end = (3.3, 60), (-7.5, 47)
+    # _startEnd = ((3.3, 60), (-7.5, 47))
     # Sri Lanka, Yemen
     # _start, _end = (78, 5), (49, 12)
     # # Rotterdam, Tokyo
     # _start, _end = (3.79, 51.98), (139.53, 34.95)
-    # Rotterdam, Tokyo
-    # _start, _end = (3.79, 51.98), (151, -34)
+    # Rotterdam, Houston
+    _startEnd = ((3.79, 51.98), (-94.687, 29.218))
 
-    _startEnd = ((5.077, 54.376), (103.571, 1.298))
-
-    parameters = {'gen': 100,  # Number of generations
+    parameters = {'gen': 2,  # Number of generations
                   'graphDens': 8,
                   'graphVarDens': 2,
                   'n': 50}    # Population size
 
-    planner = RoutePlanner(inputParameters=parameters)
+    planner = RoutePlanner(inputParameters=parameters, criteria={'minimalTime': True, 'minimalCost': True})
     _results = planner.compute(_startEnd,
-                               startDate=datetime(2020, 8, 16),
+                               startDate=datetime(2019, 3, 1),
                                inclCurr=False,
-                               inclWeather=False,
+                               inclWeather=True,
                                seed=1)
 
     pp = pprint.PrettyPrinter(depth=6)
