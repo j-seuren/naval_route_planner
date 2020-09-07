@@ -2,6 +2,7 @@ from data_config import ocean_current_data, weather_data
 import math
 import matplotlib.pyplot as plt
 import numpy as np
+import support
 
 from dask.cache import Cache
 from functools import lru_cache
@@ -63,27 +64,27 @@ def plot_current_field(uin, vin, lons, lats):
 
 
 class WeatherOperator:
-    def __init__(self, tStart, nDays):
-        self.tStart = tStart.replace(second=0, microsecond=0, minute=0, hour=0)
+    def __init__(self, startDate, nDays):
+        self.startDate = startDate.replace(second=0, microsecond=0, minute=0, hour=0)
         assert nDays * 8 < 384, 'Estimated travel days exceeds weather forecast period'
 
         # Initialize CurrentDataRetriever class instance
-        retriever = weather_data.WeatherDataRetriever(self.tStart)
-        self.ds = retriever.get_ds()
+        retriever = weather_data.WeatherDataRetriever(startDate=self.startDate, nDays=nDays)
+        self.da = retriever.get_ds(historical=True).to_array().data
 
         cache = Cache(2e9)  # Leverage two gigabytes of memory
         cache.register()  # Turn cache on globally
+        self.lons = np.linspace(-180, 179.5, 720)
+        self.lats = np.linspace(90, -90, 360)
 
     @lru_cache(maxsize=None)
     def get_grid_pt_wind(self, time, lon, lat):
-        lon, lat = round(lon), round(lat)
-        lon_idx = int(lon + 180)
-        lat_idx = int(90 - lat)
-        delta = time - self.tStart
-        step_idx = delta.seconds // 3600 // 3
-        vals = self.ds.isel(step=step_idx, latitude=lat_idx, longitude=lon_idx).load()
-        BN = int(vals['BN'])
-        windDir = float(vals['windDir'])
+        lon_idx = int(round((lon + 180) / 0.5))
+        lat_idx = int(round(-(lat - 90) / 0.5))
+        step_idx = (time - self.startDate).seconds // 3600 // 3
+        vals = self.da[:, step_idx, lat_idx, lon_idx]
+        BN = vals[0]
+        windDir = vals[1]
 
         if math.isnan(BN) or math.isnan(windDir):
             BN, windDir = 0, 0.0
