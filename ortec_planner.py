@@ -66,7 +66,8 @@ class OrtecPlanner:
 
     def plot_graph(self):
         fig, ax = plt.subplots()
-        m = Basemap(projection='merc', llcrnrlon=-180, llcrnrlat=-80, urcrnrlon=180, urcrnrlat=80, resolution='l', ax=ax)
+        m = Basemap(projection='merc', llcrnrlon=-180, llcrnrlat=-80, urcrnrlon=180, urcrnrlat=80, resolution='l',
+                    ax=ax)
         m.drawcoastlines()
         m.fillcontinents(alpha=0.5)
         pos = nx.get_node_attributes(self.graph, 'pos')
@@ -90,4 +91,3 @@ if __name__ == '__main__':
     print(len(sorted_cc))
 
     plt.show()
-

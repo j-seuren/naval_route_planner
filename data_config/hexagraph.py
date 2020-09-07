@@ -7,7 +7,7 @@ import sys
 
 from copy import deepcopy
 from data_config.navigable_area import NavigableAreaGenerator
-from evaluation.route_evaluation import geo_x_geos
+from evaluation.evaluation import geo_x_geos
 from evaluation.geodesic import Geodesic
 from mpl_toolkits.mplot3d import Axes3D
 from math import atan2, degrees, sqrt, radians, cos, sin

@@ -1,10 +1,13 @@
 import numpy as np
 import operator
+import os
+import pandas as pd
+import support
 import weather
 
 from datetime import timedelta
 from functools import lru_cache
-from math import cos, sin, tan, atan2, sqrt, log, pi, copysign
+from math import cos, sin, tan, atan2, sqrt, log, pi, copysign, degrees, pow
 from shapely.geometry import LineString, Point
 
 
@@ -16,7 +19,7 @@ class Evaluator:
                  ecaFactor,
                  fuelPrice,
                  geod,
-                 minTime,
+                 revertOutput,
                  startDate=None,
                  segLengthF=100,
                  segLengthC=15):
@@ -33,7 +36,7 @@ class Evaluator:
         self.fuelPrice = fuelPrice
         self.inclWeather = None
         self.inclCurrent = None
-        self.revertOutput = not minTime
+        self.revertOutput = revertOutput
 
     def set_classes(self, inclCurr, inclWeather, startDate, nDays):
         self.inclWeather = inclWeather
@@ -43,7 +46,13 @@ class Evaluator:
         if inclWeather:
             self.weatherOperator = weather.WeatherOperator(startDate, nDays)
 
-    def evaluate(self, ind):
+    def evaluate(self, ind, revert=None):
+        if revert is None:
+            revert = self.revertOutput
+
+        if not self.feasible(ind):
+            return 1e+20, 1e+20
+
         # Initialize variables
         TT = FC = 0.0
 
@@ -66,7 +75,7 @@ class Evaluator:
             TT += edgeTT
             FC += edgeFC
 
-        if self.revertOutput:
+        if revert:
             return FC, TT
         return TT, FC
 
@@ -127,25 +136,114 @@ class Evaluator:
         # Coordinates of middle point of edge
         lon, lat = (item / 2 for item in map(operator.add, p1, p2))
 
-        bearing = calc_bearing(p1, p2)
+        bearing_rad = calc_bearing(p1, p2)
 
         if self.inclWeather:
             # Beaufort number (BN) and true wind direction (TWD) at (lon, lat)
-            BN, TWD = self.weatherOperator.get_grid_pt_wind(now, lon, lat)
-            heading = bearing
-            boatSpeed = self.vessel.reduced_speed(boatSpeed, BN, TWD, heading)
+            BN, windDir = self.weatherOperator.get_grid_pt_wind(now, lon, lat)
+            heading = degrees(bearing_rad)
+            boatSpeed = self.vessel.reduced_speed(windDir, heading, BN, boatSpeed)
         if self.inclCurrent:
             # Easting and Northing currents at (lon, lat)
             u, v = self.currentOperator.get_grid_pt_current(now, lon, lat)
 
             # Calculate speed over ground
-            sog = calc_sog(bearing, u, v, boatSpeed)
+            sog = calc_sog(bearing_rad, u, v, boatSpeed)
         else:
             sog = boatSpeed
         return dist / sog
 
 
+class Vessel:
+    def __init__(self, name='Fairmaster', shipLoading='normal'):
+        self.name = name
+        vesselTableFP = os.path.abspath('data/speed_table.xlsx')
+        vesselTable = pd.read_excel(vesselTableFP, sheet_name=self.name)
+        self.speeds = [round(speed, 1) for speed in vesselTable['Speed']]
+        self.fuel_rates = {speed: round(vesselTable['Fuel'][i], 1) for i, speed in enumerate(self.speeds)}
+
+        # Set parameters for ship speed reduction calculations
+        Lpp = 320  # Ship length between perpendiculars [m]
+        B = 58  # Ship breadth [m]
+        D = 20.8  # Ship draft [m]
+        vol = 312622  # Displaced volume [m^3]
+        blockCoefficient = vol / (Lpp * B * D)  # Block coefficient
+        self.speed_reduction = SemiEmpiricalSpeedReduction(blockCoefficient, shipLoading, Lpp, vol)
+
+    def reduced_speed(self, windDir, heading, BN, boatSpeed):
+        return self.speed_reduction.reduced_speed(windDir, heading, BN, boatSpeed)
+
+
+class SemiEmpiricalSpeedReduction:
+    """Based on Kwon's method for calculating the reduction of ship speed as a function of wind direction and speed.
+    Kwon, Y.J., 2008. Speed loss due to added resistance in wind and waves """
+
+    def __init__(self, block, shipLoading, Lpp, volume):
+        self.g = 9.81  # gravitational acceleration [m/s^2]
+        self.Lpp = Lpp  # Length between perpendiculars [m]
+        self.vol = volume  # Displaced volume [m^3]
+
+        coefficientTableFP = 'data/kwons_method_coefficient_tables.xlsx'
+        # Weather direction reduction table
+        df = pd.read_excel(coefficientTableFP, sheet_name='direction_reduction_coefficient')
+        self.directionDF = df[['a', 'b', 'c']].to_numpy()
+        self.windAngleBins = [30, 60, 150, 180.1]
+
+        # Speed reduction formula coefficients: a, b, c
+        if shipLoading == 'ballast':
+            blockBins = np.asarray([0.75, 0.8, 0.85])
+        else:
+            blockBins = np.asarray([0.6, 0.65, 0.7, 0.75, 0.8, 0.85])
+
+        roundedBlock = blockBins[support.find_closest(blockBins, block)]
+        df = pd.read_excel(coefficientTableFP, sheet_name='speed_reduction_coefficient')
+        abc = df.loc[(df['block_coefficient'] == roundedBlock) & (df['ship_loading'] == shipLoading)]
+        self.aB, self.bB, self.cB = float(abc['a']), float(abc['b']), float(abc['c'])
+
+        # Ship coefficient formula coefficients: a, b
+        df = pd.read_excel(coefficientTableFP, sheet_name='ship_form_coefficient')
+        ab = df.loc[(df['ship_type'] == 'all') & (df['ship_loading'] == shipLoading)]
+        self.aU, self.bU = float(ab['a']), float(ab['b'])
+
+    def speed_reduction_coefficient(self, Fn):
+        return self.aB + self.bB * Fn + self.cB * Fn ** 2
+
+    def direction_reduction_coefficient(self, BN, windAngle):
+        windAngleIdx = int(np.digitize(abs(windAngle), self.windAngleBins))
+        abc = self.directionDF[windAngleIdx]
+        a, b, c = abc[0], abc[1], abc[2]
+
+        return (a + b * pow(BN + c, 2)) / 2
+
+    def ship_form_coefficient(self, BN):
+        return self.aU * BN + pow(BN, 6.5) / (self.bU * pow(self.vol, (2 / 3)))
+
+    def reduced_speed(self, windDir, heading, BN, designSpeed):
+        """ The weather effect, presented as speed loss, compares the
+        speed of the ship in varying actual sea conditions to the ship's
+        expected speed in still water conditions.
+        formC is the
+        directionC is the ,
+        speedC is is the  """
+
+        # General speed loss in head weather condition
+        formC = self.ship_form_coefficient(BN)
+
+        # Weather direction reduction factor
+        windAngle = (windDir - heading + 180) % 360 - 180  # [-180, 180] degrees
+        directionC = self.direction_reduction_coefficient(BN, windAngle)
+
+        # Correction factor for block coefficient and Froude number
+        Fn = (designSpeed * 0.514444) / sqrt(self.Lpp * self.g)
+        speedC = self.speed_reduction_coefficient(Fn)
+        relativeSpeedLoss = max(min((directionC * speedC * formC) / 100, 0.99), -0.3)
+
+        actualSpeed = designSpeed * (1 - relativeSpeedLoss)
+        return actualSpeed
+
+
 def calc_bearing(p1, p2):
+    """ Calculate bearing in degrees"""
     # Convert degrees to radians
     [(lam1, phi1), (lam2, phi2)] = np.radians([p1, p2])
 
@@ -190,3 +288,33 @@ def geo_x_geos(treeDict, p1, p2=None):
                 return True
 
     return False
+
+
+if __name__ == '__main__':
+    import matplotlib.pyplot as plt
+    import pprint
+
+    os.chdir('..')
+
+    _heading = 0
+    _vessel = Vessel()
+    _speed = 16.8  # knots
+    windDirs = np.linspace(0, 180, 181)
+    BNs = np.linspace(0, 12, 13)
+    newSpeeds = np.zeros([len(windDirs), len(BNs)])
+    for ii, _windDir in enumerate(windDirs):
+        for jj, _BN in enumerate(BNs):
+            newSpeeds[ii, jj] = _vessel.reduced_speed(_speed, _BN, _windDir, _heading)
+
+    # Print
+    pp = pprint.PrettyPrinter()
+    pp.pprint(windDirs)
+    pp.pprint(BNs)
+    pp.pprint(newSpeeds)
+
+    # Plot
+    fig = plt.figure()
+    ax = fig.gca(projection='3d')
+    X, Y = np.meshgrid(BNs, windDirs)
+    ax.plot_surface(X, Y, newSpeeds)
+    plt.show()
