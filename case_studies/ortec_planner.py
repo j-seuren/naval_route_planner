@@ -10,10 +10,10 @@ from pathlib import Path
 
 class OrtecPlanner:
     def __init__(self):
-        self.dataLoc = Path('C:/dev/data/data_20200327')
+        self.dataLoc = Path('D:/data/data_20200327')
         self.arcsFile = Path('routeplanner_output_waypoints.csv')
         self.portsFile = Path('ports.csv')
-        self.GSavePath = Path('C:/dev/projects/naval_route_planner/data/ortec_planner/ortec_graph_v1')
+        self.GSavePath = Path('D:/data/ortec_planner/ortec_graph_v1')
         self.graph = None
         self.arcs = None
 

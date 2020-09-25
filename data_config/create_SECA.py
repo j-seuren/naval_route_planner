@@ -10,18 +10,16 @@ from shapely.geometry import Polygon, shape
 def create_from_csv(fp, save=True):
     df = pd.read_csv(fp)
     area_names = df.area.unique()
-
     secas = []
     for area_name in area_names:
         area_df = df.loc[df['area'] == area_name]
         points = [[row['longitude'], row['latitude']] for idx, row in area_df.iterrows()]
         secas.append(Polygon([pt for pt in points]))
-
     if save:
-        with open('C:/dev/data/seca_areas_csv', 'wb') as file:
+        fp = 'D:/data/seca_areas_csv'
+        with open(fp, 'wb') as file:
             pickle.dump(secas, file)
-
-        print('Saved secas to: C:/dev/data/seca_areas_csv')
+        print('Saved secas to', fp)
 
     return secas
 
@@ -36,12 +34,11 @@ def create_from_shp(fp, save=True):
             secas.append(shapely_object)
         else:
             raise IOError('Shape is not a polygon.')
-
     if save:
-        with open('C:/dev/data/seca_areas_shp', 'wb') as file:
+        fp = 'D:/data/seca_areas_shp'
+        with open(fp, 'wb') as file:
             pickle.dump(secas, file)
-
-        print('Saved secas to: C:/dev/data/seca_areas_shp')
+        print('Saved secas to', fp)
 
     return secas
 
@@ -59,8 +56,9 @@ def plot_from_list(secas):
         m.plot(x, y, 'o-', markersize=2, linewidth=1)
 
 
-csv_fp = 'C:/dev/data/seca_areas.csv'
-shp_fp = 'C:/dev/data/eca_reg14_sox_pm/eca_reg14_sox_pm.shp'
+if __name__ == '__main__':
+    csv_fp = 'D:/data/seca_areas.csv'
+    shp_fp = 'D:/data/eca_reg14_sox_pm/eca_reg14_sox_pm.shp'
 
-# shp_secas = create_from_shp(shp_fp, save=False)
-csv_secas = create_from_csv(csv_fp, save=False)
+    shp_secas = create_from_shp(shp_fp, save=True)
+    # csv_secas = create_from_csv(csv_fp, save=False)

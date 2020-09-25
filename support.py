@@ -1,3 +1,5 @@
+import functools
+import gc
 import numpy as np
 
 from deap import tools
@@ -59,7 +61,7 @@ def assign_crowding_dist(individuals):
         individuals[i].fitness.crowding_dist = dist
 
 
-# Function to be replaced in Pareto front class
+# Function to be replaced in Pareto front class: returns current local front and nr. (non-)dominated hofers
 def update(front, population, prevLocalFront):
     """Updates Pareto front with individuals from population and extracts dominance relationships of
      previous local Pareto front and current local Pareto front"""
@@ -141,3 +143,71 @@ def update(front, population, prevLocalFront):
             front.insert(ind)
 
     return currLocalFront, len(dominatedHofers), len(dominatedInds)
+
+
+eastLocations = [(-51., 39.6), (-52., 41.2), (-53., 42.8), (-54., 44.4)]
+westLocations = [(-72.4, 33.4), (-72.8, 34.8), (-73.2, 36.2), (-73.6, 37.6)]
+
+locations = {'Brazil': (-23.4166, -7.2574),
+             'Canada': (-53.306878, 46.423969),
+             'Caribbean Sea': (-72.3352, 12.8774),
+             'Current1': (-5, 0),
+             'Current2': (5, 0),
+             'ECA1: Jacksonville': (-78.044447, 27.616446),
+             'ECA2: New York': (-67.871890, 40.049950),
+             'Gulf of Aden': (48.1425, 12.5489),
+             'Gulf of Bothnia': (20.89, 58.46),
+             'Gulf of Guinea': (3.14516, 4.68508),
+             'Gulf of Mexico': (-94.5968, 26.7012),
+             'Houston': (-94.657976, 29.348557),
+             'Keelung': (121.749, 25.164),
+             'Mediterranean Sea': (29.188952, 32.842985),
+             'Normandy': (-5.352121, 48.021295),
+             'North UK': (3.3, 60),
+             'Rotterdam': (4.02, 52.01),
+             'San Francisco': (-122.537, 37.775),
+             'Singapore': (103.746969, 1.141331),
+             'South UK': (-7.5, 47),
+             'Sri Lanka': (78, 5),
+             'Tokyo': (49, 12),
+             'Yemen': (49, 12),
+             'eastLocations': eastLocations,
+             'westLocations': westLocations
+             }
+
+
+def clear_caches():
+    gc.collect()
+    wrappers = [a for a in gc.get_objects() if isinstance(a, functools._lru_cache_wrapper)]
+
+    for wrapper in wrappers:
+        if wrapper.cache_info()[1] > 0:
+            wrapper.cache_clear()
+
+
+if __name__ == '__main__':
+    westBot, westTop, eastBot, eastTop = np.array([-72, 32]), np.array([-74, 39]), np.array([-50, 38]), np.array(
+        [-55, 46])
+
+    west = np.array([westBot, westTop])
+    east = np.array([eastBot, eastTop])
+
+    lenWest = np.linalg.norm(west)
+    lenEast = np.linalg.norm(east)
+
+    westVec = westTop - westBot
+    eastVec = eastTop - eastBot
+
+    westNorm = westVec / lenWest
+    eastNorm = eastVec / lenEast
+
+    locRange = np.linspace(0.2, 0.8, 4)
+    westLocations, eastLocations = [], []
+    for f in locRange:
+        eastLocations.append(f * eastVec + eastBot)
+        westLocations.append(f * westVec + westBot)
+
+    print(eastLocations, '\n', westLocations)
+
+
+

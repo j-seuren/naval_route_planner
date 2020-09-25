@@ -25,91 +25,82 @@ class Operators:
         self.vessel = vessel                    # Vessel class instance
         self.geod = geod                        # GreatCircle class instance
         self.radius = par['radius']             # Move radius
-        self.cov = [[self.radius, 0],           # Covariance matrix (move)
-                    [0, self.radius]]
         self.widthRatio = par['widthRatio']     # Insert width ratio
         self.shape = par['shape']
         self.scaleFactor = par['scaleFactor']
         self.delFactor = par['delFactor']
         self.ops = par['mutationOperators']     # Mutation operators list
         self.gauss = par['gauss']
+        self.nMutations = par['nMutations']
 
-    def mutate(self, ind, initializing=False, cumWeights=None, k=1):
-        if cumWeights is None:
-            cumWeights = [1, 1, 1, self.delFactor]
-        sample_ops = random.choices(self.ops, cum_weights=cumWeights, k=k)
+    def mutate(self, ind, initializing=False, k=None):
+        weights = [1] * len(self.ops)
+        weights[-1] = self.delFactor
+        if initializing:
+            weights[-1] = 10
+        if k is None:
+            k = random.randint(1, self.nMutations)
+        sample_ops = random.choices(self.ops, weights=weights, k=k)
         while sample_ops:
             op = sample_ops.pop()
             if op == 'move' and len(ind) > 2:
-                self.move_wp(ind, initializing, self.gauss)
+                self.move_wp(ind, initializing)
             elif op == 'delete' and len(ind) > 2:
                 self.delete_wps(ind, initializing)
             elif op == 'speed':
                 self.change_speeds(ind)
             else:
-                self.insert_wps(ind, initializing, self.gauss)
+                self.insert_wps(ind, initializing)
         del ind.fitness.values
         return ind,
 
-    def insert_wps(self, ind, initializing=False, gauss=False, shape='rhombus'):
+    def insert_wps(self, ind, initializing=False, shape='rhombus'):
         # Draw gamma int for number of inserted waypoints
-        maxK = len(ind) - 1
-        scale = maxK * self.scaleFactor
-        k = round(np.asscalar(np.random.gamma(self.shape, scale, 1)), 0)
-        while not 0 < k <= maxK:
-            k = round(np.asscalar(np.random.gamma(self.shape, scale, 1)), 0)
-        edges = random.sample(range(maxK), k=int(k))
-        for i in sorted(edges, reverse=True):
-            p1Tup, p2Tup = ind[i][0], ind[i+1][0]
-            p1, p2 = np.asarray(p1Tup), np.asarray(p2Tup)
-            ctr = (p1 + p2) / 2  # Edge centre
-            width = np.linalg.norm(p1 - p2)  # Ellipse width
-            height = width * self.widthRatio  # Ellipse height
+        edges = self.sample_sequence(stop=len(ind)-1)
+
+        for i in edges:
+            p1, p2 = np.asarray(ind[i][0]), np.asarray(ind[i+1][0])
+            assert not np.array_equal(p1, p2) != 0, 'p1 and p2 are equal: {}{}'.format(p1, p2)
+
+            ctr = (p1 + p2) / 2.  # Edge centre
+            major = np.linalg.norm(p1 - p2) / 2.  # Ellipse width
+            minor = major * self.widthRatio / 2.  # Ellipse height
 
             trials = 0
             while trials < 100:
-                if gauss or shape == 'ellipse':
-                    if gauss:
-                        mu, cov = [0, 0], [[1, 0], [0, 1]]
+                if self.gauss or shape == 'ellipse':
+                    if self.gauss:
+                        mu, cov = np.zeros(2), np.identity(2) * 0.16691704223  # 95% CI = unit circle
                         xy = np.random.multivariate_normal(mu, cov, 1).squeeze()
                     else:
                         # Generate a random point inside a circle of radius 1
                         rho = random.random()
-                        phi = random.random() * 2 * pi
+                        phi = random.random() * 2. * pi
                         xy = sqrt(rho) * np.array([cos(phi), sin(phi)])
 
                     # Scale x and y to the dimensions of the ellipse
-                    ptOrigin = xy * np.array([width, height]) / 2.0
+                    ptOrigin = xy * np.array([major, minor])
                 elif shape == 'rhombus':
-                    v1 = np.array([width / 2.0, - height / 2.0])
-                    v2 = np.array([width / 2.0, height / 2.0])
-                    offset = np.array([width / 2.0, 0.0])
+                    v1 = np.array([major, - minor])
+                    v2 = np.array([major, minor])
+                    offset = np.array([major, .0])
                     ptOrigin = random.random() * v1 + random.random() * v2 - offset
                 else:
-                    raise ValueError("Shape argument invalid: "
-                                     "try 'ellipse' or 'rhombus'")
+                    raise ValueError("Shape argument invalid: try 'ellipse' or 'rhombus'")
 
                 # Transform
-                dy, dx = p2[1] - p1[1], p2[0] - p1[0]
-                if dx != 0:
-                    slope = dy / dx
-                    rotX = 1 / sqrt(1 + slope ** 2)
-                    rotY = slope * rotX
-                else:
-                    assert dy != 0, 'p1 and p2 are equal: {}{}'.format(p1Tup, p2Tup)
-                    rotX = 0
-                    rotY = 1
-
-                cosA, sinA = rotX, rotY
-                rotation_matrix = np.array(((cosA, -sinA), (sinA, cosA)))
-                ptRotated = np.dot(rotation_matrix, ptOrigin)  # Rotate
-                x, y = ctr + ptRotated  # Translate
+                dx, dy = p2 - p1
+                theta = np.arctan2(dy, dx)
+                cosTh, sinTh = np.cos(theta), np.sin(theta)
+                rotation_matrix = np.array([[cosTh, -sinTh], [sinTh, cosTh]])
+                x, y = ctr + np.dot(rotation_matrix, ptOrigin)
                 x -= np.int(x / 180) * 360
-                y = np.clip(y, -90, 90)
+                y = np.clip(y, -89.9, 89.9)
+
                 newWP = (x, y)
 
                 if initializing:
-                    if self.tb.e_feasible(p1Tup, newWP) and self.tb.e_feasible(newWP, p2Tup):
+                    if self.tb.e_feasible(ind[i][0], newWP) and self.tb.e_feasible(newWP, ind[i+1][0]):
                         ind.insert(i+1, [newWP, ind[i][1]])
                         return
                     else:
@@ -119,47 +110,43 @@ class Operators:
                     return
             print('insert trials exceeded')
 
-    def move_wp(self, ind, initializing=False, indpb=0.2, gauss=False):
-        for i in range(1, len(ind)-1):
-            if random.random() < indpb:
-                p = np.asarray(ind[i][0])
-                trials = 0
-                while True:
-                    if gauss:
-                        x, y = np.random.multivariate_normal(p, self.cov, 1).squeeze().T
+    def move_wp(self, ind, initializing=False):
+        # Draw gamma int for number of to be moved (tbm) waypoints
+        tbm = self.sample_sequence(start=1, stop=len(ind)-1, reverse=False)
+        for i in tbm:
+            p = np.asarray(ind[i][0])
+            trials = 0
+            while True:
+                if self.gauss:
+                    mu, cov = p, np.identity(2) * self.radius * 0.16691704223  # 95% CI = circle centered at p
+                    lon, lat = np.random.multivariate_normal(mu, cov, 1).squeeze().T
+                else:
+                    # Pick random location within a radius from the current waypoint
+                    # Square root ensures a uniform distribution inside the circle.
+                    r = self.radius * sqrt(random.random())
+                    phi = random.random() * 2 * pi
+                    lon, lat = p + r * np.array([cos(phi), sin(phi)])
+
+                lon -= np.int(lon / 180) * 360
+                lat = np.clip(lat, -89.9, 89.9)
+                newWP = (lon, lat)
+
+                # Ensure feasibility during initialization
+                if initializing and (not self.tb.e_feasible(ind[i-1][0], newWP) or
+                                     not self.tb.e_feasible(newWP, ind[i+1][0])):
+                    trials += 1
+                    if trials > 100:
+                        print('move trials exceeded', end='\n ')
+                        break
                     else:
-                        # Pick random location within a radius from the current waypoint
-                        # Square root ensures a uniform distribution inside the circle.
-                        r = self.radius * sqrt(random.random())
-                        phi = random.random() * 2 * pi
-                        x, y = p + r * np.array([cos(phi), sin(phi)])
-
-                    x -= np.int(x / 180) * 360
-                    y = np.clip(y, -89.9, 89.9)
-                    newWP = (x, y)
-
-                    # Ensure feasibility during initialization
-                    if initializing and (not self.tb.e_feasible(ind[i-1][0], newWP) or
-                                         not self.tb.e_feasible(newWP, ind[i+1][0])):
-                        trials += 1
-                        if trials > 100:
-                            print('move trials exceeded', end='\n ')
-                            break
-                        else:
-                            continue
-                    ind[i][0] = newWP
-                    break
+                        continue
+                ind[i][0] = newWP
+                break
     
     def delete_wps(self, ind, initializing=False):
         # Draw gamma int for number of to be deleted (tbd) waypoints
-        maxK = len(ind) - 2
-        scale = maxK * self.scaleFactor
-        k = round(np.asscalar(np.random.gamma(self.shape, scale, 1)), 0)
-        while not 0 < k <= maxK:
-            k = round(np.asscalar(np.random.gamma(self.shape, scale, 1)), 0)
-        # Draw tbd waypoints
-        tbd = sorted(random.sample(range(1, maxK+1), k=int(k)),
-                     reverse=True)
+        tbd = self.sample_sequence(start=1, stop=len(ind)-1)
+
         if initializing:  # Ensure feasibility
             # Group consecutive tbd waypoints
             for group in mit.consecutive_groups(tbd):
@@ -183,6 +170,22 @@ class Operators:
         newSpeed = random.choice([s for s in self.vessel.speeds if s != avgCurrentSpeed])
         for wp in ind[i:i+k]:
             wp[1] = newSpeed
+
+    def sample_sequence(self, stop, start=0, reverse=True, exponential=True):
+        k = 0
+        scale = stop * self.scaleFactor
+        while not start <= k < stop:
+            if exponential:
+                k = np.ceil((np.random.exponential(scale=scale, size=1))).item()
+            else:
+                k = np.ceil((np.random.gamma(shape=self.shape, scale=scale, size=1))).item()
+
+        seq = random.sample(range(start, stop), k=int(k))
+
+        if reverse:
+            return sorted(seq, reverse=True)
+        else:
+            return seq
 
     def cx_one_point(self, ind1, ind2):
         if min(len(ind1), len(ind2)) > 2:

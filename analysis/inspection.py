@@ -1,4 +1,3 @@
-import datetime
 import folium
 import main
 import math
@@ -9,7 +8,8 @@ import os
 import pickle
 import support
 
-from matplotlib import cm
+from matplotlib import cm, patches
+from matplotlib.collections import PatchCollection
 from mpl_toolkits.basemap import Basemap
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
@@ -89,7 +89,7 @@ class RoutePlotter:
         for i, result in enumerate(results_files):
             r, c = next(r_iter), next(c_iter)
 
-            shortest_paths = result['shortest_paths']
+            shortest_paths = result['initialRoutes']
             individuals = best_inds_files[i]
 
             ax = plt.subplot2grid((self.rows, self.columns), (r, c))
@@ -98,17 +98,21 @@ class RoutePlotter:
                         urcrnrlon=self.rig, ax=ax)
             m.drawparallels(np.arange(-90., 90., 10.), labels=[1, 0, 0, 0], fontsize=8)
             m.drawmeridians(np.arange(-180., 180., 10.), labels=[0, 0, 0, 1], fontsize=8)
-            m.drawcoastlines()
-            m.fillcontinents()
+            m.drawmapboundary(color='black', fill_color='aqua')
+            m.fillcontinents(color='lightgray', lake_color='lightgray', zorder=2)
+            m.readshapefile("D:/data/bathymetry_200m/ne_10m_bathymetry_K_200", 'ne_10m_bathymetry_K_200', drawbounds=False)
+
+            ps = [patches.Polygon(np.array(shape), True) for shape in m.ne_10m_bathymetry_K_200]
+            ax.add_collection(PatchCollection(ps, facecolor='white', zorder=2))
 
             # Plot initial routes
             for p in shortest_paths.values():
-                for sp in p.values():
+                for sp in p['path'].values():
                     for shortest_path in sp.values():
                         waypoints = [item[0] for item in shortest_path]
                         edges = zip(waypoints[:-1], waypoints[1:])
                         for e in edges:
-                            m.drawgreatcircle(e[0][0], e[0][1], e[1][0], e[1][1], linewidth=2, color='black', zorder=1)
+                            m.drawgreatcircle(e[0][0], e[0][1], e[1][0], e[1][1], linewidth=2, color='black', zorder=3)
 
             # Plot individuals
             for p in individuals.values():
@@ -124,9 +128,9 @@ class RoutePlotter:
                         edges = zip(waypoints[:-1], waypoints[1:])
                         for j, e in enumerate(edges):
                             m.drawgreatcircle(e[0][0], e[0][1], e[1][0], e[1][1], linewidth=2,
-                                              color=self.col_map(normalized_speeds[j]), zorder=1)
+                                              color=self.col_map(normalized_speeds[j]), zorder=3)
                         for j, (x, y) in enumerate(waypoints):
-                            m.scatter(x, y, latlon=True, color='dimgray', marker='o', s=5, zorder=2)
+                            m.scatter(x, y, latlon=True, color='dimgray', marker='o', s=5, zorder=4)
 
             if self.plot_currents:
                 # Transform vector and coordinate data
@@ -153,7 +157,7 @@ class RoutePlotter:
                                        norm=plt.Normalize(vmin=min(self.vessel.speeds), vmax=max(self.vessel.speeds)),
                                        cax=cax)
                 min_s, max_s = min(self.vessel.speeds), max(self.vessel.speeds)
-                col_bar.ax.set_yticklabels(
+                col_bar._ax.set_yticklabels(
                     ['%.1f' % round(min_s, 1), '%.1f' % round((1 / 5) * (max_s - min_s) + min_s, 1),
                      '%.1f' % round((2 / 5) * (max_s - min_s) + min_s, 1),
                      '%.1f' % round((3 / 5) * (max_s - min_s) + min_s, 1),
@@ -198,20 +202,20 @@ def plot_interactive_route(path, path_key, obj_key):
 
 if __name__ == "__main__":
     os.chdir('..')
-    _ID_dict = {'Cruisje naar Sydney': '14_04_29'}
+    _ID_dict = {'Cruisje naar Sydney': '22_09_26'}
 
     # _start_date = datetime.datetime(2016, 1, 1)
     _start_date = None
     planner = main.RoutePlanner()
 
-    with open('C:/dev/data/seca_areas_csv', 'rb') as file:
+    with open('D:/data/seca_areas_csv', 'rb') as file:
         _ecas = pickle.load(file)
 
     # Get outer bounds of all paths
     _minx, _miny, _maxx, _maxy = 180, 90, -180, -90
     for file_id in _ID_dict.values():
         with open('output/result/{}'.format(file_id), 'rb') as f:
-            _result = pickle.load(f)[0]
+            _result = pickle.load(f)
 
         for _p in _result['fronts'].values():
             for _front in _p.values():
@@ -231,7 +235,7 @@ if __name__ == "__main__":
     # Inspect best individuals for every ID dict key
     for f_idx, f_title in enumerate(_ID_dict.keys()):
         with open('output/result/{}'.format(_ID_dict[f_title]), 'rb') as f:
-            _result = pickle.load(f)[0]
+            _result = pickle.load(f)
 
         # Initialize pareto_fig
         pareto_fig, axs = plt.subplots(squeeze=False)
@@ -256,7 +260,6 @@ if __name__ == "__main__":
                 best_inds[_p]['fuel'].append(fuel_ind)
                 best_inds[_p]['time'].append(time_ind)
                 best_inds[_p]['fit'].append(fit_ind)
-
 
                 # Get max days
                 max_days = math.ceil(max(max_days, max(
@@ -293,7 +296,7 @@ if __name__ == "__main__":
 
     for f_idx, f_title in enumerate(_ID_dict.keys()):
         with open('output/result/{}'.format(_ID_dict[f_title]), 'rb') as f:
-            _result = pickle.load(f)[0]
+            _result = pickle.load(f)
 
         plot_stats(_result['logs'], f_title)
     plt.show()

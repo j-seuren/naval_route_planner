@@ -1,0 +1,156 @@
+import netCDF4
+import datetime
+import numpy as np
+import os
+import xarray as xr
+
+from ftplib import FTP
+from pathlib import Path
+from os import path
+
+
+def ncdump(nc_fid, verb=True):
+    """
+    ncdump outputs dimensions, variables and their attribute information.
+    The information is similar to that of NCAR's ncdump utility.
+    ncdump requires a valid instance of Dataset.
+
+    Parameters
+    ----------
+    nc_fid : netCDF4.Dataset
+        A netCDF4 dateset object
+    verb : Boolean
+        whether or not nc_attrs, nc_dims, and nc_vars are printed
+
+    Returns
+    -------
+    nc_attrs : list
+        A Python list of the NetCDF file global attributes
+    nc_dims : list
+        A Python list of the NetCDF file dimensions
+    nc_vars : list
+        A Python list of the NetCDF file variables
+    """
+    def print_ncattr(key):
+        """
+        Prints the NetCDF file attributes for a given key
+
+        Parameters
+        ----------
+        key : unicode
+            a valid netCDF4.Dataset.variables key
+        """
+        try:
+            print("\t\ttype:", repr(nc_fid.variables[key].dtype))
+            for ncattr in nc_fid.variables[key].ncattrs():
+                print('\t\t%s:' % ncattr,
+                      repr(nc_fid.variables[key].getncattr(ncattr)))
+        except KeyError:
+            print("\t\tWARNING: %s does not contain variable attributes" % key)
+
+    # NetCDF global attributes
+    nc_attrs = nc_fid.ncattrs()
+    if verb:
+        print("NetCDF Global Attributes:")
+        for nc_attr in nc_attrs:
+            print('\t%s:' % nc_attr, repr(nc_fid.getncattr(nc_attr)))
+    nc_dims = [dim for dim in nc_fid.dimensions]  # list of nc dimensions
+    # Dimension shape information.
+    if verb:
+        print("NetCDF dimension information:")
+        for dim in nc_dims:
+            print("\tName:", dim)
+            print("\t\tsize:", len(nc_fid.dimensions[dim]))
+            print_ncattr(dim)
+    # Variable information.
+    nc_vars = [var for var in nc_fid.variables]  # list of nc variables
+    if verb:
+        print("NetCDF variable information:")
+        for var in nc_vars:
+            if var not in nc_dims:
+                print('\tName:', var)
+                print("\t\tdimensions:", nc_fid.variables[var].dimensions)
+                print("\t\tsize:", nc_fid.variables[var].size)
+                print_ncattr(var)
+    return nc_attrs, nc_dims, nc_vars
+
+
+class CurrentDataRetriever:
+    def __init__(self,
+                 t_s,
+                 nDays,
+                 host='eftp.ifremer.fr',
+                 user='gg1f3e8',
+                 passwd='xG3jZhT9'
+                 ):
+        # Current data period
+        self.nDays = nDays
+        self.tStart = t_s
+
+        # FTP login details
+        self.host = host
+        self.user = user
+        self.passwd = passwd
+
+        # Get dataset file path and download and save directories
+        d = Path('D:/data/currents/netcdf_OUT/')
+        f = 'Y%d_YDAY%03d_NDAYS%03d.npy' % (t_s.year,
+                                            t_s.timetuple().tm_yday,
+                                            nDays)
+        self.dsFP = Path(d / f)
+        self.dsFTP = Path('/data/globcurrent/v3.0/global_025_deg/total_hs')
+        self.dsSave = Path('D:/data/currents/netcdf_IN')
+
+    def get_da(self):
+        # First check if combined netCDF file exists
+        if os.path.exists(self.dsFP):
+            print('Loading data array:'.format(self.dsFP), end=' ')
+            with np.load(self.dsFP, allow_pickle=True) as da:
+                print('done')
+                return da
+        else:  # Create combined netCDF file from separate (to-be) downloaded netCDF files
+            # Download non-existent netCDF files
+            saveFPs = []
+            with FTP(host=self.host, user=self.user, passwd=self.passwd) as ftp:
+                for day in range(self.nDays):
+                    # Get path appendix
+                    t = self.tStart + datetime.timedelta(days=day)
+                    y, yday = t.year, t.timetuple().tm_yday
+                    path_appendix = Path('%d/%03d' % (y, yday))
+
+                    # Set FTP current working directory and save directory
+                    ftp.cwd(Path(self.dsFTP / path_appendix).as_posix())
+                    saveDir = Path(self.dsSave / path_appendix)
+                    if not path.exists(saveDir):
+                        os.makedirs(saveDir)
+
+                    # Append files to file_list
+                    files = [f for f in ftp.nlst() if '0000' in f]
+                    _saveFPs = [saveDir / f for f in files]
+                    saveFPs.extend(_saveFPs)
+                    for saveFP, loadFP in zip(_saveFPs, loadFP):
+                        if not path.isfile(saveFP):  # If files does not exist, download from FTP server
+                            with open(saveFP, 'wb') as f:  # Download file to fp_save
+                                ftp.retrbinary('RETR %s' % loadFP, f.write)
+
+            # Open downloaded netCDF files, combine and store locally
+            print('Combining %d netCDF files:' % (8 * self.nDays), end=' ')
+            with xr.open_mfdataset(saveFPs, parallel=True, combine='by_coords', preprocess=ms_to_knots) as ds:
+                print("done\nStoring data array to '{}' :".format(self.dsFP), end=' ')
+                da = ds.to_array().data
+                np.save(self.dsFP, da)
+                print('done')
+
+            return da
+
+
+def ms_to_knots(ds):
+    ds.attrs = {}
+    arr2d = np.float32(np.ones((720, 1440)) * 1.94384)
+    ds['u_knot'] = arr2d * ds['eastward_eulerian_current_velocity']
+    ds['v_knot'] = arr2d * ds['northward_eulerian_current_velocity']
+    ds = ds.drop_vars(['eastward_eulerian_current_velocity',
+                       'eastward_eulerian_current_velocity_error',
+                       'northward_eulerian_current_velocity',
+                       'northward_eulerian_current_velocity_error'])
+    return ds

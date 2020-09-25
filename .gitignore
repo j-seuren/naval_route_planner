@@ -1,7 +1,5 @@
 output/
-data/
-thesis/
-DEME/
+case_studies/project_locations/
 api/
 api/routes_OUT/*
 api/start_end_IN/*

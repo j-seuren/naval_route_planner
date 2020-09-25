@@ -2,18 +2,16 @@
 import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
-import os
 import sys
 
 from copy import deepcopy
 from data_config.navigable_area import NavigableAreaGenerator
-from evaluation.evaluation import geo_x_geos
-from evaluation.geodesic import Geodesic
+from evaluation import geo_x_geos
+from analysis.geodesic import Geodesic
 from mpl_toolkits.mplot3d import Axes3D
 from math import atan2, degrees, sqrt, radians, cos, sin
 from pathlib import Path
 from heapq import nsmallest
-# from matplotlib import rc
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
 
@@ -35,103 +33,77 @@ class Hexagraph:
     def __init__(self,
                  treeDict,
                  ecaTreeDict,
-                 parameters):
+                 p):
         self.treeDict = treeDict
         self.ecaTreeDict = ecaTreeDict
-        resolution = parameters['res']
-        graphDensity = parameters['graphDens']
-        graphVarDensity = parameters['graphVarDens']
-        self.parameters = parameters
-        self.graph = None
+        self.p = p
 
-        avoidAntarctic = parameters['avoidAntarctic']
-        avoidArctic = parameters['avoidArctic']
-
-        # Generate file path
         # Check whether Antarctic and Arctic circles are included as impassable areas
         aC = aAc = 'incl'
-        if avoidAntarctic and avoidArctic:
+        if p['avoidAntarctic'] and p['avoidArctic']:
             aC = aAc = 'avoid'
-        elif avoidAntarctic:
-            aAc = 'avoid'
-        elif avoidArctic:
-            aC = 'avoid'
+        elif p['avoidAntarctic']:
+            aAc = 'excl'
+        elif p['avoidArctic']:
+            aC = 'excl'
 
-        graphDir = Path('data/variable_density_geodesic_grids')
-        graphFN = 'res_{}_d{}_vd{}_{}Antarctic_{}Arctic.gpickle'.format(resolution, graphDensity, graphVarDensity, aAc,
-                                                                        aC)
-
-        self.graphFP = graphDir / graphFN
+        # Generate file path
+        graphFN = 'res_{}_d{}_vd{}_{}Ant_{}Arc.gpickle'.format(p['res'], p['graphDens'], p['graphVarDens'], aAc, aC)
+        self.graphFP = Path('D:/data/graphs') / graphFN
 
     def get_graph(self):
         # Load or construct graph
         try:
-            self.graph = nx.read_gpickle(self.graphFP)
+            graph = nx.read_gpickle(self.graphFP)
             print('Loaded graph file from: ', self.graphFP)
-            return self.graph
+            return graph
         except FileNotFoundError:
             # Initialize "Hexagraph"
-            constructor = self.GraphConstructor(self.treeDict, self.ecaTreeDict, self.parameters)
-            self.graph = constructor.construct()
+            constructor = self.GraphConstructor(self.treeDict, self.ecaTreeDict, self.p)
+            graph = constructor.construct()
 
             # Save graph to file
-            nx.write_gpickle(self.graph,  self.graphFP)
+            nx.write_gpickle(graph,  self.graphFP)
             print('Built and saved graph to: ', self.graphFP)
-            return self.graph
+            return graph
 
-    def plot_graph(self, draw='both'):
-        if not self.graph:
-            self.graph = self.get_graph()
-        pos = nx.get_node_attributes(self.graph, 'deg')
+    def plot_graph(self, draw='both', showLongEdges=False):
+        graph = self.get_graph()
+        if not showLongEdges:
+            edgeDataDict = deepcopy(graph.edges())
+            for n1, n2 in edgeDataDict:
+                # Get positions of nodes from current edge
+                p1, p2 = graph.nodes[n1]['deg'], graph.nodes[n2]['deg']
+                if geo_x_geos(self.treeDict, p1, p2):
+                    graph.remove_edge(n1, n2)
+        pos = nx.get_node_attributes(graph, 'deg')
         fig, ax = plt.subplots()
         if draw == 'both':
-            nx.draw(self.graph, pos=pos, node_size=1, ax=ax)
+            nx.draw(graph, pos=pos, node_size=1, ax=ax)
         elif draw == 'nodes':
             print('drawing nodes only')
-            nx.draw_networkx_nodes(self.graph, pos=pos, node_size=1, ax=ax)
+            nx.draw_networkx_nodes(graph, pos=pos, node_size=1, ax=ax)
         else:
             print('drawing edges only')
-            nx.draw_networkx_edges(self.graph, pos=pos, ax=ax)
+            nx.draw(graph, pos=pos, node_size=0, ax=ax)
         ax.tick_params(left=True, bottom=True, labelleft=True, labelbottom=True)
+        return fig, ax
 
-    def plot_sphere(self, graph=None):
+    def plot_sphere(self, elevationAngle=0, azimuthAngle=0, graph=None):
         if not graph:
-            if self.graph:
-                graph = self.graph
-            else:
-                graph = self.get_graph()
+            graph = self.get_graph()
         # 3D plot of unit sphere nodes
         fig = plt.figure()
         ax = Axes3D(fig)
+        ax.view_init(azim=azimuthAngle, elev=elevationAngle)
         xyz = nx.get_node_attributes(graph, 'xyz')
         xyz = np.array([val for val in xyz.values()])
         ax.scatter(xyz[:, 0], xyz[:, 1], xyz[:, 2], s=1, color='black')
+        return fig, ax
 
-    def plot_sphere_edges(self, graph=None):
+    def plot_sphere_edges(self, elevationAngle=0, azimuthAngle=0, graph=None):
         if not graph:
-            if self.graph:
-                graph = self.graph
-            else:
-                graph = self.get_graph()
-
-        # # !python numbers=disable
-        # fig_width_pt = 345.0  # Get this from LaTeX using \showthe\columnwidth
-        # inches_per_pt = 1.0 / 72.27  # Convert pt to inches
-        # golden_mean = (sqrt(5) - 1.0) / 2.0  # Aesthetic ratio
-        # fig_width = fig_width_pt * inches_per_pt  # width in inches
-        # fig_height = fig_width * golden_mean  # height in inches
-        # fig_size = [fig_width, fig_height]
-        #
-        # rc('text', usetex=True)
-        # rc('font', **{'family': 'serif',
-        #               'serif': 'Computer Modern Roman',
-        #               'size': 9})
-        # rc('figure', figsize=fig_size, dpi=600)
-        # rc('axes', titlesize=9, labelsize=9)
-        # rc('legend', fontsize=9)
-        # rc('xtick', labelsize=9)
-        # rc('ytick', labelsize=9)
-
+            graph = self.get_graph()
         xyz = nx.get_node_attributes(graph, 'xyz')
         edges = np.array(graph.edges)
         lines = np.empty([len(edges), 2, 3])
@@ -141,32 +113,28 @@ class Hexagraph:
             except ValueError:
                 continue
             lines[idx] = [np.asarray(xyz[e1]), np.asarray(xyz[e2])]
-
         fig = plt.figure(figsize=[6, 6])
         ax = fig.gca(projection='3d')
+        ax.plot([], [], [], 'k.', markersize=5, alpha=0.9)
+        ax.view_init(azim=azimuthAngle, elev=elevationAngle)
         ax.add_collection(Line3DCollection(lines, colors='black', linewidths=1))
-
-        minmax = [-.55, .55]
+        minmax = [-.6, .6]
         ax.set_xlim(minmax)
         ax.set_ylim(minmax)
         ax.set_zlim(minmax)
-
-        # Remove whitespace
-        plt.axis('off')
-        # plt.savefig('output/hexagraph_sphere1.pgf', bbox_inches='tight', pad_inches=.01)
+        return fig, ax
 
     class GraphConstructor:
-        def __init__(self, treeDict, ecaTreeDict, parameters):
+        def __init__(self, treeDict, ecaTreeDict, p):
             self.treeDict = treeDict
             self.ecaTreeDict = ecaTreeDict
-            self.exteriorTreeDict = NavigableAreaGenerator(parameters).get_shoreline_tree(exteriorOnly=True)
-
-            self.distance = Geodesic().distance
-            self.recursionLevel = parameters['graphDens']
-            self.varRecursionLevel = parameters['graphVarDens']
+            self.exteriorTreeDict = NavigableAreaGenerator(p).get_shoreline_tree(exteriorOnly=True)
+            self.distance = Geodesic(dist_calc='great_circle').distance
+            self.recursionLevel = p['graphDens']
+            self.varRecursionLevel = p['graphVarDens']
             self.graph = nx.Graph()
             self.nodeIdx = 0
-            self.mpCache, self.points3D, self.triCache = {}, {}, []
+            self.mpCache, self.points3D = {}, {}
             self.canals = {'Panama': {'nodes': {'panama_south': {'deg': (-79.540932, 8.894197), 'xyz': (.0,) * 3},
                                                 'panama_north': {'deg': (-79.919005, 9.391057), 'xyz': (.0,) * 3}},
                                       'dist': 43},
@@ -269,11 +237,10 @@ class Hexagraph:
         def construct(self):
             print('Constructing hexagraph')
             # Create 12 vertices of the icosahedron
-            t = (1 + sqrt(5)) / 2
-
-            [self.add_vertex(Point3D(j, i, 0)) for i in [t, -t] for j in [-1, 1]]
-            [self.add_vertex(Point3D(0, j, i)) for i in [t, -t] for j in [-1, 1]]
-            [self.add_vertex(Point3D(i, 0, j)) for i in [t, -t] for j in [-1, 1]]
+            phi = (1 + sqrt(5)) / 2  # Golden ratio
+            [self.add_vertex(Point3D(j, i, 0)) for i in [phi, -phi] for j in [-1, 1]]
+            [self.add_vertex(Point3D(0, j, i)) for i in [phi, -phi] for j in [-1, 1]]
+            [self.add_vertex(Point3D(i, 0, j)) for i in [phi, -phi] for j in [-1, 1]]
 
             # Create 20 triangles of the icosahedron
             # 5 faces around point 0
@@ -305,7 +272,6 @@ class Hexagraph:
                         Triangle(9, 8, 1)])
 
             # Refine triangles
-            print('Generate triangle faces recursively: ')
             for i in range(self.recursionLevel):
                 print('\rAdding nodes. Recursion level: {:2d}/{}'.format(i+1, self.recursionLevel),
                       end='')
@@ -315,29 +281,29 @@ class Hexagraph:
                     a = self.get_middle_point(tri.v1, tri.v2)
                     b = self.get_middle_point(tri.v2, tri.v3)
                     c = self.get_middle_point(tri.v3, tri.v1)
-
                     triangles2.append(Triangle(tri.v1, a, c))
                     triangles2.append(Triangle(tri.v2, b, a))
                     triangles2.append(Triangle(tri.v3, c, b))
                     triangles2.append(Triangle(a, b, c))
-
                 tris = triangles2
-            print('')
+            print('\rAdded nodes to graph')
 
             # Add triangles to mesh
             nTris = len(tris)
             for i, tri in enumerate(tris):
-                print('\rAdding edges of triangle faces: {:2d}/{}'.format(i+1, nTris), end='')
+                print('\rCreating triangles connecting nodes: {:2d}/{}'.format(i+1, nTris), end='')
                 self.graph.add_edge(tri.v1, tri.v2)
                 self.graph.add_edge(tri.v2, tri.v3)
                 self.graph.add_edge(tri.v3, tri.v1)
-            print('')
+            print('\rCreated {} triangles'.format(nTris))
 
             # Refine graph near shorelines
-            print('Refine graph near shorelines... ', end='')
-            if self.varRecursionLevel > 0:
-                graphCopy = self.graph.copy()
-                for edge in graphCopy.edges():
+            print('Refine graph near shorelines... ')
+            for i in range(self.varRecursionLevel):
+                triCache = {}  # Reinitialize triangle cache
+                print('\r Refinement level: {}/{}'.format(i+1, self.varRecursionLevel), end='')
+                edgesCopy = deepcopy(self.graph.edges)
+                for edge in edgesCopy:
                     # Get indices and long/lat positions of nodes from current edge
                     n1, n2 = edge[0], edge[1]
                     p1, p2 = self.graph.nodes[n1]['deg'], self.graph.nodes[n2]['deg']
@@ -347,55 +313,48 @@ class Hexagraph:
                         continue
 
                     # If edge crosses a polygon exterior, refine two adjacent triangles
-                    if geo_x_geos(self.exteriorTreeDict, p1, p2, xExterior=True):
+                    if geo_x_geos(self.exteriorTreeDict, p1, p2):
                         # Get adjacent triangles of intersected edge
-                        n3s = [e1[1] for e1 in graphCopy.edges(n1) for e2 in graphCopy.edges(n2) if e1[1] == e2[1]]
-                        new_tris = [(n1, n2, n3) for n3 in n3s if sorted((n1, n2, n3)) not in self.triCache]
-                        if new_tris:
-                            for tri in new_tris:
-                                self.triCache.append(sorted(tri))
-                        else:
-                            continue
+                        n3s = [e1[1] for e1 in edgesCopy(n1) for e2 in edgesCopy(n2) if e1[1] == e2[1]]
+                        adjacentTris = [(n1, n2, n3) for n3 in n3s if tuple(sorted((n1, n2, n3))) not in triCache]
 
-                        for i in range(self.varRecursionLevel):
-                            tris = new_tris
-                            new_tris = []
-                            # Subdivide each triangle into four equal triangles
-                            for tri in tris:
-                                # Find middle point of edge u,v
-                                # and add node and edges to graph
-                                n1, n2, n3 = tri
-                                a = self.get_middle_point(n1, n2)
-                                # Subdivide edge into two equal edges
-                                if self.graph.has_edge(n1, n2):
-                                    self.graph.remove_edge(n1, n2)
-                                self.graph.add_edge(n1, a)
-                                self.graph.add_edge(a, n2)
+                        # Subdivide each triangle into four equal triangles
+                        for tri in adjacentTris:
+                            triCache[tuple(sorted(tri))] = 1  # Store to avoid splitting in the future
 
-                                # Find middle point of edge v,w
-                                # and add node and edges to graph
-                                b = self.get_middle_point(n2, n3)
-                                # Subdivide edge into two equal edges
-                                if self.graph.has_edge(n2, n3):
-                                    self.graph.remove_edge(n2, n3)
-                                self.graph.add_edge(n2, b)
-                                self.graph.add_edge(b, n3)
+                            # Find middle point of edge u,v
+                            # and add node and edges to graph
+                            n1, n2, n3 = tri
+                            a = self.get_middle_point(n1, n2)
+                            # Subdivide edge into two equal edges
+                            if self.graph.has_edge(n1, n2):
+                                self.graph.remove_edge(n1, n2)
+                            self.graph.add_edge(n1, a)
+                            self.graph.add_edge(a, n2)
 
-                                # Find middle point of edge w,u
-                                # and add node and edges to graph
-                                c = self.get_middle_point(n3, n1)
-                                # Subdivide edge into two equal edges
-                                if self.graph.has_edge(n3, n1):
-                                    self.graph.remove_edge(n3, n1)
-                                self.graph.add_edge(n3, c)
-                                self.graph.add_edge(c, n1)
+                            # Find middle point of edge v,w
+                            # and add node and edges to graph
+                            b = self.get_middle_point(n2, n3)
+                            # Subdivide edge into two equal edges
+                            if self.graph.has_edge(n2, n3):
+                                self.graph.remove_edge(n2, n3)
+                            self.graph.add_edge(n2, b)
+                            self.graph.add_edge(b, n3)
 
-                                # Add inner edges of subdivided triangle
-                                self.graph.add_edge(a, b)
-                                self.graph.add_edge(b, c)
-                                self.graph.add_edge(c, a)
-                                new_tris.extend([(n1, a, c), (a, n2, b), (a, b, c), (c, b, n3)])
-            print('done')
+                            # Find middle point of edge w,u
+                            # and add node and edges to graph
+                            c = self.get_middle_point(n3, n1)
+                            # Subdivide edge into two equal edges
+                            if self.graph.has_edge(n3, n1):
+                                self.graph.remove_edge(n3, n1)
+                            self.graph.add_edge(n3, c)
+                            self.graph.add_edge(c, n1)
+
+                            # Add inner edges of subdivided triangle
+                            self.graph.add_edge(a, b)
+                            self.graph.add_edge(b, c)
+                            self.graph.add_edge(c, a)
+            print('\r\r Refined graph at coastlines')
 
             # Delete 3DPoint attribute since it is not needed in the future
             for n in self.graph.nodes:
@@ -431,18 +390,18 @@ class Hexagraph:
             for n1, n2 in self.graph.edges():
                 p1, p2 = self.graph.nodes[n1]['deg'], self.graph.nodes[n2]['deg']
                 miles = self.distance(p1, p2)
-                self.graph[n1][n2]['miles'] = miles
+                self.graph[n1][n2]['dist'] = miles
 
                 if geo_x_geos(self.ecaTreeDict, p1, p2):
-                    self.graph[n1][n2]['eca_weight'] = miles * 2
+                    self.graph[n1][n2]['eca'] = miles * 2
                 else:
-                    self.graph[n1][n2]['eca_weight'] = miles
+                    self.graph[n1][n2]['eca'] = miles
             print('done')
 
             # Set canal edge weights to predefined weights
             for canal in self.canals:
                 n1, n2 = (n for n in self.canals[canal]['nodes'])
-                self.graph[n1][n2]['miles'] = self.canals[canal]['dist']
+                self.graph[n1][n2]['dist'] = self.canals[canal]['dist']
 
             print('Removing isolates... ', end='')
             nx.isolates(self.graph)
@@ -454,33 +413,4 @@ class Hexagraph:
             for cc in sorted(nx.connected_components(self.graph), key=len, reverse=True)[1:]:
                 self.graph.remove_nodes_from(cc)
             print('done')
-
             return self.graph
-
-
-if __name__ == '__main__':
-    from data_config.navigable_area import NavigableAreaGenerator
-    os.chdir('..')
-    graph_d = 7
-    graph_vd = 2
-    _resolution = 'l'
-    splits = 10
-    _par = {'res': _resolution,
-            'splits': splits,
-            'graphVarDens': graph_vd,
-            'graphDens': graph_d,
-            'avoidAntarctic': True,
-            'avoidArctic': True}
-
-    # Load and pre-process shoreline and ECA polygons
-    navAreaGenerator = NavigableAreaGenerator(_par)
-    _treeDict = navAreaGenerator.get_shoreline_tree()
-    _ecaTreeDict = navAreaGenerator.get_eca_tree
-
-    # Initialize "Hexagraph"
-    hexagraph = Hexagraph(_treeDict, _ecaTreeDict, _par)
-    hexagraph.get_graph()
-    hexagraph.plot_graph()
-    # hexagraph.plot_sphere_edges()
-    # hexagraph.plot_sphere()
-    plt.show()

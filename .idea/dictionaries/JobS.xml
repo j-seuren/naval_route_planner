@@ -4,6 +4,7 @@
       <w>asdict</w>
       <w>autovivification</w>
       <w>avgs</w>
+      <w>bathymetry</w>
       <w>bilinear</w>
       <w>bothnia</w>
       <w>ccrs</w>
@@ -39,6 +40,7 @@
       <w>hofer</w>
       <w>hofers</w>
       <w>hofs</w>
+      <w>hypervolume</w>
       <w>ifremer</w>
       <w>impr</w>
       <w>inds</w>
@@ -51,6 +53,7 @@
       <w>memoized</w>
       <w>minmax</w>
       <w>mins</w>
+      <w>moea</w>
       <w>mpaes</w>
       <w>mstats</w>
       <w>mutpb</w>
@@ -69,6 +72,7 @@
       <w>polys</w>
       <w>posteriori</w>
       <w>priori</w>
+      <w>proc</w>
       <w>proj</w>
       <w>recomb</w>
       <w>recombinations</w>
@@ -80,6 +84,7 @@
       <w>secas</w>
       <w>shapefile</w>
       <w>shutil</w>
+      <w>skopt</w>
       <w>slerp</w>
       <w>spea</w>
       <w>sqrt</w>
@@ -90,6 +95,7 @@
       <w>vlsfo</w>
       <w>waypoint</w>
       <w>waypoints</w>
+      <w>wobj</w>
       <w>xformatter</w>
       <w>xlsx</w>
       <w>yday</w>

@@ -1,14 +1,15 @@
+import datetime
 import numpy as np
-import operator
 import os
 import pandas as pd
 import support
 import weather
 
-from datetime import timedelta
 from functools import lru_cache
-from math import cos, sin, tan, atan2, sqrt, log, pi, copysign, degrees, pow
+from math import cos, sin, sqrt, degrees, pow
 from shapely.geometry import LineString, Point
+
+from case_studies.demos import create_currents
 
 
 class Evaluator:
@@ -16,64 +17,71 @@ class Evaluator:
                  vessel,
                  treeDict,
                  ecaTreeDict,
+                 bathTreeDict,
                  ecaFactor,
                  fuelPrice,
                  geod,
-                 revertOutput,
-                 startDate=None,
-                 segLengthF=100,
-                 segLengthC=15):
+                 criteria,
+                 parameters,
+                 startDate=None):
         self.vessel = vessel            # Vessel class instance
         self.treeDict = treeDict        # R-tree spatial index dictionary for shorelines
         self.ecaTreeDict = ecaTreeDict  # R-tree spatial index dictionary for ECAs
+        self.bathTreeDict = bathTreeDict  # R-tree spatial index dictionary for bathymetry
         self.ecaFactor = ecaFactor      # Multiplication factor for ECA fuel
         self.startDate = startDate      # Start date of voyage
-        self.segLengthF = segLengthF    # Max segment length (for feasibility)
-        self.segLengthC = segLengthC    # Max segment length (for currents)
+        self.segLengthF = parameters['segLengthF']    # Max segment length (for feasibility)
+        self.segLengthC = parameters['segLengthC']    # Max segment length (for currents)
         self.geod = geod                # Geod class instance
         self.currentOperator = None
         self.weatherOperator = None
         self.fuelPrice = fuelPrice
         self.inclWeather = None
         self.inclCurrent = None
-        self.revertOutput = revertOutput
+        self.criteria = criteria
+        self.revertOutput = not criteria['minimalTime']
+        self.penaltyValue = parameters['penaltyValue']
+        self.includePenalty = False
 
     def set_classes(self, inclCurr, inclWeather, startDate, nDays):
         self.inclWeather = inclWeather
         self.inclCurrent = inclCurr
         if inclCurr:
+            assert isinstance(startDate, datetime.date), 'Set start date'
             self.currentOperator = weather.CurrentOperator(startDate, nDays)
+            # self.currentOperator.da = create_currents(nDays)
         if inclWeather:
-            self.weatherOperator = weather.WeatherOperator(startDate, nDays)
+            assert isinstance(startDate, datetime.date), 'Set start date'
+            self.weatherOperator = weather.WindOperator(startDate, nDays)
 
-    def evaluate(self, ind, revert=None):
+    def evaluate(self, ind, revert=None, includePenalty=False):
         if revert is None:
             revert = self.revertOutput
-
-        if not self.feasible(ind):
-            return 1e+20, 1e+20
 
         # Initialize variables
         TT = FC = 0.0
 
         for e in range(len(ind) - 1):
-            # Get edge waypoints and edge boat speed
+            # Leg endpoints and boat speed
             p1, p2 = sorted((ind[e][0], ind[e + 1][0]))
             boatSpeed = ind[e][1]
 
-            # Compute travel time over edge
-            edgeTT = self.e_tt(p1, p2, TT, boatSpeed)
+            # Leg travel time and fuel cost
+            legTT = self.leg_tt(p1, p2, TT, boatSpeed)
+            legFC = self.vessel.fuel_rates[boatSpeed] * legTT * self.fuelPrice
 
-            # Compute fuel consumption over edge
-            edgeFC = self.vessel.fuel_rates[boatSpeed] * edgeTT * self.fuelPrice
-
-            # If edge intersects SECA increase fuel consumption by ecaFactor
+            # If leg intersects ECA increase fuel consumption by ecaFactor
             if geo_x_geos(self.ecaTreeDict, p1, p2):
-                edgeFC *= self.ecaFactor
+                legFC *= self.ecaFactor
 
             # Increment objective values
-            TT += edgeTT
-            FC += edgeFC
+            TT += legTT
+            FC += legFC
+
+            if includePenalty:
+                penalty = self.e_feasible(p1, p2)
+                TT += penalty[0]
+                FC += penalty[1]
 
         if revert:
             return FC, TT
@@ -92,7 +100,7 @@ class Evaluator:
         lons, lats = self.geod.points(p1, p2, dist, self.segLengthF)
         vertices = np.stack([lons, lats]).T
 
-        # since we know the difference between any two points, we can use this to find wrap arounds on the plot
+        # since we know the difference between any two points, we can use this to find wrap arounds
         maxDist = self.segLengthF * 10 / 60
 
         # calculate distances and compare with max allowable distance
@@ -107,42 +115,50 @@ class Evaluator:
                                     vertices[cut+1:, :]]
                                    )
             vertices = verts
+        timePenalty = costPenalty = 0
         for i in range(len(vertices)-1):
             if not np.isnan(np.sum(vertices[i:i+2, :])):
                 q1, q2 = tuple(vertices[i, :]), tuple(vertices[i+1, :])
                 if geo_x_geos(self.treeDict, q1, q2):
                     return False
-        return True
+                if self.includePenalty and not geo_x_geos(self.bathTreeDict, q1, q1):
+                    timePenalty += self.penaltyValue['time']
+                    costPenalty += self.penaltyValue['cost']
+        return [timePenalty, costPenalty]
 
-    def e_tt(self, p1, p2, tt, boatSpeed):
+    @lru_cache(maxsize=None)
+    def leg_tt(self, p1, p2, tt, boatSpeed):
         dist = self.geod.distance(p1, p2)
         if self.inclCurrent or self.inclWeather:
-            # Split edge in segments (seg) of del_sc in nautical miles
+            # Split leg in segments (seg) of segLengthC in nautical miles
             lons, lats = self.geod.points(p1, p2, dist, self.segLengthC)
-            edgeTT = 0.0
+            legTT = 0.0
             for i in range(len(lons) - 1):
                 q1, q2 = (lons[i], lats[i]), (lons[i+1], lats[i+1])
-                currentTT = tt + edgeTT
+                currentTT = tt + legTT
                 segmentTT = self.seg_tt(q1, q2, boatSpeed, currentTT)
-                edgeTT += segmentTT
+                legTT += segmentTT
         else:
-            edgeTT = dist / boatSpeed
-        return edgeTT / 24.0  # Travel time in days
+            legTT = dist / boatSpeed
+        return legTT / 24.0  # Travel time in days
 
     def seg_tt(self, p1, p2, boatSpeed, currentTT):
-        now = self.startDate + timedelta(hours=currentTT)
-        dist = self.geod.distance(p1, p2)
+        now = self.startDate + datetime.timedelta(hours=currentTT)
+        dist, bearing_rad = self.geod.distance(p1, p2, bearing=True)
 
-        # Coordinates of middle point of edge
-        lon, lat = (item / 2 for item in map(operator.add, p1, p2))
+        # Coordinates of middle point of leg
 
-        bearing_rad = calc_bearing(p1, p2)
+        if abs(p1[0] - p2[0]) > 300:  # If segment crosses datum line (-180 degrees), choose p1 as middle point
+            lon, lat = p1
+        else:
+            lon, lat = (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2
 
         if self.inclWeather:
             # Beaufort number (BN) and true wind direction (TWD) at (lon, lat)
             BN, windDir = self.weatherOperator.get_grid_pt_wind(now, lon, lat)
             heading = degrees(bearing_rad)
             boatSpeed = self.vessel.reduced_speed(windDir, heading, BN, boatSpeed)
+
         if self.inclCurrent:
             # Easting and Northing currents at (lon, lat)
             u, v = self.currentOperator.get_grid_pt_current(now, lon, lat)
@@ -151,16 +167,18 @@ class Evaluator:
             sog = calc_sog(bearing_rad, u, v, boatSpeed)
         else:
             sog = boatSpeed
+
         return dist / sog
 
 
 class Vessel:
     def __init__(self, name='Fairmaster', shipLoading='normal'):
         self.name = name
-        vesselTableFP = os.path.abspath('data/speed_table.xlsx')
-        vesselTable = pd.read_excel(vesselTableFP, sheet_name=self.name)
-        self.speeds = [round(speed, 1) for speed in vesselTable['Speed']]
-        self.fuel_rates = {speed: round(vesselTable['Fuel'][i], 1) for i, speed in enumerate(self.speeds)}
+        vesselTableFP = os.path.abspath('D:/data/speed_table.xlsx')
+        df = pd.read_excel(vesselTableFP, sheet_name=self.name)
+        df = df[df['Loading'] == shipLoading].round(1)
+        self.fuel_rates = pd.Series(df.Fuel.values, index=df.Speed).to_dict()
+        self.speeds = list(self.fuel_rates.keys())
 
         # Set parameters for ship speed reduction calculations
         Lpp = 320  # Ship length between perpendiculars [m]
@@ -179,15 +197,12 @@ class SemiEmpiricalSpeedReduction:
     Kwon, Y.J., 2008. Speed loss due to added resistance in wind and waves """
 
     def __init__(self, block, shipLoading, Lpp, volume):
-        self.g = 9.81  # gravitational acceleration [m/s^2]
-        self.Lpp = Lpp  # Length between perpendiculars [m]
-        self.vol = volume  # Displaced volume [m^3]
 
-        coefficientTableFP = 'data/kwons_method_coefficient_tables.xlsx'
+        coefficientTableFP = 'D:/data/kwons_method_coefficient_tables.xlsx'
         # Weather direction reduction table
         df = pd.read_excel(coefficientTableFP, sheet_name='direction_reduction_coefficient')
         self.directionDF = df[['a', 'b', 'c']].to_numpy()
-        self.windAngleBins = [30, 60, 150, 180.1]
+        # self.windAngleBins = [30, 60, 150, 180]
 
         # Speed reduction formula coefficients: a, b, c
         if shipLoading == 'ballast':
@@ -198,63 +213,50 @@ class SemiEmpiricalSpeedReduction:
         roundedBlock = blockBins[support.find_closest(blockBins, block)]
         df = pd.read_excel(coefficientTableFP, sheet_name='speed_reduction_coefficient')
         abc = df.loc[(df['block_coefficient'] == roundedBlock) & (df['ship_loading'] == shipLoading)]
-        self.aB, self.bB, self.cB = float(abc['a']), float(abc['b']), float(abc['c'])
+        self.aB, self.bB, cB = float(abc['a']), float(abc['b']), float(abc['c'])
+        g = 9.81  # gravitational acceleration [m/s^2]
+        knotToMs = 0.514444
+        self.FnConstant = knotToMs / sqrt(Lpp * g)
+        self.cB = cB * self.FnConstant ** 2
 
         # Ship coefficient formula coefficients: a, b
         df = pd.read_excel(coefficientTableFP, sheet_name='ship_form_coefficient')
         ab = df.loc[(df['ship_type'] == 'all') & (df['ship_loading'] == shipLoading)]
-        self.aU, self.bU = float(ab['a']), float(ab['b'])
+        self.aU, bU = float(ab['a']), float(ab['b'])
 
-    def speed_reduction_coefficient(self, Fn):
-        return self.aB + self.bB * Fn + self.cB * Fn ** 2
-
-    def direction_reduction_coefficient(self, BN, windAngle):
-        windAngleIdx = int(np.digitize(abs(windAngle), self.windAngleBins))
-        abc = self.directionDF[windAngleIdx]
-        a, b, c = abc[0], abc[1], abc[2]
-
-        return (a + b * pow(BN + c, 2)) / 2
-
-    def ship_form_coefficient(self, BN):
-        return self.aU * BN + pow(BN, 6.5) / (self.bU * pow(self.vol, (2 / 3)))
+        self.formDenominator = 1 / (bU * pow(volume, (2 / 3)))
 
     def reduced_speed(self, windDir, heading, BN, designSpeed):
-        """ The weather effect, presented as speed loss, compares the
+        """ The wind effect, presented as speed loss, compares the
         speed of the ship in varying actual sea conditions to the ship's
         expected speed in still water conditions.
         formC is the
         directionC is the ,
         speedC is is the  """
 
-        # General speed loss in head weather condition
-        formC = self.ship_form_coefficient(BN)
+        # General speed loss in head wind condition
+        formC = self.aU * BN + pow(BN, 6.5) * self.formDenominator
 
         # Weather direction reduction factor
-        windAngle = (windDir - heading + 180) % 360 - 180  # [-180, 180] degrees
-        directionC = self.direction_reduction_coefficient(BN, windAngle)
+        windAngle = abs((windDir - heading + 180) % 360 - 180)  # [0, 180] degrees
+        if windAngle < 30:
+            abc = self.directionDF[0]
+        elif windAngle < 60:
+            abc = self.directionDF[1]
+        elif windAngle < 150:
+            abc = self.directionDF[2]
+        else:
+            abc = self.directionDF[3]
+        a, b, c = abc[0], abc[1], abc[2]
+        directionC = (a + b * pow(BN + c, 2)) / 2
 
         # Correction factor for block coefficient and Froude number
-        Fn = (designSpeed * 0.514444) / sqrt(self.Lpp * self.g)
-        speedC = self.speed_reduction_coefficient(Fn)
+        Fn = designSpeed * self.FnConstant
+        speedC = self.aB + self.bB * Fn + self.cB * pow(designSpeed, 2)
         relativeSpeedLoss = max(min((directionC * speedC * formC) / 100, 0.99), -0.3)
 
         actualSpeed = designSpeed * (1 - relativeSpeedLoss)
         return actualSpeed
-
-
-def calc_bearing(p1, p2):
-    """ Calculate bearing in degrees"""
-    # Convert degrees to radians
-    [(lam1, phi1), (lam2, phi2)] = np.radians([p1, p2])
-
-    # Latitude difference projected on Mercator projection
-    dPsi = log(tan(pi / 4 + phi2 / 2) / tan(pi / 4 + phi1 / 2))
-
-    dLam = lam2 - lam1  # Longitude difference
-    if abs(dLam) > pi:  # take shortest route: dLam < PI
-        dLam = dLam - copysign(2 * pi, dLam)
-
-    return atan2(dLam, dPsi)
 
 
 def calc_sog(bearing, Se, Sn, V):
@@ -294,7 +296,7 @@ if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import pprint
 
-    os.chdir('..')
+    os.chdir('')
 
     _heading = 0
     _vessel = Vessel()
