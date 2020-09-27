@@ -33,7 +33,8 @@ class Hexagraph:
     def __init__(self,
                  treeDict,
                  ecaTreeDict,
-                 p):
+                 p,
+                 DIR=Path('D:/')):
         self.treeDict = treeDict
         self.ecaTreeDict = ecaTreeDict
         self.p = p
@@ -49,7 +50,7 @@ class Hexagraph:
 
         # Generate file path
         graphFN = 'res_{}_d{}_vd{}_{}Ant_{}Arc.gpickle'.format(p['res'], p['graphDens'], p['graphVarDens'], aAc, aC)
-        self.graphFP = self.DIR / 'data' / graphFN
+        self.graphFP = DIR / 'data' / graphFN
 
     def get_graph(self):
         # Load or construct graph

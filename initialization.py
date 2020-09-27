@@ -16,7 +16,8 @@ class Initializer:
                  ecaTree,
                  geod,
                  p,
-                 container):
+                 container,
+                 DIR):
         self.evaluator = evaluator
         self.vessel = vessel          # Vessel class
         self.tree = tree              # R-tree spatial index for shorelines
@@ -25,7 +26,7 @@ class Initializer:
         self.container = container    # Container for individual
         self.canals = {'Panama': ['panama_south', 'panama_north'],
                        'Suez': ['suez_south', 'suez_north']}
-        self.hexagraph = hexagraph.Hexagraph(self.tree, self.ecaTree, p)
+        self.hexagraph = hexagraph.Hexagraph(self.tree, self.ecaTree, p, DIR=DIR)
 
     def get_path(self, graph):
         """

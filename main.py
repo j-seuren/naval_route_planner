@@ -29,7 +29,7 @@ elif _criteria['minimalCost']:
 else:
     _criteria = {'minimalTime': -1}
 
-DIR = Path('')
+DIR = Path('D:/')
 creator.create("FitnessMin", base.Fitness, weights=tuple(_criteria.values(),))
 creator.create("Individual", list, fitness=creator.FitnessMin)
 _tb = base.Toolbox()
@@ -119,7 +119,8 @@ class RoutePlanner:
                                                       ecaTree,
                                                       self.geod,
                                                       self.p,
-                                                      creator.Individual)
+                                                      creator.Individual,
+                                                      DIR)
 
         # Load previously calculated initial paths
         self.initPathsDir = Path('output/initialRoutes/RES_{}_D{}_VD_{}'.format(self.p['res'],
@@ -702,13 +703,13 @@ class RoutePlanner:
             # Re-populate R-Tree structures
             navAreaGenerator = NavigableAreaGenerator(self.p)
             landTree = navAreaGenerator.get_shoreline_rtree()
-            ecaTree = navAreaGenerator.get_eca_tree
+            ecaTree = navAreaGenerator.get_eca_rtree()
 
             set_attrs(self.evaluator,
                       treeDict=landTree,
                       ecaTreeDict=ecaTree)
             self.initializer = initialization.Initializer(self.evaluator, self.vessel, landTree, ecaTree,
-                                                          self.geod, self.p, creator.Individual)
+                                                          self.geod, self.p, creator.Individual, DIR)
 
     def get_days(self, pop):
         """
