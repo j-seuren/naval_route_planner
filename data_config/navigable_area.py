@@ -19,7 +19,7 @@ class NavigableAreaGenerator:
         self.antarcticFP = self.gshhgDir / '{0}/GSHHS_{0}_L6.shp'.format(self.resolution)
         self.DIR = DIR
 
-    def get_shoreline_tree(self, getExterior=False):
+    def get_shoreline_rtree(self, getExterior=False):
         aC = 'excl' if self.avoidArctic else 'incl'
         aAc = 'excl' if self.avoidAntarctic else 'incl'
         fp = self.DIR / 'data/navigation_area/shorelines_{}_split{}_{}Antarc_{}Arc'.format(self.resolution, self.splitThreshold,
@@ -41,7 +41,7 @@ class NavigableAreaGenerator:
         else:
             return populate_rtree(shorelines, fp)
 
-    def get_bathymetry_tree(self):
+    def get_bathymetry_rtree(self):
         fp = self.DIR / 'data/navigation_area/bath_split{}'.format(self.splitThreshold)
         if os.path.exists(fp):
             with open(fp, 'rb') as f:
@@ -216,7 +216,7 @@ if __name__ == '__main__':
     os.chdir('..')
     pars = {'res': 'l', 'splits': 10, 'avoidAntarctic': False, 'avoidArctic': False}
     generator = NavigableAreaGenerator(parameters=pars)
-    bathymetry = generator.get_bathymetry_tree()
+    bathymetry = generator.get_bathymetry_rtree()
 
     # Plot on Basemap
     _fig, _ax = plt.subplots()

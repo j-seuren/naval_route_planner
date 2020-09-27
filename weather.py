@@ -8,10 +8,10 @@ from mpl_toolkits import basemap
 
 
 class CurrentOperator:
-    def __init__(self, t0, nDays):
+    def __init__(self, t0, nDays, DIR):
         self.t0 = t0.replace(second=0, microsecond=0, minute=0, hour=0)
         self.nDays = nDays
-        self.data = current_data.CurrentDataRetriever(self.t0, self.nDays).get_data()
+        self.data = current_data.CurrentDataRetriever(self.t0, self.nDays, DIR=DIR).get_data()
 
         cache = Cache(2e9)  # Leverage two gigabytes of memory
         cache.register()  # Turn cache on globally
@@ -57,10 +57,10 @@ def plot_current_field(uin, vin, lons, lats):
 
 
 class WindOperator:
-    def __init__(self, t0, nDays):
+    def __init__(self, t0, nDays, DIR):
         self.t0 = t0.replace(second=0, microsecond=0, minute=0, hour=0)
         assert nDays * 8 < 384, 'Estimated travel days exceeds wind forecast period'
-        self.data = wind_data.WindDataRetriever(startDate=self.t0, nDays=nDays).get_data(forecast=False)
+        self.data = wind_data.WindDataRetriever(startDate=self.t0, nDays=nDays, DIR=DIR).get_data(forecast=False)
 
         cache = Cache(2e9)  # Leverage two gigabytes of memory
         cache.register()  # Turn cache on globally

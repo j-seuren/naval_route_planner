@@ -23,7 +23,7 @@ _par = {'res': _resolution,
 
 # Load and pre-process shoreline and ECA polygons
 navAreaGenerator = NavigableAreaGenerator(_par)
-_treeDict = navAreaGenerator.get_shoreline_tree()
+_treeDict = navAreaGenerator.get_shoreline_rtree()
 _ecaTreeDict = navAreaGenerator.get_eca_tree
 
 # Initialize "Hexagraph"

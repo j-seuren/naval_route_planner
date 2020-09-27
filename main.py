@@ -43,10 +43,10 @@ class RoutePlanner:
                  inputParameters=None,
                  criteria=None,
                  tb=None):
+        DIR = Path('D:/')
+
         # Set parameters
         defaultParameters = {
-                             'saveDIR': Path('D:/'),
-
                              # Navigation area parameters
                              'avoidAntarctic': True,
                              'avoidArctic': True,
@@ -89,16 +89,16 @@ class RoutePlanner:
         self.tb = _tb if tb is None else tb
         self.criteria = criteria
         self.procResultsFP = None
-        self.vessel = evaluation.Vessel(vesselName, shipLoading)  # Vessel class instance
+        self.vessel = evaluation.Vessel(vesselName, shipLoading, DIR=DIR)  # Vessel class instance
         self.ecaFactor = ecaFactor              # Multiplication factor ECA fuel
         self.fuelPrice = fuelPrice              # Fuel price [1000 dollars / mt]
         self.geod = geodesic.Geodesic()         # Geodesic class instance
 
         # Load and pre-process shoreline, ECA, and Bathymetry geometries
-        navAreaGenerator = NavigableAreaGenerator(self.p)
-        landTree = navAreaGenerator.get_shoreline_tree()
-        ecaTree = navAreaGenerator.get_eca_tree()
-        bathTree = navAreaGenerator.get_bathymetry_tree()
+        navAreaGenerator = NavigableAreaGenerator(self.p, DIR=DIR)
+        landTree = navAreaGenerator.get_shoreline_rtree()
+        ecaTree = navAreaGenerator.get_eca_rtree()
+        bathTree = navAreaGenerator.get_bathymetry_rtree()
 
         # Initialize "Evaluator" and register it's functions
         self.evaluator = evaluation.Evaluator(self.vessel,
@@ -109,7 +109,8 @@ class RoutePlanner:
                                               self.fuelPrice,
                                               self.geod,
                                               criteria,
-                                              self.p)
+                                              self.p,
+                                              DIR=DIR)
 
         # Initialize "Initializer"
         self.initializer = initialization.Initializer(self.evaluator,
@@ -700,7 +701,7 @@ class RoutePlanner:
         if reinitialize:
             # Re-populate R-Tree structures
             navAreaGenerator = NavigableAreaGenerator(self.p)
-            landTree = navAreaGenerator.get_shoreline_tree()
+            landTree = navAreaGenerator.get_shoreline_rtree()
             ecaTree = navAreaGenerator.get_eca_tree
 
             set_attrs(self.evaluator,

@@ -32,6 +32,7 @@ class Evaluator:
                  geod,
                  criteria,
                  parameters,
+                 DIR,
                  startDate=None):
         self.vessel = vessel            # Vessel class instance
         self.treeDict = treeDict        # R-tree spatial index dictionary for shorelines
@@ -52,6 +53,7 @@ class Evaluator:
         self.penaltyValue = parameters['penaltyValue']
         self.includePenalty = False
         self.delta = (1e+20,) * len(criteria)
+        self.DIR = DIR
 
     def set_classes(self, inclCurr, inclWeather, startDate, nDays):
         self.startDate = startDate
@@ -59,11 +61,11 @@ class Evaluator:
         self.inclCurrent = inclCurr
         if inclCurr:
             assert isinstance(startDate, datetime.date), 'Set start date'
-            self.currentOperator = weather.CurrentOperator(startDate, nDays)
+            self.currentOperator = weather.CurrentOperator(startDate, nDays, DIR=self.DIR)
             # self.currentOperator.da = create_currents(nDays)
         if inclWeather:
             assert isinstance(startDate, datetime.date), 'Set start date'
-            self.weatherOperator = weather.WindOperator(startDate, nDays)
+            self.weatherOperator = weather.WindOperator(startDate, nDays, DIR=self.DIR)
 
     @delta_penalty
     def evaluate(self, ind, revert=None, includePenalty=False):
