@@ -29,7 +29,7 @@ elif _criteria['minimalCost']:
 else:
     _criteria = {'minimalTime': -1}
 
-DIR = Path('D:/')
+DIR = Path('')
 creator.create("FitnessMin", base.Fitness, weights=tuple(_criteria.values(),))
 creator.create("Individual", list, fitness=creator.FitnessMin)
 _tb = base.Toolbox()
