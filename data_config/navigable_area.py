@@ -22,10 +22,11 @@ class NavigableAreaGenerator:
     def get_shoreline_rtree(self, getExterior=False):
         aC = 'excl' if self.avoidArctic else 'incl'
         aAc = 'excl' if self.avoidAntarctic else 'incl'
-        fp = self.DIR / 'data/navigation_area/shorelines{}_{}_split{}_{}Antarc_{}Arc'.format('Ext' if getExterior else '',
-                                                                                           self.resolution,
-                                                                                           self.splitThreshold,
-                                                                                           aAc, aC)
+        extString = 'Ext' if getExterior else ''
+        fp = self.DIR / 'data/navigation_area/shorelines{}_{}_split{}_{}Antarc_{}Arc'.format(extString,
+                                                                                             self.resolution,
+                                                                                             self.splitThreshold,
+                                                                                             aAc, aC)
         shorelines = self.get_shorelines(fp, not getExterior)
         if getExterior:
             exteriors = []
