@@ -14,7 +14,7 @@ class NavigableAreaGenerator:
         self.splitThreshold = parameters['splits']
         self.avoidAntarctic = parameters['avoidAntarctic']
         self.avoidArctic = parameters['avoidArctic']
-        self.gshhgDir = DIR / 'data/gshhg-shp-2.3.7/GSHHS_shp'
+        self.gshhgDir = DIR / 'data/GSHHS_shp'
         self.shorelinesFP = self.gshhgDir / '{0}/GSHHS_{0}_L1.shp'.format(self.resolution)
         self.antarcticFP = self.gshhgDir / '{0}/GSHHS_{0}_L6.shp'.format(self.resolution)
         self.DIR = DIR
