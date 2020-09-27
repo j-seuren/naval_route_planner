@@ -22,8 +22,9 @@ class NavigableAreaGenerator:
     def get_shoreline_rtree(self, getExterior=False):
         aC = 'excl' if self.avoidArctic else 'incl'
         aAc = 'excl' if self.avoidAntarctic else 'incl'
-        fp = self.DIR / 'data/navigation_area/shorelines_{}_split{}_{}Antarc_{}Arc'.format(self.resolution, self.splitThreshold,
-                                                                                   aAc, aC)
+        fp = self.DIR / 'data/navigation_area/shorelines_{}_split{}_{}Antarc_{}Arc'.format(self.resolution,
+                                                                                           self.splitThreshold,
+                                                                                           aAc, aC)
         shorelines = self.get_shorelines(fp, not getExterior)
         if getExterior:
             exteriors = []
@@ -37,7 +38,7 @@ class NavigableAreaGenerator:
             shorelines = exteriors
 
         if os.path.exists(fp / '.idx'):
-            return {'rtree': Index(fp.as_posix()), 'geometries': shorelines}
+            return {'rtree': Index(str(fp)), 'geometries': shorelines}
         else:
             return populate_rtree(shorelines, fp)
 
@@ -57,7 +58,7 @@ class NavigableAreaGenerator:
             print('Saved to: ', fp)
 
         if os.path.exists(fp / '.idx'):
-            return {'rtree': Index(fp.as_posix()), 'geometries': bathPolys}
+            return {'rtree': Index(str(fp)), 'geometries': bathPolys}
         else:
             return populate_rtree(bathPolys, fp)
 
@@ -177,7 +178,7 @@ class NavigableAreaGenerator:
             ecas = pickle.load(f)
 
         if os.path.exists(fp / '.idx'):
-            return {'rtree': Index(fp.as_posix()), 'geometries': ecas}
+            return {'rtree': Index(str(fp)), 'geometries': ecas}
         else:
             return populate_rtree(ecas, fp)
 
