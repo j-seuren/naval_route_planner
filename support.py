@@ -172,7 +172,9 @@ locations = {'Brazil': (-23.4166, -7.2574),
              'Tokyo': (49, 12),
              'Yemen': (49, 12),
              'eastLocations': eastLocations,
-             'westLocations': westLocations
+             'westLocations': westLocations,
+             'weatherStarts': [],
+             'weatherEnds': []
              }
 
 
@@ -186,6 +188,25 @@ def clear_caches():
 
 
 if __name__ == '__main__':
+    # Weather locations
+    starts = [
+        (),  # Dutch Harbor
+        (),  # New York
+        (),  # New York
+        (),  # Cape Town
+        (),  # Perth
+        (),  # Hamburg
+        (),  #
+        (),  #
+        (),  #
+        (),  #
+        (),  #
+        (),  #
+    ]
+
+
+
+    # Current locations
     westBot, westTop, eastBot, eastTop = np.array([-72, 32]), np.array([-74, 39]), np.array([-50, 38]), np.array(
         [-55, 46])
 

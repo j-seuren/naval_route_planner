@@ -5,6 +5,7 @@ import main
 import numpy as np
 import os
 import pandas as pd
+import pickle
 import time
 
 # from case_studies.demos import create_currents
@@ -14,145 +15,114 @@ from support import locations
 os.chdir('..')
 
 DIR = Path('D:/')
-
-PARAMETERS = {'mutpb': 0.61,
+SPEED = True
+ITERS = 1
+parameters = {'mutpb': 0.61,
               'widthRatio': 7.5e-4,
               'radius': 0.39,
-              'gauss': True,
-              'mutationOperators': ['insert', 'move', 'delete'],  # Operators to be included
-              'gen': 2,  # Number of generations
+              'gauss': False,
+              'mutationOperators': ['insert', 'move', 'delete'] if SPEED else ['insert', 'move', 'speed', 'delete'],
+              'gen': 2,  # Min number of generations
               'n': 300}  # Population size
+PLANNER = main.RoutePlanner(inputParameters=parameters, criteria={'minimalTime': True, 'minimalCost': True})
 
 
-START_END = (locations['Current1'], locations['Current2'])
-START_DATE = datetime.datetime(2016, 1, 1)
-START_DATE_STRING = START_DATE.strftime('%Y_%m_%d')
-# START_DATE = datetime.datetime(2019, 3, 1)
-ITERATIONS = 1
-
-
-def eca_test(parameters, iterations):
-    startEnd = (locations['ECA1: Jacksonville'], locations['ECA2: New York'])
-    routePlanner = main.RoutePlanner(inputParameters=parameters, criteria={'minimalTime': True, 'minimalCost': True})
-
-    startTime = time.time()
-    rawList, procList = [], []
-    for _ in range(iterations):
-        raw = routePlanner.compute(startEnd,
-                                   recompute=False,
-                                   current=False,
-                                   weather=False,
-                                   seed=1)
-        proc, raw = routePlanner.post_process(raw)
-
-        rawList.append(raw)
-        procList.append(proc)
-
-    statisticsPlotter = plot_results.StatisticsPlotter(rawList[0])
-    statisticsPlotter.plot_fronts()
-    statisticsPlotter.plot_stats()
-
-    routePlotter = plot_results.RoutePlotter(procList[0], vessel=routePlanner.vessel)
-    routePlotter.results(initial=True, ecas=True, bathymetry=True)
-
-    print("--- %s seconds ---" % (time.time() - startTime))
-
-    return procList
-
-
-def current_test(startEnd, startDate, parameters, iterations, saveFig=True):
-    routePlanner = main.RoutePlanner(inputParameters=parameters, criteria={'minimalTime': True, 'minimalCost': True})
-
-    rawList, procList = [], []
-    for i in range(iterations):
-        startTime = time.time()
-        raw = routePlanner.compute(startEnd, startDate=startDate, recompute=True, current=True, seed=1)
-        totTime = time.time() - startTime
-        proc, raw = routePlanner.post_process(raw)
-        proc['computationTime'] = totTime
-        rawList.append(raw)
-        procList.append(proc)
-
-        statisticsPlotter = plot_results.StatisticsPlotter(rawList[0])
-        statisticsPlotter.plot_fronts()
-        statisticsPlotter.plot_stats()
-
-        da = routePlanner.evaluator.currentOperator.data
-        lons0 = np.linspace(-179.875, 179.875, 1440)
-        lats0 = np.linspace(-89.875, 89.875, 720)
-        currentDict = {'u': da[0, 0], 'v': da[1, 0], 'lons': lons0, 'lats': lats0}
-
-        if saveFig:
-            routePlotter = plot_results.RoutePlotter(procList[0], rawResults=rawList[0], vessel=routePlanner.vessel)
-            fig, _ = routePlotter.results(initial=False, ecas=False, nRoutes=5, current=currentDict, colorbar=True)
-            timestamp = datetime.datetime.now().strftime("%m%d_%H-%M-%S")
-            fig.savefig(DIR / "output/figures/{}_current_demo_ITER{}.pdf".format(timestamp, i))
-            plt.close('all')
-
-    distancesTime = [proc['routeResponse'][0]['distance'] for proc in procList]
-    distancesFuel = [proc['routeResponse'][1]['distance'] for proc in procList]
-    costsTime = [proc['routeResponse'][0]['fuelCost'] for proc in procList]
-    costsFuel = [proc['routeResponse'][1]['fuelCost'] for proc in procList]
-    timesTime = [proc['routeResponse'][0]['travelTime'] for proc in procList]
-    timesFuel = [proc['routeResponse'][1]['travelTime'] for proc in procList]
-    compTimes = [proc['computationTime'] for proc in procList]
-
-    zipped = list(zip(compTimes, timesFuel, timesTime, costsFuel, costsTime, distancesFuel, distancesTime))
-    df = pd.DataFrame(zipped, columns=['compTimes', 'timesFuel', 'timesTime', 'costsFuel', 'costsTime',
-                                          'distancesFuel', 'distancesTime']).T
-    df['mean'] = df.mean(axis=1)
-    df['std'] = df.std(axis=1)
+def get_df(procList):
+    L_time = [proc['routeResponse'][0]['distance'] for proc in procList]
+    L_fuel = [proc['routeResponse'][1]['distance'] for proc in procList]
+    C_time = [proc['routeResponse'][0]['fuelCost'] for proc in procList]
+    C_fuel = [proc['routeResponse'][1]['fuelCost'] for proc in procList]
+    T_time = [proc['routeResponse'][0]['travelTime'] for proc in procList]
+    T_fuel = [proc['routeResponse'][1]['travelTime'] for proc in procList]
+    compTime = [proc['computationTime'] for proc in procList]
+    table = list(zip(compTime, T_fuel, T_time, C_fuel, C_time, L_fuel, L_time))
+    df = pd.DataFrame(table, columns=['compTime', 'T_fuel', 'T_time', 'C_fuel', 'C_time', 'L_fuel', 'L_time']).T
+    mean, std = df.mean(axis=1), df.std(axis=1)
+    df['mean'], df['std'] = mean, std
 
     return df
 
 
-def general_test(startEnd, startDate, parameters, plot=True):
-    current, weather = False, False
+def single_experiment(experiment, startEnd, depDate, depS, saveFig=True):
+    current = True if experiment == 'current' else False
+    weather = True if experiment == 'weather' else False
+    ecas = True if experiment == 'ecas' else False
 
-    startTime = time.time()
-    routePlanner = main.RoutePlanner(inputParameters=parameters, criteria={'minimalTime': True, 'minimalCost': True})
-    raw = routePlanner.compute(startEnd, recompute=True, startDate=startDate, current=current, weather=weather, seed=1)
+    rawList, procList = [], []
+    for i in range(ITERS):
+        t0 = time.time()
+        raw = PLANNER.compute(startEnd, startDate=depDate, recompute=True, weather=weather, current=current)
+        t1 = time.time() - t0
+        proc, raw = PLANNER.post_process(raw)
+        proc['computationTime'] = t1
+        rawList.append(raw)
+        procList.append(proc)
 
-    print("--- %s seconds ---" % (time.time() - startTime))
+        if saveFig:
+            statisticsPlotter = plot_results.StatisticsPlotter(raw)
+            frontFig, _ = statisticsPlotter.plot_fronts()
+            statsFig, _ = statisticsPlotter.plot_stats()
 
-    if plot:
-        weatherDate = startDate if weather else None
-        proc, raw = routePlanner.post_process(raw)
+            if experiment == 'current':
+                cData = PLANNER.evaluator.currentOperator.data
+                lons0 = np.linspace(-179.875, 179.875, 1440)
+                lats0 = np.linspace(-89.875, 89.875, 720)
+                currentDict = {'u': cData[0, 0], 'v': cData[1, 0], 'lons': lons0, 'lats': lats0}
+            else:
+                currentDict = None
 
-        statisticsPlotter = plot_results.StatisticsPlotter(raw)
-        statisticsPlotter.plot_fronts()
-        statisticsPlotter.plot_stats()
+            weatherDate = depDate if experiment == 'weather' else None
+            routePlotter = plot_results.RoutePlotter(proc, rawResults=raw, vessel=PLANNER.vessel)
+            routeFig, _ = routePlotter.results(initial=False, ecas=ecas, nRoutes=4, weatherDate=weatherDate,
+                                               current=currentDict, colorbar=True)
 
-        routePlotter = plot_results.RoutePlotter(proc, vessel=routePlanner.vessel)
-        routePlotter.results(weatherDate=weatherDate,
-                             initial=True,
-                             bathymetry=True,
-                             ecas=True)
+            for name, fig in {'front': frontFig, 'stats': statsFig, 'routes': routeFig}:
+                fig.savefig(DIR / "output/{}/figures/{}_{}_iters{}.pdf".format(experiment, startEnd, name, i, depS))
 
+            plt.close('all')
 
-writer = pd.ExcelWriter(DIR / 'output/currents/gulf_stream_routes_DATE{}_constantSpeed.xlsx'.format(START_DATE_STRING))
-dfSummary = pd.DataFrame(index=['compTimes', 'timesFuel', 'timesTime', 'costsFuel', 'costsTime', 'distancesFuel',
-                                'distancesTime'])
+    with open(DIR / 'output/{}/raw/{}_{}_iters{}'.format(experiment, startEnd, ITERS, depS)) as f:
+        pickle.dump(rawList, f)
 
-for i, west in enumerate(locations['westLocations']):
-    for j, east in enumerate(locations['eastLocations']):
-        _df = current_test((west, east), START_DATE, PARAMETERS, ITERATIONS, saveFig=False)
-        string = str((i, j))
-        _df.to_excel(writer, sheet_name=string)
-        _df.to_csv(DIR / 'output/currents/single_files/{}_gulf_stream_routes_DATE{}_constantSpeed.xlsx'.format(string,
-                                                                                                               START_DATE_STRING))
-
-        dfSummary[string + '_mean'] = _df['mean']
-        dfSummary[string + '_std'] = _df['std']
+    return get_df(procList)
 
 
-dfSummary.to_excel(writer, sheet_name='summary')
+def multiple_experiments(startEnds, experiment, depDates=None):
+    depDates = [None] if depDates is None else depDates
+    for d, depDate in enumerate(depDates):
+        print('date {} of {}'.format(d, len(depDates)))
+        depS = '' if depDate is None else 'depart' + depDate.strftime('%Y_%m_%d')
+        speedS = 'constant' if SPEED else 'var'
+        writer = pd.ExcelWriter(DIR / 'output/{}/{}_gulf_{}Speed.xlsx'.format(experiment, depS, speedS))
+        dfSummary = pd.DataFrame(index=['compTime', 'T_fuel', 'T_time', 'C_fuel', 'C_time', 'L_fuel', 'L_time'])
+        starts, ends = zip(*startEnds)
 
-writer.save()
+        for i, start in enumerate(starts):
+            for j, end in enumerate(ends):
+                print('start, end {}, {} of {}'.format(i, j, len(ends)))
+                df = single_experiment(experiment, (start, end), depDate, depS, saveFig=True)
+                locS = str((i, j))
+                df.to_excel(writer, sheet_name=locS)
+                df.to_csv(DIR / 'output/{}/single_files/{}_{}_gulf_{}Speed.xlsx'.format(experiment, depS, locS, speedS))
+                dfSummary[locS + '_mean'] = df['mean']
+                dfSummary[locS + '_std'] = df['std']
 
-# df = pd.DataFrame.from_dict(procDict)
-# df.to_excel(DIR / 'output/currents/gulf_stream_routes.xlsx')
+        dfSummary.to_excel(writer, sheet_name='summary')
+        writer.save()
+    print('DONE TESTING')
 
-# eca_test(PARAMETERS, ITERATIONS)
-# general_test(START_END, START_DATE, PARAMETERS)
+
+# Test current
+currentDepartures = [datetime.datetime(2014, 10, 28),
+                     datetime.datetime(2014, 11, 11),
+                     datetime.datetime(2014, 11, 25),
+                     datetime.datetime(2014, 4, 20),
+                     datetime.datetime(2015, 5, 4),
+                     datetime.datetime(2015, 5, 18)]
+currentStartEnds = zip(locations['westLocations'], locations['eastLocations'])
+multiple_experiments(currentStartEnds, 'current', currentDepartures)
+
+# Test ECA
+ecaStartEnds = zip([locations['ECA1: Jacksonville']], [locations['ECA2: New York']])
+multiple_experiments(ecaStartEnds, 'ecas')
 

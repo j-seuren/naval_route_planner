@@ -37,10 +37,10 @@ _tb = base.Toolbox()
 
 class RoutePlanner:
     def __init__(self,
-                 vesselName='Fairmaster',
+                 vesselName='Fairmaster_2',
                  shipLoading='normal',
                  ecaFactor=1.2,
-                 fuelPrice=0.3,
+                 fuelPrice=300,  # Fuel price per metric tonne
                  inputParameters=None,
                  tb=None,
                  criteria=None):
@@ -91,9 +91,9 @@ class RoutePlanner:
         self.tb = _tb if tb is None else tb
         self.criteria = criteria
         self.procResultsFP = None
-        self.vessel = evaluation.Vessel(vesselName, shipLoading, DIR=DIR)  # Vessel class instance
+        self.vessel = evaluation.Vessel(fuelPrice, vesselName, shipLoading, DIR=DIR)  # Vessel class instance
+        self.fuelPrice = fuelPrice
         self.ecaFactor = ecaFactor              # Multiplication factor ECA fuel
-        self.fuelPrice = fuelPrice              # Fuel price [1000 dollars / mt]
         self.geod = geodesic.Geodesic()         # Geodesic class instance
 
         # Load and pre-process shoreline, ECA, and Bathymetry geometries
@@ -108,7 +108,6 @@ class RoutePlanner:
                                               ecaTree,
                                               bathTree,
                                               ecaFactor,
-                                              self.fuelPrice,
                                               self.geod,
                                               criteria,
                                               self.p,

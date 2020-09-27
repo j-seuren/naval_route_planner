@@ -26,8 +26,9 @@ def np_cache(function):
 
 class Geodesic:
     def __init__(self, dist_calc='ellipsoidal'):
+        self.ref_sys = pyproj.Geod(ellps='WGS84')
+
         if dist_calc == 'ellipsoidal':
-            self.ref_sys = pyproj.Geod(ellps='WGS84')
             self.distance = self.ellipsoidal
         elif dist_calc == 'rhumb_line':
             self.distance = self.rhumb_line

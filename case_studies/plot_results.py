@@ -50,6 +50,7 @@ class StatisticsPlotter:
                 statistics(log, axs)
             else:
                 statistics(log, axs[i])
+        return fig, axs
 
     def plot_fronts(self):
         fronts = self.rawResults['fronts']
