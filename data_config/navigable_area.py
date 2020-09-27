@@ -9,7 +9,7 @@ from shapely.geometry import box, Polygon, MultiPolygon, GeometryCollection, sha
 
 
 class NavigableAreaGenerator:
-    def __init__(self, parameters, DIR=Path('D:/')):
+    def __init__(self, parameters, DIR):
         self.resolution = parameters['res']
         self.splitThreshold = parameters['splits']
         self.avoidAntarctic = parameters['avoidAntarctic']

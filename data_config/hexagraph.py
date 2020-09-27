@@ -34,10 +34,11 @@ class Hexagraph:
                  treeDict,
                  ecaTreeDict,
                  p,
-                 DIR=Path('D:/')):
+                 DIR):
         self.treeDict = treeDict
         self.ecaTreeDict = ecaTreeDict
         self.p = p
+        self.DIR = DIR
 
         # Check whether Antarctic and Arctic circles are included as impassable areas
         aC = aAc = 'incl'
@@ -60,7 +61,7 @@ class Hexagraph:
             return graph
         except FileNotFoundError:
             # Initialize "Hexagraph"
-            constructor = self.GraphConstructor(self.treeDict, self.ecaTreeDict, self.p)
+            constructor = self.GraphConstructor(self.treeDict, self.ecaTreeDict, self.p, DIR=self.DIR)
             graph = constructor.construct()
 
             # Save graph to file
@@ -126,10 +127,10 @@ class Hexagraph:
         return fig, ax
 
     class GraphConstructor:
-        def __init__(self, treeDict, ecaTreeDict, p):
+        def __init__(self, treeDict, ecaTreeDict, p, DIR):
             self.treeDict = treeDict
             self.ecaTreeDict = ecaTreeDict
-            self.exteriorTreeDict = NavigableAreaGenerator(p).get_shoreline_rtree(getExterior=True)
+            self.exteriorTreeDict = NavigableAreaGenerator(p, DIR=DIR).get_shoreline_rtree(getExterior=True)
             self.distance = Geodesic(dist_calc='great_circle').distance
             self.recursionLevel = p['graphDens']
             self.varRecursionLevel = p['graphVarDens']

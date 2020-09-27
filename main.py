@@ -701,7 +701,7 @@ class RoutePlanner:
 
         if reinitialize:
             # Re-populate R-Tree structures
-            navAreaGenerator = NavigableAreaGenerator(self.p)
+            navAreaGenerator = NavigableAreaGenerator(self.p, DIR=DIR)
             landTree = navAreaGenerator.get_shoreline_rtree()
             ecaTree = navAreaGenerator.get_eca_rtree()
 
