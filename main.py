@@ -29,6 +29,7 @@ elif _criteria['minimalCost']:
 else:
     _criteria = {'minimalTime': -1}
 
+DIR = Path('D:/')
 creator.create("FitnessMin", base.Fitness, weights=tuple(_criteria.values(),))
 creator.create("Individual", list, fitness=creator.FitnessMin)
 _tb = base.Toolbox()
@@ -43,7 +44,6 @@ class RoutePlanner:
                  inputParameters=None,
                  criteria=None,
                  tb=None):
-        DIR = Path('D:/')
 
         # Set parameters
         defaultParameters = {
@@ -99,7 +99,6 @@ class RoutePlanner:
         landTree = navAreaGenerator.get_shoreline_rtree()
         ecaTree = navAreaGenerator.get_eca_rtree()
         bathTree = navAreaGenerator.get_bathymetry_rtree()
-        
 
         # Initialize "Evaluator" and register it's functions
         self.evaluator = evaluation.Evaluator(self.vessel,
