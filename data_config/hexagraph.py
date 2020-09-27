@@ -51,7 +51,7 @@ class Hexagraph:
 
         # Generate file path
         graphFN = 'res_{}_d{}_vd{}_{}Ant_{}Arc.gpickle'.format(p['res'], p['graphDens'], p['graphVarDens'], aAc, aC)
-        self.graphFP = DIR / 'data' / graphFN
+        self.graphFP = DIR / 'data/graphs' / graphFN
 
     def get_graph(self):
         # Load or construct graph
