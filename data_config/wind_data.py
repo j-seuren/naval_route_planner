@@ -16,7 +16,7 @@ class WindDataRetriever:
         self.nDays = nDays
 
         # Dataset file path and grib directory
-        f = '{}_nDays{}.npz'.format(self.t0.strftime('%Y%m%d'), self.nDays)
+        f = '{}_nDays{}.nc'.format(self.t0.strftime('%Y%m%d'), self.nDays)
         self.dsFP = DIR / 'data/wind/netcdf_OUT/' / f
         self.gribDir = DIR / 'data/wind/grib_IN' / self.t0.strftime('%Y')  # directory in which to put the output
 
@@ -39,14 +39,18 @@ class WindDataRetriever:
             pipe.communicate()
             pipe.stdin.close()
         else:
+            count = 0
             pathDict = self.request_save_paths()
             for url, files in pathDict.items():
                 for f in files:
                     if not os.path.exists(self.gribDir / f):
+                        count += 1
                         r = requests.get(url + f)
                         savePath = self.gribDir / f
                         with open(savePath, 'wb') as file:
                             file.write(r.content)
+
+            print('Downloaded {} GRIB files'.format(count))
 
     def request_save_paths(self):
         serverURL = 'https://www.ncei.noaa.gov/data/global-forecast-system/access/historical/analysis/'
@@ -69,7 +73,7 @@ class WindDataRetriever:
         pathDict = self.request_save_paths()
         fps = [self.gribDir / f for files in pathDict.values() for f in files]
 
-        print('Converting grib files to netcdf')
+        print('Converting GRIB files to netcdf')
         if forecast:
             prep = prep_wind_forecast
             kwargs = {}
@@ -85,21 +89,19 @@ class WindDataRetriever:
         with xr.open_mfdataset(fps, combine='nested', concat_dim='step', engine='cfgrib', backend_kwargs=kwargs,
                                preprocess=prep) as ds:
             ds = ds.sortby('latitude')
-            da = ds.to_array().data
-            np.savez_compressed(self.dsFP, da)  # ds.to_netcdf(self.dsFP, encoding={'BN': {'dtype': 'int16'}})
-            print('done')
+            ds.to_netcdf(self.dsFP)
+        print('Merged and saved {} GRIB files into'.format(len(fps)), self.dsFP)
 
     def get_data(self, forecast):
         if not os.path.exists(self.dsFP):
             print('{} does not exist, downloading GRIB files.'.format(self.dsFP))
             self.download_grib_files(forecast)
-            print('Downloaded GRIB files')
             self.grib_to_netcdf(forecast=forecast)
-            print('Combined GRIB files and saved to netCDF file')
-        print('Loading dataset into memory:'.format(self.dsFP), end=' ')
-        with np.load(self.dsFP) as npz:
+        print('Loading wind data into memory:'.format(self.dsFP), end=' ')
+        with xr.open_dataset(self.dsFP) as ds:
+            da = ds.to_array().data
             print('done')
-            return npz['arr_0']
+            return da
 
 
 def wind_bft(u, v):

@@ -148,7 +148,8 @@ def update(front, population, prevLocalFront):
 eastLocations = [(-51., 39.6), (-52., 41.2), (-53., 42.8), (-54., 44.4)]
 westLocations = [(-72.4, 33.4), (-72.8, 34.8), (-73.2, 36.2), (-73.6, 37.6)]
 
-locations = {'Brazil': (-23.4166, -7.2574),
+locations = {'Agios Nikolaos': (25.726617, 35.152255),
+             'Brazil': (-23.4166, -7.2574),
              'Canada': (-53.306878, 46.423969),
              'Caribbean Sea': (-72.3352, 12.8774),
              'Current1': (-5, 0),
@@ -160,17 +161,23 @@ locations = {'Brazil': (-23.4166, -7.2574),
              'Gulf of Guinea': (3.14516, 4.68508),
              'Gulf of Mexico': (-94.5968, 26.7012),
              'Houston': (-94.657976, 29.348557),
-             'Keelung': (121.749, 25.164),
+             'Keelung': (121.75, 25.15),
+             'Malta': (14.061035, 34.996707),
+             'Miami': (-75.724478, 26.152992),
              'Mediterranean Sea': (29.188952, 32.842985),
-             'Normandy': (-5.352121, 48.021295),
+             'New York': (-71.143, 40.356),
+             'Normandy': (-5.145, 49.211),
              'North UK': (3.3, 60),
+             'Paramaribo': (-55.218390, 5.956055),
              'Rotterdam': (4.02, 52.01),
-             'San Francisco': (-122.537, 37.775),
+             'San Francisco': (-123, 37.75),
              'Singapore': (103.746969, 1.141331),
              'South UK': (-7.5, 47),
              'Sri Lanka': (78, 5),
+             'Thessaloniki': (22.933677, 40.616297),
              'Tokyo': (49, 12),
              'Yemen': (49, 12),
+             'Valencia': (-0.188091, 39.464972),
              'eastLocations': eastLocations,
              'westLocations': westLocations,
              'weatherStarts': [],
@@ -190,20 +197,27 @@ def clear_caches():
 if __name__ == '__main__':
     # Weather locations
     starts = [
-        (),  # Dutch Harbor
-        (),  # New York
-        (),  # New York
-        (),  # Cape Town
-        (),  # Perth
-        (),  # Hamburg
+        locations['New York'],  # to Paramaribo 2017, 9, 4
+        locations['Thessaloniki'],
+        locations['Keelung'],  # Lin2013: departure 0000Z 28 May 2011, ETA 0000Z 11 June 2011
+        locations['Normandy'],  # Shao2012: Departure: 03:00 p.m. 25/01/2011 ETA: 00:30 p.m. 30/01/2011
+        locations['Normandy'],  # Vettor2016: June 21, 2015 at 00:00
+        locations['Valencia'],  # June 21, 2015 at 00:00
         (),  #
         (),  #
+    ]
+
+    ends = [locations['Paramaribo'],
+        locations['Agios Nikolaos'],
+        locations['San Francisco'],  #
+        locations['New York'],  #
+        locations['Miami'],  #
+        locations['Malta'],  #
         (),  #
         (),  #
         (),  #
         (),  #
     ]
-
 
 
     # Current locations

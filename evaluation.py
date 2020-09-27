@@ -46,6 +46,7 @@ class Evaluator:
         self.weatherOperator = None
         self.inclWeather = None
         self.inclCurrent = None
+        self.bathymetry = True if bathTreeDict else False
         self.criteria = criteria
         self.revertOutput = not criteria['minimalTime']
         self.penaltyValue = parameters['penaltyValue']
@@ -66,7 +67,8 @@ class Evaluator:
             self.weatherOperator = weather.WindOperator(startDate, nDays, DIR=self.DIR)
 
     @delta_penalty
-    def evaluate(self, ind, revert=None, includePenalty=False):
+    def evaluate(self, ind, revert=None, includePenalty=None):
+        includePenalty = self.bathymetry if includePenalty is None else includePenalty
         revert = self.revertOutput if revert is None else revert
         hours = cost = 0.
 

@@ -10,7 +10,6 @@ import support
 import uuid
 
 from copy import deepcopy
-# from datetime import datetime
 from data_config.navigable_area import NavigableAreaGenerator
 from deap import base, creator, tools, algorithms
 from analysis import geodesic
@@ -41,6 +40,7 @@ class RoutePlanner:
                  shipLoading='normal',
                  ecaFactor=1.2,
                  fuelPrice=300,  # Fuel price per metric tonne
+                 bathymetry=True,
                  inputParameters=None,
                  tb=None,
                  criteria=None):
@@ -100,7 +100,7 @@ class RoutePlanner:
         navAreaGenerator = NavigableAreaGenerator(self.p, DIR=DIR)
         landTree = navAreaGenerator.get_shoreline_rtree()
         ecaTree = navAreaGenerator.get_eca_rtree()
-        bathTree = navAreaGenerator.get_bathymetry_rtree()
+        bathTree = navAreaGenerator.get_bathymetry_rtree() if bathymetry else None
 
         # Initialize "Evaluator" and register it's functions
         self.evaluator = evaluation.Evaluator(self.vessel,
@@ -417,7 +417,6 @@ class RoutePlanner:
                 for subIdx, subRoute in enumerate(route['route']):
                     result['logs'][routeIdx], result['fronts'][routeIdx], result['indicators'][routeIdx] = [], [], {}
                     print('Computing sub route {0}/{1}'.format(subIdx+1, len(route['route'])))
-                    self.evaluator.set_classes(current, weather, startDate, 30)
 
                     # Reset functions and caches
                     self.tb.register("individual", initialization.init_individual, self.tb, subRoute)
@@ -426,11 +425,11 @@ class RoutePlanner:
 
                     # Step 1: Initialization
                     print('Initializing population from shortest path:', end='\n ')
-                    pop = self.tb.population(self.tb.individual,
-                                             int(self.n / len(subRoute.values())))
-                    offspring = []
-                    currGen = 0
+                    pop = self.tb.population(self.tb.individual, int(self.n / len(subRoute.values())))
+                    offspring, currGen = [], 0
                     print('done')
+
+                    self.evaluator.set_classes(current, weather, startDate, self.get_days(pop))
 
                     # Step 2: Fitness assignment
                     print('Fitness assignment:', end=' ')
@@ -585,7 +584,6 @@ class RoutePlanner:
 
     def compute(self, startEnd, recompute=False, startDate=None, current=False,
                 weather=False, algorithm='NSGA2', seed=None, avoidArctic=True, avoidAntarctic=True):
-        self.evaluator.set_classes(current, weather, startDate, 2)
         support.clear_caches()  # Clear caches
 
         if startEnd[0] == startEnd[1]:
@@ -859,6 +857,7 @@ if __name__ == "__main__":
     import time
 
     from case_studies.plot_results import RoutePlotter
+    from datetime import datetime
     from scoop import futures
     from support import locations
 
@@ -869,7 +868,8 @@ if __name__ == "__main__":
                   'n': 100}    # Population size
 
     kwargsPlanner = {'inputParameters': parameters, 'tb': _tb, 'criteria': _criteria}
-    kwargsCompute = {'startEnd': _startEnd, 'recompute': True, 'current': False, 'weather': False, 'seed': 1}
+    kwargsCompute = {'startEnd': _startEnd, 'startDate': datetime(2019, 3, 1), 'recompute': True, 'current': False,
+                     'weather': True, 'seed': 1}
     multiprocess = True
 
     if multiprocess:

@@ -82,9 +82,12 @@ class WindOperator:
 
 
 if __name__ == '__main__':
-    from datetime import datetime, timedelta
-    startDate = datetime(2018, 10, 10)
-    nr_days = 1
-    windOp = WindOperator(startDate, nr_days)
+    from datetime import datetime
+    from pathlib import Path
+
+    DIR = Path('D:/')
+    startDate = datetime(2015, 6, 21)
+    nr_days = 28
+    windOp = WindOperator(startDate, nr_days, DIR)
     print(windOp.get_grid_pt_wind(startDate, -86.707108, 27.572103))
 

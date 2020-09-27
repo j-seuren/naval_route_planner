@@ -102,7 +102,7 @@ class CurrentDataRetriever:
     def get_data(self):
         # First check if combined netCDF file exists
         if os.path.exists(self.dataFP):
-            print('Loading data:'.format(self.dataFP), end=' ')
+            print('Loading current data into memory:'.format(self.dataFP), end=' ')
             with xr.open_dataset(self.dataFP) as ds:
                 print('done')
                 return ds.to_array().data

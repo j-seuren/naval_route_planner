@@ -5,6 +5,7 @@ import skopt
 # import time
 
 from datetime import datetime
+from matplotlib.backends.backend_pdf import PdfPages
 from skopt import plots, dump, load
 from skopt.callbacks import CheckpointSaver
 from support import locations
@@ -22,7 +23,7 @@ SPACE = [
     skopt.space.Integer(2, 20, name='nMutations'),
     skopt.space.Categorical([4 * i for i in range(1, 101)], name='n'),
     skopt.space.Real(0.5, 1.0, name='cxpb'),
-    skopt.space.Real(0.5, 1.0, name='mutpb'),
+    skopt.space.Real(0.2, 0.7, name='mutpb'),
     skopt.space.Real(1e-7, 1e-4, name='minVar'),
     # skopt.space.Integer(5, 500, name='nBar', prior='log-uniform'),
     # skopt.space.Integer(1, 10, name='recomb'),
@@ -41,6 +42,8 @@ def tune(default_parameters):
 
         parameters = {**default_parameters, **search_params}
         print(parameters)
+        CALLS += 1
+        print('Call', CALLS)
 
         PLANNER.update_parameters(parameters)
         result = PLANNER.compute(START_END, recompute=True, seed=None)
@@ -53,8 +56,6 @@ def tune(default_parameters):
         #                   )
         weights = np.array([10, 1])
         weightedSum = np.dot(avgFit, weights)
-        CALLS += 1
-        print('Call', CALLS)
 
         return weightedSum
 
@@ -85,13 +86,13 @@ def show_results(fp, timestamp):
     print('best parameters: ', best_params)
 
     # Plot results
-    plots.plot_evaluations(res)
-    fp_ev = DIR + '/output/tuning/figures/{}_eval.pdf'.format(timestamp)
-    plt.savefig(fp_ev)
-    plots.plot_objective(res)
-    fp_obj = DIR + '/output/tuning/figures/{}_obj.pdf'.format(timestamp)
-    plt.savefig(fp_obj)
-    plots.plot_convergence(res)
+    with PdfPages('/output/tuning/figures/{}.pdf'.format(timestamp)) as pdf:
+        plots.plot_evaluations(res)
+        pdf.savefig()
+        plots.plot_objective(res)
+        pdf.savefig()
+        plots.plot_convergence(res)
+        pdf.savefig()
 
 
 filesInfo = []

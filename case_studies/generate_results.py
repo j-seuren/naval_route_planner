@@ -1,5 +1,4 @@
 import case_studies.plot_results as plot_results
-import datetime
 import matplotlib.pyplot as plt
 import main
 import numpy as np
@@ -9,6 +8,7 @@ import pickle
 import time
 
 # from case_studies.demos import create_currents
+from datetime import datetime
 from pathlib import Path
 from support import locations
 
@@ -23,7 +23,7 @@ parameters = {'mutpb': 0.61,
               'gauss': False,
               'mutationOperators': ['insert', 'move', 'delete'] if SPEED else ['insert', 'move', 'speed', 'delete'],
               'gen': 2,  # Min number of generations
-              'n': 300}  # Population size
+              'n': 10}  # Population size
 PLANNER = main.RoutePlanner(inputParameters=parameters, criteria={'minimalTime': True, 'minimalCost': True})
 
 
@@ -76,7 +76,7 @@ def single_experiment(experiment, startEnd, depDate, depS, saveFig=True):
             routeFig, _ = routePlotter.results(initial=False, ecas=ecas, nRoutes=4, weatherDate=weatherDate,
                                                current=currentDict, colorbar=True)
 
-            for name, fig in {'front': frontFig, 'stats': statsFig, 'routes': routeFig}:
+            for name, fig in {'front': frontFig, 'stats': statsFig, 'routes': routeFig}.items():
                 fig.savefig(DIR / "output/{}/figures/{}_{}_iters{}.pdf".format(experiment, startEnd, name, i, depS))
 
             plt.close('all')
@@ -113,16 +113,23 @@ def multiple_experiments(startEnds, experiment, depDates=None):
 
 
 # Test current
-currentDepartures = [datetime.datetime(2014, 10, 28),
-                     datetime.datetime(2014, 11, 11),
-                     datetime.datetime(2014, 11, 25),
-                     datetime.datetime(2014, 4, 20),
-                     datetime.datetime(2015, 5, 4),
-                     datetime.datetime(2015, 5, 18)]
+currentDepartures = [datetime(2014, 10, 28),
+                     datetime(2014, 11, 11),
+                     datetime(2014, 11, 25),
+                     datetime(2014, 4, 20),
+                     datetime(2015, 5, 4),
+                     datetime(2015, 5, 18)]
 currentStartEnds = zip(locations['westLocations'], locations['eastLocations'])
-multiple_experiments(currentStartEnds, 'current', currentDepartures)
+# multiple_experiments(currentStartEnds, 'current', currentDepartures)
 
 # Test ECA
 ecaStartEnds = zip([locations['ECA1: Jacksonville']], [locations['ECA2: New York']])
-multiple_experiments(ecaStartEnds, 'ecas')
+# multiple_experiments(ecaStartEnds, 'ecas')
+
+departure = datetime(2019, 3, 1)
+departureS = 'depart' + departure.strftime('%Y_%m_%d')
+
+single_experiment('weather', (locations['Caribbean Sea'], locations['North UK']), datetime(2019, 3, 1), departureS,
+                  saveFig=True)
+plt.show()
 
