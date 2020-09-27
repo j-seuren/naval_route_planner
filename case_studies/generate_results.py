@@ -1,17 +1,22 @@
 import case_studies.plot_results as plot_results
 import datetime
+import json
 import matplotlib.pyplot as plt
+import main
 import numpy as np
 import os
+import pandas as pd
 import time
 
-from case_studies.demos import create_currents
-from main import RoutePlanner
+# from case_studies.demos import create_currents
 from support import locations
 
 os.chdir('..')
 
-PARAMETERS = {'mutpb': 0.61, 'widthRatio': 7.5e-4, 'radius': 0.39, 'gauss': True,
+PARAMETERS = {'mutpb': 0.61,
+              'widthRatio': 7.5e-4,
+              'radius': 0.39,
+              'gauss': True,
               'gen': 2000,  # Number of generations
               'n': 300}  # Population size
 
@@ -24,7 +29,7 @@ ITERATIONS = 1
 
 def eca_test(parameters, iterations):
     startEnd = (locations['ECA1: Jacksonville'], locations['ECA2: New York'])
-    routePlanner = RoutePlanner(inputParameters=parameters, criteria={'minimalTime': True, 'minimalCost': True})
+    routePlanner = main.RoutePlanner(inputParameters=parameters, criteria={'minimalTime': True, 'minimalCost': True})
 
     startTime = time.time()
     rawList, procList = [], []
@@ -48,14 +53,16 @@ def eca_test(parameters, iterations):
 
     print("--- %s seconds ---" % (time.time() - startTime))
 
+    return procList
+
 
 def current_test(startEnd, parameters, iterations, saveFig=True):
-    routePlanner = RoutePlanner(inputParameters=parameters, criteria={'minimalTime': True, 'minimalCost': True})
+    routePlanner = main.RoutePlanner(inputParameters=parameters, criteria={'minimalTime': True, 'minimalCost': True})
 
     rawList, procList = [], []
     for i in range(iterations):
         startTime = time.time()
-        raw = routePlanner.compute(startEnd, startDate=datetime.datetime(2016, 1, 1), recompute=True, current=True,
+        raw = routePlanner.compute(startEnd, startDate=datetime.datetime(2016, 1, 1), recompute=False, current=True,
                                    seed=1)
         proc, raw = routePlanner.post_process(raw)
         rawList.append(raw)
@@ -65,25 +72,28 @@ def current_test(startEnd, parameters, iterations, saveFig=True):
         statisticsPlotter.plot_fronts()
         statisticsPlotter.plot_stats()
 
-        da = routePlanner.evaluator.currentOperator.da
+        da = routePlanner.evaluator.currentOperator.data
         lons0 = np.linspace(-179.875, 179.875, 1440)
         lats0 = np.linspace(-89.875, 89.875, 720)
-        currentDict = {'u': da[0,0], 'v': da[1,0], 'lons': lons0, 'lats': lats0}
+        currentDict = {'u': da[0, 0], 'v': da[1, 0], 'lons': lons0, 'lats': lats0}
 
         routePlotter = plot_results.RoutePlotter(procList[0], rawResults=rawList[0], vessel=routePlanner.vessel)
-        fig, ax = routePlotter.results(initial=False, ecas=False, nRoutes=5, current=currentDict, colorbar=True)
+        fig, _ = routePlotter.results(initial=False, ecas=False, nRoutes=5, current=currentDict, colorbar=True)
 
         print("--- %s seconds ---" % (time.time() - startTime))
         if saveFig:
             timestamp = datetime.datetime.now().strftime("%m%d_%H-%M-%S")
-            fig.savefig("thesis/figures/{}_current_demo_ITER{}.pdf".format(timestamp, i))
+            fig.savefig("D:/output/figures/{}_current_demo_ITER{}.pdf".format(timestamp, i))
+        plt.close('all')
+
+    return procList
 
 
 def general_test(startEnd, startDate, parameters, plot=True):
     current, weather = False, False
 
     startTime = time.time()
-    routePlanner = RoutePlanner(inputParameters=parameters, criteria={'minimalTime': True, 'minimalCost': True})
+    routePlanner = main.RoutePlanner(inputParameters=parameters, criteria={'minimalTime': True, 'minimalCost': True})
     raw = routePlanner.compute(startEnd, recompute=True, startDate=startDate, current=current, weather=weather, seed=1)
 
     print("--- %s seconds ---" % (time.time() - startTime))
@@ -103,11 +113,12 @@ def general_test(startEnd, startDate, parameters, plot=True):
                              ecas=True)
 
 
-for west in locations['westLocations']:
-    for east in locations['eastLocations']:
-        current_test((west, east), PARAMETERS, ITERATIONS, saveFig=True)
+procDict = {str((i, j)): current_test((west, east), PARAMETERS, ITERATIONS, saveFig=False)
+            for i, west in enumerate(locations['westLocations']) for j, east in enumerate(locations['eastLocations'])}
 
-plt.show()
+# df = pd.DataFrame.from_dict(procDict)
+# df.to_excel('D:/output/currents/gulf_stream_routes.xlsx')
+
 # eca_test(PARAMETERS, ITERATIONS)
 # general_test(START_END, START_DATE, PARAMETERS)
 

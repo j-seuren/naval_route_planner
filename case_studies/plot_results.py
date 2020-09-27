@@ -221,7 +221,8 @@ class RoutePlotter:
         vLon = int(dLon * 4)
         vLat = int(dLat * 4)
         uRot, vRot, x, y = m.transform_vector(uin, vin, lons, lats, vLon, vLat, returnxy=True)
-        Q = m.quiver(x, y, uRot, vRot, uRot, pivot='mid', width=0.002, headlength=4, cmap='PiYG', scale=90, ax=ax)
+        Q = m.quiver(x, y, uRot, vRot, np.hypot(uRot, vRot), pivot='mid', width=0.002, headlength=4, cmap='PuBu',
+                     scale=90, ax=ax)
         ax.quiverkey(Q, 0.5, -0.1, 2, r'$2$ knots', labelpos='E')
 
     def colorbar(self, ax, colors):
@@ -229,13 +230,11 @@ class RoutePlotter:
         sm = plt.cm.ScalarMappable(cmap=colors)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size=0.2, pad=0.05)  # Colorbar axis
-        col_bar = plt.colorbar(sm, norm=plt.Normalize(vmin=self.vMin, vmax=self.vMax),
-                               cax=cax)
+        cb = plt.colorbar(sm, norm=plt.Normalize(vmin=self.vMin, vmax=self.vMax), cax=cax)
         vDif = self.vMax - self.vMin
         nTicks = 6
-        col_bar._ax.set_yticklabels(['%.1f' % round(self.vMin + i * vDif / (nTicks - 1), 1) for i in range(nTicks)],
-                                    fontsize=8)
-        col_bar.set_label('Calm water speed [knots]', rotation=270, labelpad=15)
+        cb.ax.set_yticklabels(['%.1f' % round(self.vMin + i * vDif / (nTicks - 1), 1) for i in range(nTicks)], fontsize=8)
+        cb.set_label('Calm water speed [knots]', rotation=270, labelpad=15)
 
     def route(self, route, m, line='solid', colors=None):
         waypoints = [leg[0] for leg in route]
@@ -262,7 +261,7 @@ class RoutePlotter:
 
 def plot_weather(m, dateTime):
     retriever = WindDataRetriever(nDays=1, startDate=dateTime)
-    ds = retriever.get_da(forecast=False)
+    ds = retriever.get_data(forecast=False)
 
     lons, lats = np.linspace(-180, 179.5, 720), np.linspace(-90, 89.5, 360)
     x, y = m(*np.meshgrid(lons, lats))

@@ -89,7 +89,7 @@ class WindDataRetriever:
             np.savez_compressed(self.dsFP, da)  # ds.to_netcdf(self.dsFP, encoding={'BN': {'dtype': 'int16'}})
             print('done')
 
-    def get_da(self, forecast):
+    def get_data(self, forecast):
         if not os.path.exists(self.dsFP):
             print('{} does not exist, downloading GRIB files.'.format(self.dsFP))
             self.download_grib_files(forecast)
@@ -168,7 +168,7 @@ if __name__ == '__main__':
 
     os.chdir('..')
     retriever = WindDataRetriever(nDays=1, startDate=datetime(2018, 10, 10))  #27 20
-    _ds = retriever.get_da(forecast=False)
+    _ds = retriever.get_data(forecast=False)
     plot_wind(_ds)
     plt.show()
 

@@ -1,4 +1,4 @@
-# import functools
+import evaluation
 import initialization
 import math
 import numpy as np
@@ -9,16 +9,29 @@ import random
 import support
 import uuid
 
-from copy import deepcopy, copy
-from datetime import datetime
+from copy import deepcopy
+# from datetime import datetime
 from data_config.navigable_area import NavigableAreaGenerator
 from deap import base, creator, tools, algorithms
 from analysis import geodesic
-import evaluation
 from operations import Operators
-from os import listdir
 from pathlib import Path
 from shapely.geometry import Point, Polygon
+
+
+_criteria = {'minimalTime': True, 'minimalCost': True}
+timeWeight, costWeight = -5, -1
+
+if _criteria['minimalTime'] and _criteria['minimalCost']:
+    _criteria = {'minimalTime': timeWeight, 'minimalCost': timeWeight}
+elif _criteria['minimalCost']:
+    _criteria = {'minimalCost': -1}
+else:
+    _criteria = {'minimalTime': -1}
+
+creator.create("FitnessMin", base.Fitness, weights=tuple(_criteria.values(),))
+creator.create("Individual", list, fitness=creator.FitnessMin)
+_tb = base.Toolbox()
 
 
 class RoutePlanner:
@@ -29,47 +42,36 @@ class RoutePlanner:
                  fuelPrice=0.3,
                  inputParameters=None,
                  criteria=None,
-                 weightTime=5,
-                 weightCost=1):
-        if criteria is None:
-            criteria = {'minimalTime': True, 'minimalCost': True}
-        if criteria['minimalTime'] and criteria['minimalCost']:
-            weights = (-weightTime, -weightCost)
-        elif criteria['minimalTime'] or criteria['minimalCost']:
-            weights = (-1, )
-        else:
-            raise Exception('Specify at least one criterion to minimize')
-
-        self.criteria = criteria
-
-        self.FP = None
-
+                 tb=None):
+        # Set parameters
         defaultParameters = {
                              # Navigation area parameters
                              'avoidAntarctic': True,
                              'avoidArctic': True,
-                             'res': 'l',           # Resolution of GSHHG database
-                             'penaltyValue': {'time': weightTime,
-                                              'cost': weightCost},
+                             'res': 'l',           # Resolution of shorelines
+                             'penaltyValue': {'time': criteria['minimalTime'],
+                                              'cost': criteria['minimalCost']},
                              'graphDens': 6,       # Recursion level graph
                              'graphVarDens': 4,    # Variable recursion level graph
                              'splits': 3,          # Threshold for split_polygon (val 3 yields best performance)
 
-                             # # MOEA parameters
+                             # MOEA parameters
                              'n': 300,             # Population size
                              'nBar': 50,           # Local archive size (M-PAES, SPEA2)
                              'cxpb': 0.85,         # Crossover probability (NSGAII, SPEA2)
-                             'mutpb': 0.6,        # Mutation probability (NSGAII, SPEA2)
+                             'mutpb': 0.6,         # Mutation probability (NSGAII, SPEA2)
+                             'nMutations': 8,      # Max. number of mutations per selected individual
                              'recomb': 5,          # Max recombination trials (M-PAES)
                              'fails': 5,           # Max fails (M-PAES)
                              'moves': 10,          # Max moves (M-PAES)
+
                              # Stopping parameters
                              'gen': 200,           # Max generations
                              'maxStops': 30,       # Max number of consecutive GD threshold violations
                              'gdThreshold': 1e-3,  # Threshold value for generational distance
 
                              # Mutation parameters
-                             'mutationOperators': ['speed', 'insert', 'move', 'delete'],
+                             'mutationOperators': ['speed', 'insert', 'move', 'delete'],  # Operators to be included
                              'widthRatio': 7.5e-4,  # 7.5e-4 obtained from hyp param tuning
                              'radius': 0.39,       # 0.39 obtained from hyp param tuning
                              'shape': 3,           # Shape parameter for Gamma distribution
@@ -79,40 +81,39 @@ class RoutePlanner:
 
                              # Evaluation parameters
                              'segLengthF': 15,     # Length of linear approx. of great circle track for feasibility
-                             'segLengthC': 15,      # same for ocean currents and wind along route
-
-                             # Initialization parameters
-                             'nMutations': 8
+                             'segLengthC': 15      # same for ocean currents and wind along route
                              }
-
-        # Set parameters
-        if inputParameters:
-            self.p = {**defaultParameters, **inputParameters}
-        else:
-            self.p = defaultParameters
-
-        # Create Fitness and Individual types
-        creator.create("FitnessMin", base.Fitness, weights=weights)
-        creator.create("Individual", list, fitness=creator.FitnessMin)
-
-        self.tb = base.Toolbox()                # Function toolbox
-        self.vessel = evaluation.Vessel(vesselName,
-                                        shipLoading)  # Vessel class instance
+        self.p = {**defaultParameters, **inputParameters} if inputParameters else defaultParameters
+        self.tb = _tb if tb is None else tb
+        self.criteria = criteria
+        self.procResultsFP = None
+        self.vessel = evaluation.Vessel(vesselName, shipLoading)  # Vessel class instance
         self.ecaFactor = ecaFactor              # Multiplication factor ECA fuel
         self.fuelPrice = fuelPrice              # Fuel price [1000 dollars / mt]
         self.geod = geodesic.Geodesic()         # Geodesic class instance
 
-        # Load and pre-process shoreline and ECA polygons
+        # Load and pre-process shoreline, ECA, and Bathymetry geometries
         navAreaGenerator = NavigableAreaGenerator(self.p)
-        self.treeDict = navAreaGenerator.get_shoreline_tree()
-        self.ecaTreeDict = navAreaGenerator.get_eca_tree
-        self.bathTreeDict = navAreaGenerator.get_bathymetry_tree()
+        landTree = navAreaGenerator.get_shoreline_tree()
+        ecaTree = navAreaGenerator.get_eca_tree()
+        bathTree = navAreaGenerator.get_bathymetry_tree()
+
+        # Initialize "Evaluator" and register it's functions
+        self.evaluator = evaluation.Evaluator(self.vessel,
+                                              landTree,
+                                              ecaTree,
+                                              bathTree,
+                                              ecaFactor,
+                                              self.fuelPrice,
+                                              self.geod,
+                                              criteria,
+                                              self.p)
 
         # Initialize "Initializer"
-        self.initializer = initialization.Initializer(self.vessel,
-                                                      self.treeDict,
-                                                      self.ecaTreeDict,
-                                                      self.tb,
+        self.initializer = initialization.Initializer(self.evaluator,
+                                                      self.vessel,
+                                                      landTree,
+                                                      ecaTree,
                                                       self.geod,
                                                       self.p,
                                                       creator.Individual)
@@ -123,65 +124,26 @@ class RoutePlanner:
                                                                                 self.p['graphVarDens']))
         if not os.path.exists(self.initPathsDir):
             os.mkdir(self.initPathsDir)
-        files = listdir(self.initPathsDir)
         self.initialPaths = []
-        for fp in files:
+        for fp in os.listdir(self.initPathsDir):
             with open(self.initPathsDir / fp, 'rb') as file:
                 self.initialPaths.append(pickle.load(file))
 
-        # Initialize "Evaluator" and register it's functions
-        self.evaluator = evaluation.Evaluator(self.vessel,
-                                              self.treeDict,
-                                              self.ecaTreeDict,
-                                              self.bathTreeDict,
-                                              ecaFactor,
-                                              self.fuelPrice,
-                                              self.geod,
-                                              criteria,
-                                              self.p)
-        self.tb.register("e_feasible", self.evaluator.e_feasible)
-        self.tb.register("feasible", self.evaluator.feasible)
-        self.tb.register("evaluate", self.evaluator.evaluate)
-        self.tb.decorate("evaluate", tools.DeltaPenalty(self.tb.feasible, [1e+20, 1e+20]))
-
         # Initialize "Operator" and register it's functions
-        self.operators = Operators(self.tb, self.vessel, self.geod, self.p)
+        self.operators = Operators(self.evaluator.e_feasible, self.vessel, self.geod, self.p)
         self.tb.register("mutate", self.operators.mutate)
         self.tb.register("mate", self.operators.cx_one_point)
-
         self.tb.register("population", initialization.init_repeat_list)
 
-        # Initialize Statistics and logbook
-        self.mstats = support.statistics()
-        self.log = support.logbook()
-
-        # Initialize ParetoFront class and replace its 'update' function
-        self.front = tools.ParetoFront()
-        # self.front.update = functools.partial(support.update, self.front)
-
         # Initialize algorithm classes
-        self.mpaes = self.MPAES(self.tb, self.evaluator, self.mstats, self.log,
-                                self.front, self.get_days, self.p)
-        self.spea2 = self.SPEA2(self.tb, self.evaluator, self.mstats, self.log,
-                                self.front, self.get_days, self.p)
-        self.nsgaii = self.NSGAII(self.tb, self.evaluator, self.mstats,
-                                  self.front, self.get_days, self.p)
+        self.mpaes = self.MPAES(self.tb, self.evaluator, self.get_days, self.p)
+        self.spea2 = self.SPEA2(self.tb, self.evaluator, self.get_days, self.p)
+        self.nsgaii = self.NSGAII(self.tb, self.evaluator, self.get_days, self.p)
 
     class MPAES:
-        def __init__(self,
-                     tb,
-                     evaluator,
-                     mstats,
-                     log,
-                     front,
-                     get_days,
-                     par):
-
+        def __init__(self, tb, evaluator, get_days, par):
             self.tb = tb
             self.evaluator = evaluator
-            self.mstats = mstats
-            self.log = log
-            self.front = front
             self.get_days = get_days
 
             # Parameters
@@ -196,6 +158,9 @@ class RoutePlanner:
             self.nStops = 0
             self.minGD = par['gdThreshold']
             self.evals = 0
+
+            self.mstats = support.statistics()
+            self.front = tools.ParetoFront()  # Initialize ParetoFront class
 
         def test(self, c, m, H):
             # If the archive is not full
@@ -238,7 +203,7 @@ class RoutePlanner:
             while fails < self.fails and moves < self.moves:
                 # Mutate c to produce m, evaluate m
                 m, = self.tb.mutate(self.tb.clone(c))
-                fitM = self.tb.evaluate(m)
+                fitM = self.evaluator.evaluate(m)
                 m.fitness.values = fitM
                 self.evals += 1
 
@@ -292,7 +257,7 @@ class RoutePlanner:
                     print('Sub path {0}/{1}'.format(subPathKey+1, len(path)))
                     self.tb.register("individual", initialization.init_individual, self.tb,  subPath)
                     self.front.clear()
-                    self.log.clear()
+                    log = support.logbook()
 
                     # Step 1: Initialization
                     print('Initializing population from shortest path:', end=' ')
@@ -307,7 +272,7 @@ class RoutePlanner:
 
                     # Step 2: Fitness and crowding distance assignment
                     invInds = pop
-                    fits = self.tb.map(self.tb.evaluate, invInds)
+                    fits = self.tb.map(self.evaluator.evaluate, invInds)
                     self.evals = len(invInds)
                     for ind, fit in zip(invInds, fits):
                         ind.fitness.values = fit
@@ -315,13 +280,13 @@ class RoutePlanner:
                     # Begin the generational process
                     while True:
                         # Step 3: Update global Pareto front
-                        prevFront = copy(self.front)
+                        prevFront = deepcopy(self.front)
                         self.front.update(pop)
 
                         # Record statistics
                         record = self.mstats.compile(self.front)
-                        self.log.record(gen=currGen, evals=self.evals, **record)
-                        print('\r', self.log.stream)
+                        log.record(gen=currGen, evals=self.evals, **record)
+                        print('\r', log.stream)
 
                         self.evals = 0
 
@@ -352,7 +317,7 @@ class RoutePlanner:
 
                                 # Recombine to form offspring, evaluate
                                 child, _ = self.tb.mate(mom, dad)
-                                fitChild = self.tb.evaluate(child)
+                                fitChild = self.evaluator.evaluate(child)
                                 child.fitness.values = fitChild
                                 self.evals += 1
 
@@ -387,7 +352,7 @@ class RoutePlanner:
 
                         # Step 4: Termination
                         if self.termination(prevFront, currGen):
-                            result['logs'][pathKey][subPathKey] = self.log[:]
+                            result['logs'][pathKey][subPathKey] = log[:]
                             result['fronts'][pathKey][subPathKey] = self.front[:]
                             self.tb.unregister("individual")
                             break
@@ -399,20 +364,12 @@ class RoutePlanner:
             return result
 
     class NSGAII:
-        def __init__(self,
-                     tb,
-                     evaluator,
-                     mstats,
-                     front,
-                     get_days,
-                     par):
+        def __init__(self, tb, evaluator, get_days, par):
             self.tb = tb
             self.evaluator = evaluator
-            self.mstats = mstats
-            self.front = front
             self.get_days = get_days
 
-            # Parameter settings
+            # Parameters
             self.gen = par['gen']
             self.n = par['n']
             self.cxpb = par['cxpb']
@@ -426,11 +383,11 @@ class RoutePlanner:
             # self.mutP = {op: 0 for op in par['mutationOperators']}
             # self.mutS = {op: 0 for op in par['mutationOperators']}
 
-            # Register NSGA2 selection function
+            self.mstats = support.statistics()
+            self.front = tools.ParetoFront()  # Initialize ParetoFront class
             self.tb.register("select", tools.selNSGA2)
 
         def termination(self, prevFront, t):
-            stop = False
             gd = indicators.generational_distance(prevFront, self.front)
             if gd < self.minGD and t >= self.gen // 3:
                 self.nStops += 1
@@ -442,7 +399,7 @@ class RoutePlanner:
                 return True
             return False
 
-        def optimize(self, startEnd, initRoutes, startDate, inclCurr, inclWeather, seed):
+        def optimize(self, startEnd, initRoutes, startDate, current, weather, seed):
             random.seed(seed)
 
             result = {'startEnd': startEnd, 'initialRoutes': initRoutes, 'indicators': [None] * len(initRoutes),
@@ -452,6 +409,7 @@ class RoutePlanner:
                 for subIdx, subRoute in enumerate(route['route']):
                     result['logs'][routeIdx], result['fronts'][routeIdx], result['indicators'][routeIdx] = [], [], {}
                     print('Computing sub route {0}/{1}'.format(subIdx+1, len(route['route'])))
+                    self.evaluator.set_classes(current, weather, startDate, 30)
 
                     # Reset functions and caches
                     self.tb.register("individual", initialization.init_individual, self.tb, subRoute)
@@ -466,12 +424,10 @@ class RoutePlanner:
                     currGen = self.nStops = 0
                     print('done')
 
-                    self.evaluator.set_classes(inclCurr, inclWeather, startDate, self.get_days(pop))
-
                     # Step 2: Fitness assignment
                     print('Fitness assignment:', end=' ')
                     evals = len(pop)
-                    fits = self.tb.map(self.tb.evaluate, pop)
+                    fits = self.tb.map(self.evaluator.evaluate, pop)
                     for ind, fit in zip(pop, fits):
                         ind.fitness.values = fit
                     print('assigned')
@@ -503,7 +459,7 @@ class RoutePlanner:
 
                         # Step 2: Fitness assignment
                         invInds = [ind for ind in offspring if not ind.fitness.valid]
-                        fits = self.tb.map(self.tb.evaluate, invInds)
+                        fits = self.tb.map(self.evaluator.evaluate, invInds)
                         for ind, fit in zip(invInds, fits):
                             ind.fitness.values = fit
 
@@ -514,22 +470,12 @@ class RoutePlanner:
             return result
 
     class SPEA2:
-        def __init__(self,
-                     tb,
-                     evaluator,
-                     mstats,
-                     log,
-                     front,
-                     get_days,
-                     par):
+        def __init__(self, tb, evaluator, get_days, par):
             self.tb = tb
             self.evaluator = evaluator
-            self.mstats = mstats
-            self.log = log
-            self.front = front
             self.get_days = get_days
 
-            # Parameter settings
+            # Parameters
             self.gen = par['gen']
             self.n = par['n']
             self.nBar = par['nBar']
@@ -539,7 +485,8 @@ class RoutePlanner:
             self.maxStops = par['maxStops']
             self.nStops = 0
 
-            # Register SPEA2 selection function
+            self.mstats = support.statistics()
+            self.front = tools.ParetoFront()  # Initialize ParetoFront class
             self.tb.register("select", tools.selSPEA2)
 
         def termination(self, prevFront, t):
@@ -564,7 +511,7 @@ class RoutePlanner:
                     print('Sub path {0}/{1}'.format(subPathKey+1, len(path)))
                     self.tb.register("individual", initialization.init_individual, self.tb, subPath)
                     self.front.clear()
-                    self.log.clear()
+                    log = support.logbook()
 
                     # Step 1: Initialization
                     print('Initializing population from shortest path:', end=' ')
@@ -580,7 +527,7 @@ class RoutePlanner:
                     # Step 2: Fitness assignment
                     invInds = pop
                     evals = len(invInds)
-                    fits = self.tb.map(self.tb.evaluate, invInds)
+                    fits = self.tb.map(self.evaluator.evaluate, invInds)
                     for ind, fit in zip(invInds, fits):
                         ind.fitness.values = fit
 
@@ -588,17 +535,17 @@ class RoutePlanner:
                     while True:
                         # Step 3: Environmental selection
                         archive = self.tb.select(pop + archive, k=self.nBar)
-                        prevFront = copy(self.front)
+                        prevFront = deepcopy(self.front)
                         self.front.update(archive)
 
                         # Record statistics
                         record = self.mstats.compile(self.front)
-                        self.log.record(gen=currGen, evals=evals, **record)
-                        print('\r', self.log.stream)
+                        log.record(gen=currGen, evals=evals, **record)
+                        print('\r', log.stream)
 
                         # Step 4: Termination
                         if self.termination(prevFront, currGen):
-                            result['logs'][pathKey][subPathKey] = self.log
+                            result['logs'][pathKey][subPathKey] = log
                             result['fronts'][pathKey][subPathKey] = self.front[:]
                             self.tb.unregister("individual")
                             break
@@ -607,18 +554,18 @@ class RoutePlanner:
                         matingPool = tools.selTournament(archive, k=self.n, tournsize=2)
 
                         # Step 6: Variation
-                        pop = algorithms.varAnd(matingPool, self.tb, self.cxpb, self.mutpb)
+                        pop = algorithms.varAnd(matingPool, self.tb, 1, self.mutpb)
 
                         # Step 2: Fitness assignment
                         # Population
                         invInds1 = [ind for ind in pop if not ind.fitness.valid]
-                        fits = self.tb.map(self.tb.evaluate, invInds1)
+                        fits = self.tb.map(self.evaluator.evaluate, invInds1)
                         for ind, fit in zip(invInds1, fits):
                             ind.fitness.values = fit
 
                         # Archive
                         invInds2 = [ind for ind in archive if not ind.fitness.valid]
-                        fits = self.tb.map(self.tb.evaluate, invInds2)
+                        fits = self.tb.map(self.evaluator.evaluate, invInds2)
                         for ind, fit in zip(invInds2, fits):
                             ind.fitness.values = fit
 
@@ -630,7 +577,7 @@ class RoutePlanner:
 
     def compute(self, startEnd, recompute=False, startDate=None, current=False,
                 weather=False, algorithm='NSGA2', seed=None, avoidArctic=True, avoidAntarctic=True):
-        self.evaluator.startDate = startDate  # Update start date
+        self.evaluator.set_classes(current, weather, startDate, 2)
         support.clear_caches()  # Clear caches
 
         if startEnd[0] == startEnd[1]:
@@ -658,9 +605,9 @@ class RoutePlanner:
                                                                             self.criteria['minimalTime'],
                                                                             self.criteria['minimalCost'],
                                                                             self.fuelPrice, self.ecaFactor)
-        self.FP = "output/processedResults/" + fn
+        self.procResultsFP = "output/processedResults/" + fn
 
-        if not recompute and os.path.exists(self.FP):
+        if not recompute and os.path.exists(self.procResultsFP):
             return None
 
         newParameters, reinitialize = {}, False
@@ -751,13 +698,13 @@ class RoutePlanner:
         if reinitialize:
             # Re-populate R-Tree structures
             navAreaGenerator = NavigableAreaGenerator(self.p)
-            self.treeDict = navAreaGenerator.get_shoreline_tree()
-            self.ecaTreeDict = navAreaGenerator.get_eca_tree
+            landTree = navAreaGenerator.get_shoreline_tree()
+            ecaTree = navAreaGenerator.get_eca_tree
 
             set_attrs(self.evaluator,
-                      treeDict=self.treeDict,
-                      ecaTreeDict=self.ecaTreeDict)
-            self.initializer = initialization.Initializer(self.vessel, self.treeDict, self.ecaTreeDict, self.tb,
+                      treeDict=landTree,
+                      ecaTreeDict=ecaTree)
+            self.initializer = initialization.Initializer(self.evaluator, self.vessel, landTree, ecaTree,
                                                           self.geod, self.p, creator.Individual)
 
     def get_days(self, pop):
@@ -793,9 +740,9 @@ class RoutePlanner:
 
     def post_process(self, result, ID=None):
         if result is None:
-            with open(self.FP, 'rb') as file:
+            with open(self.procResultsFP, 'rb') as file:
                 processedResults = pickle.load(file)
-            with open(self.FP + '_raw', 'rb') as file:
+            with open(self.procResultsFP + '_raw', 'rb') as file:
                 result = pickle.load(file)
             return processedResults, result
         elif result == 'equal_start_end':
@@ -834,7 +781,7 @@ class RoutePlanner:
             wps, bestWeightedObjValue, fitValue = [], np.zeros(2), np.zeros(nFits)
             for subFront in pathFront:
                 ind = subFront[0]
-                bestWeightedObjValue += self.tb.evaluate(ind, revert=False, includePenalty=False)
+                bestWeightedObjValue += self.evaluator.evaluate(ind, revert=False, includePenalty=False)
                 fitValue += ind.fitness.values
                 wps.extend(ind)
 
@@ -855,7 +802,7 @@ class RoutePlanner:
                 for subFront in pathFront:
                     # Evaluate fuel and time for each individual in front
                     # NB: Using same parameter settings for Evaluator as in optimization
-                    subObjValues = np.asarray([self.tb.evaluate(ind, revert=False, includePenalty=False)
+                    subObjValues = np.asarray([self.evaluator.evaluate(ind, revert=False, includePenalty=False)
                                                for ind in subFront])
 
                     # Get best individual
@@ -891,9 +838,9 @@ class RoutePlanner:
                 processedResults['routeResponse'].append(bestWeightedResponse)
 
         try:
-            with open(self.FP, 'wb') as file:
+            with open(self.procResultsFP, 'wb') as file:
                 pickle.dump(processedResults, file)
-            with open(self.FP + '_raw', 'wb') as file:
+            with open(self.procResultsFP + '_raw', 'wb') as file:
                 pickle.dump(result, file)
         except TypeError:
             print("Save filepath is 'None': Result is not saved")
@@ -902,28 +849,40 @@ class RoutePlanner:
 
 
 if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    # import multiprocessing as mp
     # import pprint
     import time
+
+    from case_studies.plot_results import RoutePlotter
+    from scoop import futures
 
     startTime = time.time()
     _startEnd = ((4.02, 52.01), (-94.657976, 29.348557))
 
-    parameters = {'gen': 20,  # Max number of generations
+    parameters = {'gen': 1000,  # Max number of generations
                   'n': 100}    # Population size
 
-    planner = RoutePlanner(inputParameters=parameters, criteria={'minimalTime': True,
-                                                                 'minimalCost': True})
-    for _ in range(2):
-        _results = planner.compute(_startEnd,
-                                   recompute=True,
-                                   startDate=datetime(2016, 1, 1),
-                                   current=False,
-                                   weather=False,
-                                   seed=1)
+    kwargsPlanner = {'inputParameters': parameters, 'tb': _tb, 'criteria': _criteria}
+    kwargsCompute = {'startEnd': _startEnd, 'recompute': True, 'current': False, 'weather': False, 'seed': 1}
+    multiprocess = True
 
-    post_processed_results = planner.post_process(_results)
+    if multiprocess:
+        # with mp.Pool() as pool:
+        _tb.register("map", futures.map)
+
+        planner = RoutePlanner(**kwargsPlanner)
+        rawResults = planner.compute(**kwargsCompute)
+    else:
+        planner = RoutePlanner(**kwargsPlanner)
+        rawResults = planner.compute(**kwargsCompute)
+
+    procResults, rawResults = planner.post_process(rawResults)
+    routePlotter = RoutePlotter(procResults, rawResults=rawResults, vessel=planner.vessel)
+    fig, ax = routePlotter.results(initial=True, ecas=False, nRoutes=5, colorbar=True)
 
     # pp = pprint.PrettyPrinter(depth=6)
     # pp.pprint(post_processed_results)
-
     print("--- %s seconds ---" % (time.time() - startTime))
+
+    plt.show()

@@ -128,7 +128,7 @@ class Hexagraph:
         def __init__(self, treeDict, ecaTreeDict, p):
             self.treeDict = treeDict
             self.ecaTreeDict = ecaTreeDict
-            self.exteriorTreeDict = NavigableAreaGenerator(p).get_shoreline_tree(exteriorOnly=True)
+            self.exteriorTreeDict = NavigableAreaGenerator(p).get_shoreline_tree(getExterior=True)
             self.distance = Geodesic(dist_calc='great_circle').distance
             self.recursionLevel = p['graphDens']
             self.varRecursionLevel = p['graphVarDens']

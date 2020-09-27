@@ -10,17 +10,17 @@ from math import cos, sin
 
 class Initializer:
     def __init__(self,
+                 evaluator,
                  vessel,
                  tree,
                  ecaTree,
-                 toolbox,
                  geod,
                  p,
                  container):
+        self.evaluator = evaluator
         self.vessel = vessel          # Vessel class
         self.tree = tree              # R-tree spatial index for shorelines
         self.ecaTree = ecaTree        # R-tree spatial index for ECAs
-        self.tb = toolbox             # Function toolbox
         self.geod = geod              # Geod class instance
         self.container = container    # Container for individual
         self.canals = {'Panama': ['panama_south', 'panama_north'],
@@ -110,7 +110,7 @@ class Initializer:
                     print('Too few points in neighborhood')
                     break
                 neighbor = graph.nodes[n]['deg']
-                if self.tb.e_feasible(endPoint, neighbor):
+                if self.evaluator.e_feasible(endPoint, neighbor):
                     nrEdges += 1
                     graph.add_edge(ptKey, n, miles=d[n])
                 else:

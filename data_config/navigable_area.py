@@ -1,70 +1,70 @@
 import matplotlib.pyplot as plt
-import cartopy.crs as ccrs
 import fiona
 import os
 import pickle
 
 from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 from pathlib import Path
+from rtree.index import Index
 from shapely.geometry import box, Polygon, MultiPolygon, GeometryCollection, shape, LineString, Point
-from shapely.strtree import STRtree
-from shapely.prepared import prep
 
 
 class NavigableAreaGenerator:
     def __init__(self, parameters):
         self.resolution = parameters['res']
-        self.maxGeoSize = parameters['splits']
+        self.splitThreshold = parameters['splits']
         self.avoidAntarctic = parameters['avoidAntarctic']
         self.avoidArctic = parameters['avoidArctic']
-        self.get_eca_tree = get_eca_rtree()
-        self.splitPolygonsDir = Path('D:/data/split_polygons')
+        self.get_eca_tree = get_eca_rtree
         self.gshhgDir = Path('D:/data/gshhg-shp-2.3.7/GSHHS_shp')
         self.shorelinesFP = self.gshhgDir / '{0}/GSHHS_{0}_L1.shp'.format(self.resolution)
         self.antarcticFP = self.gshhgDir / '{0}/GSHHS_{0}_L6.shp'.format(self.resolution)
 
-    def get_shoreline_tree(self, exteriorOnly=False):
-        shorelines = self.get_shorelines(not exteriorOnly)
-        if exteriorOnly:
+    def get_shoreline_tree(self, getExterior=False):
+        aC = 'excl' if self.avoidArctic else 'incl'
+        aAc = 'excl' if self.avoidAntarctic else 'incl'
+        fp = 'D:/data/navigation_area/shorelines_{}_split{}_{}Antarc_{}Arc'.format(self.resolution, self.splitThreshold,
+                                                                                   aAc, aC)
+        shorelines = self.get_shorelines(fp, not getExterior)
+        if getExterior:
             exteriors = []
             for polygon in shorelines:
-                cutLines = cut(polygon.exterior, self.maxGeoSize)
+                cutLines = cut(polygon.exterior, self.splitThreshold)
                 exterior = [cutLines[0]]
                 while len(cutLines) > 1:
                     cutLines = cut(cutLines[-1], 10)
                     exterior.append(cutLines[0])
                 exteriors.extend(exterior)
             shorelines = exteriors
-        return populate_rtree(shorelines)
+
+        if os.path.exists(fp + '.idx'):
+            return {'rtree': Index(fp), 'geometries': shorelines}
+        else:
+            return populate_rtree(shorelines, fp)
 
     def get_bathymetry_tree(self):
-        bathFP = Path('D:/data/bathymetry_200m/ne_10m_bathymetry_K_200.shp')
-        saveFP = self.splitPolygonsDir / 'bath_splitsize_{}'.format(self.maxGeoSize)
-        if os.path.exists(saveFP):
-            with open(saveFP, 'rb') as f:
-                splitPolys = pickle.load(f)
+        fp = 'D:/data/navigation_area/bath_split{}'.format(self.splitThreshold)
+        if os.path.exists(fp):
+            with open(fp, 'rb') as f:
+                bathPolys = pickle.load(f)
         else:
+            bathFP = Path('D:/data/bathymetry_200m/ne_10m_bathymetry_K_200.shp')
             polygons = [shape(polygon['geometry']) for polygon in iter(fiona.open(bathFP))]
 
             # Split and save polygons
-            splitPolys = self.split_polygons(polygons)
-            with open(saveFP, 'wb') as f:
-                pickle.dump(splitPolys, f)
-            print('Saved to: ', saveFP)
-        return populate_rtree(splitPolys)
+            bathPolys = self.split_polygons(polygons)
+            with open(fp, 'wb') as f:
+                pickle.dump(bathPolys, f)
+            print('Saved to: ', fp)
 
-    def get_shorelines(self, split):
-        aC = aAc = 'incl'
-        if self.avoidAntarctic and self.avoidArctic:
-            aC = aAc = 'avoid'
-        elif self.avoidAntarctic:
-            aAc = 'avoid'
-        elif self.avoidArctic:
-            aC = 'avoid'
-        saveFP = self.splitPolygonsDir / 'res_{}_threshold_{}_{}Antarctic_{}Arctic'.format(self.resolution,
-                                                                                           self.maxGeoSize, aAc, aC)
-        if split and os.path.exists(saveFP):
-            with open(saveFP, 'rb') as f:
+        if os.path.exists(fp + '.idx'):
+            return {'rtree': Index(fp), 'geometries': bathPolys}
+        else:
+            return populate_rtree(bathPolys, fp)
+
+    def get_shorelines(self, fp, split):
+        if split and os.path.exists(fp):
+            with open(fp, 'rb') as f:
                 return pickle.load(f)
         shorelines = [shape(shoreline['geometry']) for shoreline in iter(fiona.open(self.shorelinesFP))]
 
@@ -83,9 +83,9 @@ class NavigableAreaGenerator:
         if split:
             splitShorelines = self.split_polygons(shorelines)
             # Save result
-            with open(saveFP, 'wb') as f:
+            with open(fp, 'wb') as f:
                 pickle.dump(splitShorelines, f)
-            print('Saved to: ', saveFP)
+            print('Saved to: ', fp)
             return splitShorelines
         return shorelines
 
@@ -104,7 +104,7 @@ class NavigableAreaGenerator:
         width = maxx - minx
         height = maxy - miny
         # if max(width, height) <= threshold or cnt == 250:
-        if geo.envelope.area < self.maxGeoSize ** 2 or cnt == 250:
+        if geo.envelope.area < self.splitThreshold ** 2 or cnt == 250:
             # either the polygon is smaller than the threshold, or the maximum
             # number of recursions has been reached
             return [geo]
@@ -141,7 +141,7 @@ class NavigableAreaGenerator:
         width = maxx - minx
         height = maxy - miny
         # if max(width, height) <= threshold or cnt == 250:
-        if geo.envelope.area < self.maxGeoSize ** 2 or cnt == 250:
+        if geo.envelope.area < self.splitThreshold ** 2 or cnt == 250:
             # either the polygon is smaller than the threshold, or the maximum
             # number of recursions has been reached
             return [geo]
@@ -174,36 +174,25 @@ class NavigableAreaGenerator:
 
 
 def get_eca_rtree():
-    fp = 'D:/data/seca_areas'
-    if os.path.exists(fp):
-        with open(fp, 'rb') as f:
-            ecas = pickle.load(f)
+    fp = 'D:/data/navigation_area/secas'
+    with open(fp, 'rb') as f:
+        ecas = pickle.load(f)
+
+    if os.path.exists(fp + '.idx'):
+        return {'rtree': Index(fp), 'geometries': ecas}
     else:
-        raise FileNotFoundError("File 'seca_areas' not found")
-    return populate_rtree(ecas)
+        return populate_rtree(ecas, fp)
 
 
-def populate_rtree(geos):
-    # Populate R-tree index with bounds of polygons
-    tree = STRtree(geos)
+def populate_rtree(geometries, fn):
+    # Populate R-tree index with bounds of geometries
+    print('Populate {} tree'.format(fn))
+    idx = Index(fn)
+    for i, geo in enumerate(geometries):
+        idx.insert(i, geo.bounds)
+    idx.close()
 
-    # Create dict of original indexes for querying prepared polygons.
-    indexByID = {id(geo): i for i, geo in enumerate(geos)}
-
-    prepGeos = [prep(poly) for poly in geos]  # Prepare polygons
-    return {'tree': tree, 'indexByID': indexByID, 'polys': prepGeos}
-
-
-def plot_geometries(geometries):
-    fig, ax = plt.subplots(figsize=(9, 13),
-                           subplot_kw=dict(projection=ccrs.PlateCarree()))
-    gl = ax.gridlines(draw_labels=True)
-    gl.top_labels = gl.right_labels = False
-    gl.xformatter = LONGITUDE_FORMATTER
-    gl.yformatter = LATITUDE_FORMATTER
-
-    ax.add_geometries(geometries, ccrs.PlateCarree(), facecolor='lightgray',
-                      edgecolor='black')
+    return {'rtree': Index(fn), 'geometries': geometries}
 
 
 def cut(line, distance):

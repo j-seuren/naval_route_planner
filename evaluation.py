@@ -5,11 +5,19 @@ import pandas as pd
 import support
 import weather
 
-from functools import lru_cache
+from functools import lru_cache, wraps
 from math import cos, sin, sqrt, degrees, pow
 from shapely.geometry import LineString, Point
+# from case_studies.demos import create_currents
 
-from case_studies.demos import create_currents
+
+def delta_penalty(func):
+    @wraps(func)
+    def wrapper(self, individual, *args, **kwargs):
+        if self.feasible(individual):
+            return func(self, individual, *args, **kwargs)
+        return self.delta
+    return wrapper
 
 
 class Evaluator:
@@ -42,8 +50,10 @@ class Evaluator:
         self.revertOutput = not criteria['minimalTime']
         self.penaltyValue = parameters['penaltyValue']
         self.includePenalty = False
+        self.delta = (1e+20,) * len(criteria)
 
     def set_classes(self, inclCurr, inclWeather, startDate, nDays):
+        self.startDate = startDate
         self.inclWeather = inclWeather
         self.inclCurrent = inclCurr
         if inclCurr:
@@ -54,6 +64,7 @@ class Evaluator:
             assert isinstance(startDate, datetime.date), 'Set start date'
             self.weatherOperator = weather.WindOperator(startDate, nDays)
 
+    @delta_penalty
     def evaluate(self, ind, revert=None, includePenalty=False):
         if revert is None:
             revert = self.revertOutput
@@ -271,24 +282,21 @@ def calc_sog(bearing, Se, Sn, V):
 
 
 def geo_x_geos(treeDict, p1, p2=None):
-    if p2 is None:
-        geo = Point(p1)
-    else:
-        geo = LineString([p1, p2])
+    p2 = p1 if p2 is None else p2
+    minx, maxx = (p1[0], p2[0]) if p1[0] < p2[0] else (p2[0], p1[0])
+    miny, maxy = (p1[1], p2[1]) if p1[1] < p2[1] else (p2[1], p1[1])
+    bounds = (minx, miny, maxx, maxy)
 
-    # Return a list of all geometries in the R-tree whose extents
-    # intersect the extent of geom
-    extent_intersections = treeDict['tree'].query(geo)
-    if extent_intersections:
-        # Check if any geometry in extent_intersections actually intersects line
-        for geom in extent_intersections:
-            geomIdx = treeDict['indexByID'][id(geom)]
-            prepGeom = treeDict['polys'][geomIdx]
-            if p2 is None and prepGeom.contains(geo):
+    # Return the geometry indices whose bounds intersect the query bounds
+    indices = treeDict['rtree'].intersection(bounds)
+    if indices:
+        shapelyObject = Point(p1) if p2 is None else LineString([p1, p2])
+        for idx in indices:
+            geometry = treeDict['geometries'][idx]
+            if p2 is None and geometry.contains(shapelyObject):
                 return True
-            elif prepGeom.intersects(geo):
+            elif geometry.intersects(shapelyObject):
                 return True
-
     return False
 
 

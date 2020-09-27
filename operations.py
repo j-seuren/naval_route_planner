@@ -16,12 +16,12 @@ def star(f):
 
 class Operators:
     def __init__(self,
-                 tb,
+                 e_feasible,
                  vessel,
                  geod,
                  par
                  ):
-        self.tb = tb                            # Function toolbox
+        self.e_feasible = e_feasible
         self.vessel = vessel                    # Vessel class instance
         self.geod = geod                        # GreatCircle class instance
         self.radius = par['radius']             # Move radius
@@ -100,7 +100,7 @@ class Operators:
                 newWP = (x, y)
 
                 if initializing:
-                    if self.tb.e_feasible(ind[i][0], newWP) and self.tb.e_feasible(newWP, ind[i+1][0]):
+                    if self.e_feasible(ind[i][0], newWP) and self.e_feasible(newWP, ind[i+1][0]):
                         ind.insert(i+1, [newWP, ind[i][1]])
                         return
                     else:
@@ -132,8 +132,8 @@ class Operators:
                 newWP = (lon, lat)
 
                 # Ensure feasibility during initialization
-                if initializing and (not self.tb.e_feasible(ind[i-1][0], newWP) or
-                                     not self.tb.e_feasible(newWP, ind[i+1][0])):
+                if initializing and (not self.e_feasible(ind[i-1][0], newWP) or
+                                     not self.e_feasible(newWP, ind[i+1][0])):
                     trials += 1
                     if trials > 100:
                         print('move trials exceeded', end='\n ')
@@ -152,7 +152,7 @@ class Operators:
             for group in mit.consecutive_groups(tbd):
                 group = list(group)
                 a, b = group[0], group[-1]
-                if not self.tb.e_feasible(ind[a-1][0], ind[b+1][0]):
+                if not self.e_feasible(ind[a-1][0], ind[b+1][0]):
                     i, j = tbd.index(a), tbd.index(b)
                     del tbd[i:j+1]
         for i in tbd:
@@ -216,8 +216,8 @@ class Operators:
                     # If new edges not feasible, discard c2
                     e1p1, e1p2 = tuple(ps2[c2-1]), tuple(ps1[c1])
                     e2p1, e2p2 = tuple(ps1[c1-1]), tuple(ps2[c2])
-                    if e1p1 == e1p2 or e2p1 == e2p2 or not (self.tb.e_feasible(e1p1, e1p2) and
-                                                            self.tb.e_feasible(e2p1, e2p2)):
+                    if e1p1 == e1p2 or e2p1 == e2p2 or not (self.e_feasible(e1p1, e1p2) and
+                                                            self.e_feasible(e2p1, e2p2)):
                         continue
                     else:
                         ind1[c1:], ind2[c2:] = ind2[c2:], ind1[c1:]

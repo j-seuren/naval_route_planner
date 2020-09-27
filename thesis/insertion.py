@@ -122,7 +122,7 @@ def plot_uniform_shapes(n, bins, save=False):
         ax.yaxis.set_major_locator(plt.NullLocator())
 
     if save:
-        fig.savefig("figures/OPS_rhombus_ellipse.pdf", bbox_inches='tight', pad_inches=0)
+        fig.savefig("D:/output/figures/OPS_rhombus_ellipse.pdf", bbox_inches='tight', pad_inches=0)
 
     return fig, (ax1, ax2, ax3, ax4)
 
@@ -194,7 +194,7 @@ def plot_gaussian_shape(n, plot=True, save=False):
         # ax.scatter([p1[0], p2[0]], [p1[1], p2[1]], s=10, color='blue', zorder=2)
 
         if save:
-            fig.savefig("figures/OPS_gauss1.pdf", bbox_inches='tight', pad_inches=0)
+            fig.savefig("D:/output/figures/OPS_gauss1.pdf", bbox_inches='tight', pad_inches=0)
 
         return fig, ax
 

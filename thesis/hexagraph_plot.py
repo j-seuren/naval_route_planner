@@ -59,6 +59,6 @@ ax.xaxis.set_major_locator(plt.NullLocator())
 ax.yaxis.set_major_locator(plt.NullLocator())
 ax.zaxis.set_major_locator(plt.NullLocator())
 
-fig.savefig('thesis/figures/INIT_3D_sphere.pdf', bbox_inches='tight', pad_inches=0)
+fig.savefig('D:/output/figures/INIT_3D_sphere.pdf', bbox_inches='tight', pad_inches=0)
 print('saved graph')
 plt.show()

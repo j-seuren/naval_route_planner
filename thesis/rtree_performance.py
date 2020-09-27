@@ -68,7 +68,7 @@ def poly_stats(geos, splitGeos, save=False):
         ax.set_yscale("log")
 
     if save:
-        tikzplotlib.save("thesis/figures/histogram.tex")
+        tikzplotlib.save("D:/output/figures/histogram.tex")
 
 
 # Generate n uniformly random distributed and oriented line segments
@@ -205,7 +205,7 @@ def plot_intersections(lines, intersects, save=True, width=2):
     plt.gca().add_collection(LineCollection(ptsRest, color="gray", linewidths=width))
 
     if save:
-        fp = 'thesis/figures/RTREE_linesegs_map.pdf'
+        fp = 'D:/output/figures/RTREE_linesegs_map.pdf'
         fig.savefig(fp,  bbox_inches='tight', pad_inches=0)
         print('saved to: ', fp)
 

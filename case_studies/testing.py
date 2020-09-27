@@ -136,8 +136,8 @@ class CaseStudy:
         # ---- Initialize route planner
         os.chdir('..')
         planner = main.RoutePlanner(criteria=criteria, inputParameters=self.inputParameters)
-        planner.evaluator.treeDict = self.obstacleRtreeDict
-        planner.evaluator.ecaTreeDict = self.ecaRtreeDict
+        planner.evaluator.landTree = self.obstacleRtreeDict
+        planner.evaluator.ecaTree = self.ecaRtreeDict
         # planner.evaluator.geod.distance = planner.geod.euclidean
         nsga = planner.NSGAII(planner.tb, planner.evaluator, planner.mstats, planner.front, planner.get_days,
                               planner.stopping_criterion, planner.p).optimize

@@ -1,4 +1,5 @@
 import netCDF4
+import dask.array as da
 import datetime
 import numpy as np
 import os
@@ -94,20 +95,18 @@ class CurrentDataRetriever:
 
         # Get dataset file path and download and save directories
         d = Path('D:/data/currents/netcdf_OUT/')
-        f = 'Y%d_YDAY%03d_NDAYS%03d.npy' % (t_s.year,
-                                            t_s.timetuple().tm_yday,
-                                            nDays)
-        self.dsFP = Path(d / f)
+        f = 'Y%d_YDAY%03d_NDAYS%03d.nc' % (t_s.year, t_s.timetuple().tm_yday, nDays)
+        self.dataFP = Path(d / f)
         self.dsFTP = Path('/data/globcurrent/v3.0/global_025_deg/total_hs')
         self.dsSave = Path('D:/data/currents/netcdf_IN')
 
-    def get_da(self):
+    def get_data(self):
         # First check if combined netCDF file exists
-        if os.path.exists(self.dsFP):
-            print('Loading data array:'.format(self.dsFP), end=' ')
-            with np.load(self.dsFP, allow_pickle=True) as da:
+        if os.path.exists(self.dataFP):
+            print('Loading data:'.format(self.dataFP), end=' ')
+            with xr.open_dataset(self.dataFP) as ds:
                 print('done')
-                return da
+                return ds.to_array().data
         else:  # Create combined netCDF file from separate (to-be) downloaded netCDF files
             # Download non-existent netCDF files
             saveFPs = []
@@ -128,7 +127,7 @@ class CurrentDataRetriever:
                     files = [f for f in ftp.nlst() if '0000' in f]
                     _saveFPs = [saveDir / f for f in files]
                     saveFPs.extend(_saveFPs)
-                    for saveFP, loadFP in zip(_saveFPs, loadFP):
+                    for saveFP, loadFP in zip(_saveFPs, files):
                         if not path.isfile(saveFP):  # If files does not exist, download from FTP server
                             with open(saveFP, 'wb') as f:  # Download file to fp_save
                                 ftp.retrbinary('RETR %s' % loadFP, f.write)
@@ -136,12 +135,10 @@ class CurrentDataRetriever:
             # Open downloaded netCDF files, combine and store locally
             print('Combining %d netCDF files:' % (8 * self.nDays), end=' ')
             with xr.open_mfdataset(saveFPs, parallel=True, combine='by_coords', preprocess=ms_to_knots) as ds:
-                print("done\nStoring data array to '{}' :".format(self.dsFP), end=' ')
-                da = ds.to_array().data
-                np.save(self.dsFP, da)
+                print("done\nStoring data array to '{}' :".format(self.dataFP), end=' ')
+                ds.to_netcdf(self.dataFP)
                 print('done')
-
-            return da
+                return ds.to_array().data
 
 
 def ms_to_knots(ds):

@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from dask.cache import Cache
-# from functools import lru_cache
 from mpl_toolkits import basemap
 
 
@@ -12,22 +11,18 @@ class CurrentOperator:
     def __init__(self, t0, nDays):
         self.t0 = t0.replace(second=0, microsecond=0, minute=0, hour=0)
         self.nDays = nDays
-
-        # Initialize CurrentDataRetriever class instance
-        retriever = current_data.CurrentDataRetriever(self.t0, self.nDays)
-        self.da = retriever.get_da()
+        self.data = current_data.CurrentDataRetriever(self.t0, self.nDays).get_data()
 
         cache = Cache(2e9)  # Leverage two gigabytes of memory
         cache.register()  # Turn cache on globally
 
-    # @lru_cache(maxsize=None)
     def get_grid_pt_current(self, date_in, lon, lat):
         lonIdx = int(round((lon + 179.875) / 0.25))
         latIdx = int(round((lat + 89.875) / 0.25))
         delta = date_in - self.t0
         if delta.days < self.nDays:
             dayIdx = delta.seconds // 3600 // 3
-            vals = self.da[:, dayIdx, latIdx, lonIdx]
+            vals = self.data[:, dayIdx, latIdx, lonIdx]
             u_pt, v_pt = vals[0], vals[1]
 
             if math.isnan(u_pt) or math.isnan(v_pt):
@@ -65,30 +60,25 @@ class WindOperator:
     def __init__(self, t0, nDays):
         self.t0 = t0.replace(second=0, microsecond=0, minute=0, hour=0)
         assert nDays * 8 < 384, 'Estimated travel days exceeds wind forecast period'
-
-        # Initialize CurrentDataRetriever class instance
-        retriever = wind_data.WindDataRetriever(startDate=self.t0, nDays=nDays)
-        self.da = retriever.get_da(forecast=False)
+        self.data = wind_data.WindDataRetriever(startDate=self.t0, nDays=nDays).get_data(forecast=False)
 
         cache = Cache(2e9)  # Leverage two gigabytes of memory
         cache.register()  # Turn cache on globally
 
-    # @lru_cache(maxsize=None)
     def get_grid_pt_wind(self, time, lon, lat):
         resolution = 0.5
-        # Get indices of data array
         lon_idx = int(round((lon + 180) / resolution))
-        lon_idx = 0 if lon_idx == 720 else lon_idx
+        # lon_idx = 0 if lon_idx == 720 else lon_idx
         lat_idx = int(round((lat + 90) / resolution))
         step_idx = (time - self.t0).seconds // 3600 // 3
-        vals = self.da[:, step_idx, lat_idx, lon_idx]
+        vals = self.data[:, step_idx, lat_idx, lon_idx]
         BN = vals[0]
-        windDir = vals[1]
+        TWD = vals[1]
 
-        if math.isnan(BN) or math.isnan(windDir):
-            BN, windDir = 0, 0.0
+        if math.isnan(BN) or math.isnan(TWD):
+            BN, TWD = 0, 0.0
 
-        return BN, windDir
+        return BN, TWD
 
 
 if __name__ == '__main__':
