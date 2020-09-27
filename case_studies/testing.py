@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import os
 
-from data_config.navigable_area import populate_rtree
+from data_config.navigable_area import get_rtree
 from mpl_toolkits.basemap import Basemap
 from shapely.geometry import shape, LineString, Polygon
 
@@ -62,7 +62,7 @@ class CaseStudy:
 
         margin = 10
         self.extent = [minExt - margin, maxExt + margin]
-        self.obstacleRtreeDict, self.ecaRtreeDict = populate_rtree(self.obstacles), populate_rtree(self.ecas)
+        self.obstacleRtreeDict, self.ecaRtreeDict = get_rtree(self.obstacles), get_rtree(self.ecas)
         self.graph, self.xv, self.yv, self.pos = self.construct_graph()
         self.path, self.ecaPath = self.graph_paths()
         self.solver, self.initialRoutes, self.processor = self.initialize_planner(criteria)

@@ -39,10 +39,7 @@ class NavigableAreaGenerator:
                 exteriors.extend(exterior)
             shorelines = exteriors
 
-        if os.path.exists(fp / '.idx'):
-            return {'rtree': Index(fp), 'geometries': shorelines}
-        else:
-            return populate_rtree(shorelines, fp)
+        return get_rtree(shorelines, fp)
 
     def get_bathymetry_rtree(self):
         fp = self.DIR / 'data/navigation_area/bath_split{}'.format(self.splitThreshold)
@@ -59,10 +56,7 @@ class NavigableAreaGenerator:
                 pickle.dump(bathPolys, f)
             print('Saved to: ', fp)
 
-        if os.path.exists(fp / '.idx'):
-            return {'rtree': Index(fp), 'geometries': bathPolys}
-        else:
-            return populate_rtree(bathPolys, fp)
+        return get_rtree(bathPolys, fp)
 
     def get_shorelines(self, fp, split):
         if split and os.path.exists(fp):
@@ -179,21 +173,20 @@ class NavigableAreaGenerator:
         with open(fp, 'rb') as f:
             ecas = pickle.load(f)
 
-        if os.path.exists(fp / '.idx'):
-            return {'rtree': Index(fp), 'geometries': ecas}
-        else:
-            return populate_rtree(ecas, fp)
+        return get_rtree(ecas, fp)
 
 
-def populate_rtree(geometries, fp):
-    # Populate R-tree index with bounds of geometries
-    print('Populate {} tree'.format(fp))
-    idx = Index(fp.as_posix())
-    for i, geo in enumerate(geometries):
-        idx.insert(i, geo.bounds)
-    idx.close()
+def get_rtree(geometries, fp):
+    fp = fp.as_posix()
+    if not os.path.exists(fp + '.idx'):
+        # Populate R-tree index with bounds of geometries
+        print('Populate {} tree'.format(fp))
+        idx = Index(fp)
+        for i, geo in enumerate(geometries):
+            idx.insert(i, geo.bounds)
+        idx.close()
 
-    return {'rtree': Index(fp.as_posix()), 'geometries': geometries}
+    return {'rtree': Index(fp), 'geometries': geometries}
 
 
 def cut(line, distance):

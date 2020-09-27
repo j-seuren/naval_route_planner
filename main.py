@@ -42,8 +42,10 @@ class RoutePlanner:
                  ecaFactor=1.2,
                  fuelPrice=0.3,
                  inputParameters=None,
-                 criteria=None,
-                 tb=None):
+                 tb=None,
+                 criteria=None):
+        if criteria is None:
+            criteria = _criteria
 
         # Set parameters
         defaultParameters = {
@@ -53,8 +55,8 @@ class RoutePlanner:
                              'res': 'l',           # Resolution of shorelines
                              'penaltyValue': {'time': criteria['minimalTime'],
                                               'cost': criteria['minimalCost']},
-                             'graphDens': 6,       # Recursion level graph
-                             'graphVarDens': 4,    # Variable recursion level graph
+                             'graphDens': 4,       # Recursion level graph
+                             'graphVarDens': 6,    # Variable recursion level graph
                              'splits': 3,          # Threshold for split_polygon (val 3 yields best performance)
 
                              # MOEA parameters
@@ -68,9 +70,9 @@ class RoutePlanner:
                              'moves': 10,          # Max moves (M-PAES)
 
                              # Stopping parameters
-                             'gen': 200,           # Max generations
-                             'maxStops': 30,       # Max number of consecutive GD threshold violations
-                             'gdThreshold': 1e-3,  # Threshold value for generational distance
+                             'gen': 200,           # Min generations
+                             'maxGDs': 30,         # Max length of generational distance list
+                             'minVar': 1e-5,       # Minimal variance of generational distance list
 
                              # Mutation parameters
                              'mutationOperators': ['speed', 'insert', 'move', 'delete'],  # Operators to be included
@@ -151,16 +153,17 @@ class RoutePlanner:
             self.get_days = get_days
 
             # Parameters
-            self.gen = par['gen']
-            self.n = par['n']
             self.nBar = par['nBar']
             self.recomb = par['recomb']
+            self.n = par['n']
             self.nM = int(self.n / 2 / (self.recomb + 1))
             self.fails = par['fails']
             self.moves = par['moves']
-            self.maxStops = par['maxStops']
+            self.gen = par['gen']
+            self.minVar = par['minVar']
+            self.maxStops = par['maxGDs']
+            self.gds = []
             self.nStops = 0
-            self.minGD = par['gdThreshold']
             self.evals = 0
 
             self.mstats = support.statistics()
@@ -241,13 +244,13 @@ class RoutePlanner:
 
         def termination(self, prevFront, t):
             gd = indicators.generational_distance(prevFront, self.front)
-            if gd < self.minGD:
-                self.nStops += 1
-                if self.nStops >= self.maxStops:
-                    print('STOPPING: Generational distance')
+            self.gds.append(gd)
+            if len(self.gds) > self.maxStops:
+                self.gds.pop(0)
             if t >= self.gen:
-                print('STOPPING: Max generations')
-                return True
+                if np.var(self.gds) < self.minVar:
+                    print('STOPPING: Generational distance')
+                    return True
             return False
 
         def optimize(self, startEnd, initPaths, startDate, inclCurr, inclWeather, seed=None):
@@ -378,9 +381,9 @@ class RoutePlanner:
             self.n = par['n']
             self.cxpb = par['cxpb']
             self.mutpb = par['mutpb']
-            self.minGD = par['gdThreshold']
-            self.maxStops = par['maxStops']
-            self.nStops = 0
+            self.minVar = par['minVar']
+            self.maxStops = par['maxGDs']
+            self.gds = []
 
             # Initialize mutation selection weights, scores, and probabilities
             # self.mutW = {op: 0 for op in par['mutationOperators']}
@@ -393,14 +396,16 @@ class RoutePlanner:
 
         def termination(self, prevFront, t):
             gd = indicators.generational_distance(prevFront, self.front)
-            if gd < self.minGD and t >= self.gen // 3:
-                self.nStops += 1
-                if self.nStops >= self.maxStops:
+            self.gds.append(gd)
+            if len(self.gds) > self.maxStops:
+                self.gds.pop(0)
+            if t >= self.gen:
+                if np.var(self.gds) < self.minVar:
                     print('STOPPING: Generational distance')
                     return True
-            if t >= self.gen:
-                print('STOPPING: Max generations')
-                return True
+            # if t >= self.gen:
+            #     print('STOPPING: Max generations')
+            #     return True
             return False
 
         def optimize(self, startEnd, initRoutes, startDate, current, weather, seed):
@@ -425,7 +430,7 @@ class RoutePlanner:
                     pop = self.tb.population(self.tb.individual,
                                              int(self.n / len(subRoute.values())))
                     offspring = []
-                    currGen = self.nStops = 0
+                    currGen = 0
                     print('done')
 
                     # Step 2: Fitness assignment
@@ -485,9 +490,9 @@ class RoutePlanner:
             self.nBar = par['nBar']
             self.cxpb = par['cxpb']
             self.mutpb = par['mutpb']
-            self.minGD = par['gdThreshold']
-            self.maxStops = par['maxStops']
-            self.nStops = 0
+            self.minVar = par['minVar']
+            self.maxStops = par['maxGDs']
+            self.gds = []
 
             self.mstats = support.statistics()
             self.front = tools.ParetoFront()  # Initialize ParetoFront class
@@ -495,13 +500,13 @@ class RoutePlanner:
 
         def termination(self, prevFront, t):
             gd = indicators.generational_distance(prevFront, self.front)
-            if gd < self.minGD:
-                self.nStops += 1
-                if self.nStops >= self.maxStops:
-                    print('STOPPING: Generational distance')
+            self.gds.append(gd)
+            if len(self.gds) > self.maxStops:
+                self.gds.pop(0)
             if t >= self.gen:
-                print('STOPPING: Max generations')
-                return True
+                if np.var(self.gds) < self.minVar:
+                    print('STOPPING: Generational distance')
+                    return True
             return False
 
         def optimize(self, startEnd, initPaths, startDate, inclCurr, inclWeather, seed):
@@ -523,7 +528,7 @@ class RoutePlanner:
                                              int(self.n / len(subPath.values()))
                                              )
                     archive = []
-                    currGen = self.nStops = 0
+                    currGen = 0
                     print('done')
 
                     self.evaluator.set_classes(inclCurr, inclWeather, startDate, self.get_days(pop))
@@ -558,7 +563,7 @@ class RoutePlanner:
                         matingPool = tools.selTournament(archive, k=self.n, tournsize=2)
 
                         # Step 6: Variation
-                        pop = algorithms.varAnd(matingPool, self.tb, 1, self.mutpb)
+                        pop = algorithms.varAnd(matingPool, self.tb, self.cxpb, self.mutpb)
 
                         # Step 2: Fitness assignment
                         # Population
@@ -732,10 +737,10 @@ class RoutePlanner:
 
     def create_route_response(self, obj, bestWeighted, wps, objValue, fitValue, xCanals):
         return {'optimizationCriterion': obj,
-                'bestWeighted': bestWeighted[obj],
-                'distance': round(self.geod.total_distance(wps), 2),
-                'fuelCost': round(objValue[1], 0),
-                'travelTime': round(objValue[0], 2),
+                'bestWeighted': bestWeighted,
+                'distance': self.geod.total_distance(wps),
+                'fuelCost': objValue[1],
+                'travelTime': objValue[0],
                 'fitValues': fitValue.tolist(),
                 'waypoints': [{'lon': wp[0][0],
                                'lat': wp[0][1],
@@ -790,7 +795,7 @@ class RoutePlanner:
                 wps.extend(ind)
 
             bestWeightedResponse = self.create_route_response('bestWeighted',
-                                                              bestWeighted,
+                                                              True,
                                                               wps,
                                                               bestWeightedObjValue,
                                                               fitValue,
@@ -824,16 +829,12 @@ class RoutePlanner:
                 else:
                     bestWeighted[obj] = False
 
-                routeResponse = {'optimizationCriterion': obj,
-                                 'bestWeighted': bestWeighted[obj],
-                                 'distance': round(self.geod.total_distance(wps), 2),
-                                 'fuelCost': round(objValue[1], 0),
-                                 'travelTime': round(objValue[0], 2),
-                                 'fitValues': fitValue.tolist(),
-                                 'waypoints': [{'lon': wp[0][0],
-                                                'lat': wp[0][1],
-                                                'speed': wp[1]} for i, wp in enumerate(wps)],
-                                 'crossedCanals': xCanals}
+                routeResponse = self.create_route_response(obj=obj,
+                                                           bestWeighted=bestWeighted[obj],
+                                                           wps=wps,
+                                                           fitValue=fitValue,
+                                                           objValue=objValue,
+                                                           xCanals=xCanals)
 
                 processedResults['routeResponse'].append(routeResponse)
 
@@ -860,11 +861,12 @@ if __name__ == "__main__":
 
     from case_studies.plot_results import RoutePlotter
     from scoop import futures
+    from support import locations
 
     startTime = time.time()
-    _startEnd = ((4.02, 52.01), (-94.657976, 29.348557))
+    _startEnd = (locations['Caribbean Sea'], locations['North UK'])
 
-    parameters = {'gen': 1000,  # Max number of generations
+    parameters = {'gen': 200,  # Min number of generations
                   'n': 100}    # Population size
 
     kwargsPlanner = {'inputParameters': parameters, 'tb': _tb, 'criteria': _criteria}

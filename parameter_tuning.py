@@ -1,32 +1,35 @@
+import main
 import matplotlib.pyplot as plt
 import numpy as np
 import skopt
 # import time
 
 from datetime import datetime
-from main import RoutePlanner
 from skopt import plots, dump, load
 from skopt.callbacks import CheckpointSaver
 from support import locations
 
-DIR = 'output/tuning/'
+DIR = 'D:/'
 N_CALLs = 200
 N_POINTS = 10
 
-START_END = (locations['Tokyo'], locations['San Francisco'])
+START_END = (locations['Caribbean Sea'], locations['North UK'])
 CALLS = 0
-PLANNER = RoutePlanner()
+PLANNER = main.RoutePlanner()
 SPACE = [
-    # skopt.space.Integer(10, 500, name='gen'),
-    # skopt.space.Categorical([4 * i for i in range(1, 151)], name='n'),
-    # skopt.space.Real(0.5, 1.0, name='cxpb'),
+    skopt.space.Integer(50, 300, name='gen'),
+    skopt.space.Integer(10, 50, name='maxGDs'),
+    skopt.space.Integer(2, 20, name='nMutations'),
+    skopt.space.Categorical([4 * i for i in range(1, 101)], name='n'),
+    skopt.space.Real(0.5, 1.0, name='cxpb'),
     skopt.space.Real(0.5, 1.0, name='mutpb'),
+    skopt.space.Real(1e-7, 1e-4, name='minVar'),
     # skopt.space.Integer(5, 500, name='nBar', prior='log-uniform'),
     # skopt.space.Integer(1, 10, name='recomb'),
     # skopt.space.Integer(1, 20, name='fails'),
     # skopt.space.Integer(1, 20, name='moves'),
-    skopt.space.Real(0.0001, 10.0, name='widthRatio', prior='log-uniform'),
-    skopt.space.Real(0.0001, 10.0, name='radius', prior='log-uniform'),
+    # skopt.space.Real(0.0001, 10.0, name='widthRatio', prior='log-uniform'),
+    # skopt.space.Real(0.0001, 10.0, name='radius', prior='log-uniform'),
     # skopt.space.Real(0.1, 5.0, name='delFactor')
     ]
 
@@ -65,7 +68,7 @@ def tune(default_parameters):
 
     # Save results
     timestamp = datetime.now().strftime('%m%d%H%M')
-    fn = '{}_{}calls_{}points_tuned_parameters_result.gz'.format(timestamp, N_CALLs, N_POINTS)
+    fn = 'output/tuning/{}_{}calls_{}points_tuned_parameters_result.gz'.format(timestamp, N_CALLs, N_POINTS)
     fp = DIR + fn
     dump(res, fp, compress=9, store_objective=False)
     print('Saved to', fp)
@@ -83,19 +86,18 @@ def show_results(fp, timestamp):
 
     # Plot results
     plots.plot_evaluations(res)
-    fp_ev = DIR + '{}_eval.pdf'.format(timestamp)
+    fp_ev = DIR + '/output/tuning/figures/{}_eval.pdf'.format(timestamp)
     plt.savefig(fp_ev)
     plots.plot_objective(res)
-    fp_obj = 'output/tuning/{}_obj.pdf'.format(timestamp)
+    fp_obj = DIR + '/output/tuning/figures/{}_obj.pdf'.format(timestamp)
     plt.savefig(fp_obj)
     plots.plot_convergence(res)
 
 
 filesInfo = []
-for gauss in [True, False]:
-    _default_parameters = {'gauss': gauss, 'gen': 500, 'mutationOperators': ['insert', 'move', 'delete']}
-    FP, STAMP = tune(_default_parameters)
-    filesInfo.append((FP, STAMP))
+_default_parameters = {'mutationOperators': ['insert', 'move', 'delete']}
+FP, STAMP = tune(_default_parameters)
+filesInfo.append((FP, STAMP))
 
 for fileInfo in filesInfo:
     show_results(fileInfo[0], fileInfo[1])

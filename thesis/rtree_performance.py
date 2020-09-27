@@ -7,7 +7,7 @@ import pickle
 import random
 import time
 
-from data_config.navigable_area import NavigableAreaGenerator, populate_rtree
+from data_config.navigable_area import NavigableAreaGenerator, get_rtree
 from matplotlib.collections import LineCollection
 from mpl_toolkits.basemap import Basemap
 from pathlib import Path
@@ -123,7 +123,7 @@ def time_rtree(lines, geos, printOutput=True):
     t0 = time.time()
 
     # Populate R-tree index with bounds of polygons
-    treeSplitGeoDict = populate_rtree(geos)
+    treeSplitGeoDict = get_rtree(geos)
     intersections = []
     ptsInGeo = tests = nEdges = nExtents = lenExtents = 0
     for line in lines:
