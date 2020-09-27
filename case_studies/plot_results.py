@@ -112,7 +112,7 @@ class RoutePlotter:
 
         # Colorbar settings
         if vessel is None:
-            vessel = evaluation.Vessel()
+            vessel = evaluation.Vessel(fuelPrice=0.3)
         self.vMin, self.vMax = min(vessel.speeds), max(vessel.speeds)
         self.colors = cm.rainbow
 
@@ -138,7 +138,7 @@ class RoutePlotter:
         else:
             self.extent = (-180, -80, 180, 80)
 
-    def results(self, resolution='c',
+    def results(self, resolution='i',
                 weatherDate=None,
                 current=None,
                 initial=False,
@@ -199,14 +199,14 @@ class RoutePlotter:
             # m = Basemap(projection='lcc', resolution=None, llcrnrlat=bottom, urcrnrlat=top,
             #         llcrnrlon=left, urcrnrlon=right, lat_0=(top+bottom)/2, lon_0=(right+left)/2, ax=ax)
             # m.etopo()
-            m.readshapefile(self.DIR / "data/bathymetry_200m/ne_10m_bathymetry_K_200", 'ne_10m_bathymetry_K_200',
+            m.readshapefile(Path(self.DIR / "data/bathymetry_200m/ne_10m_bathymetry_K_200").as_posix(), 'ne_10m_bathymetry_K_200',
                             drawbounds=False)
             ps = [patches.Polygon(np.array(shape), True) for shape in m.ne_10m_bathymetry_K_200]
             ax.add_collection(PatchCollection(ps, facecolor='white', zorder=2))
             m.drawmapboundary(color='black', fill_color='darkblue')
 
         if eca:
-            m.readshapefile(self.DIR / "data/eca_reg14_sox_pm/eca_reg14_sox_pm", 'eca_reg14_sox_pm', drawbounds=False)
+            m.readshapefile(Path(self.DIR / "data/eca_reg14_sox_pm/eca_reg14_sox_pm").as_posix(), 'eca_reg14_sox_pm', drawbounds=False)
             ps = [patches.Polygon(np.array(shape), True) for shape in m.eca_reg14_sox_pm]
             ax.add_collection(PatchCollection(ps, facecolor='green', alpha=0.5, zorder=3))
 

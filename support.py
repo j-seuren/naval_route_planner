@@ -195,29 +195,7 @@ def clear_caches():
 
 
 if __name__ == '__main__':
-    # Weather locations
-    starts = [
-        locations['New York'],  # to Paramaribo 2017, 9, 4
-        locations['Thessaloniki'],
-        locations['Keelung'],  # Lin2013: departure 0000Z 28 May 2011, ETA 0000Z 11 June 2011
-        locations['Normandy'],  # Shao2012: Departure: 03:00 p.m. 25/01/2011 ETA: 00:30 p.m. 30/01/2011
-        locations['Normandy'],  # Vettor2016: June 21, 2015 at 00:00
-        locations['Valencia'],  # June 21, 2015 at 00:00
-        (),  #
-        (),  #
-    ]
 
-    ends = [locations['Paramaribo'],
-        locations['Agios Nikolaos'],
-        locations['San Francisco'],  #
-        locations['New York'],  #
-        locations['Miami'],  #
-        locations['Malta'],  #
-        (),  #
-        (),  #
-        (),  #
-        (),  #
-    ]
 
 
     # Current locations

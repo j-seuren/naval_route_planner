@@ -16,14 +16,8 @@ os.chdir('..')
 
 DIR = Path('D:/')
 SPEED = True
-ITERS = 1
-parameters = {'mutpb': 0.61,
-              'widthRatio': 7.5e-4,
-              'radius': 0.39,
-              'gauss': False,
-              'mutationOperators': ['insert', 'move', 'delete'] if SPEED else ['insert', 'move', 'speed', 'delete'],
-              'gen': 2,  # Min number of generations
-              'n': 10}  # Population size
+ITERS = 5
+parameters = {'mutationOperators': ['insert', 'move', 'delete'] if SPEED else ['insert', 'move', 'speed', 'delete']}
 PLANNER = main.RoutePlanner(inputParameters=parameters, criteria={'minimalTime': True, 'minimalCost': True})
 
 
@@ -78,10 +72,9 @@ def single_experiment(experiment, startEnd, depDate, depS, saveFig=True):
 
             for name, fig in {'front': frontFig, 'stats': statsFig, 'routes': routeFig}.items():
                 fig.savefig(DIR / "output/{}/figures/{}_{}_iters{}.pdf".format(experiment, startEnd, name, i, depS))
-
             plt.close('all')
 
-    with open(DIR / 'output/{}/raw/{}_{}_iters{}'.format(experiment, startEnd, ITERS, depS)) as f:
+    with open(DIR / 'output/{}/raw/{}_{}_iters{}'.format(experiment, startEnd, ITERS, depS), 'wb') as f:
         pickle.dump(rawList, f)
 
     return get_df(procList)
@@ -95,22 +88,63 @@ def multiple_experiments(startEnds, experiment, depDates=None):
         speedS = 'constant' if SPEED else 'var'
         writer = pd.ExcelWriter(DIR / 'output/{}/{}_gulf_{}Speed.xlsx'.format(experiment, depS, speedS))
         dfSummary = pd.DataFrame(index=['compTime', 'T_fuel', 'T_time', 'C_fuel', 'C_time', 'L_fuel', 'L_time'])
-        starts, ends = zip(*startEnds)
 
-        for i, start in enumerate(starts):
-            for j, end in enumerate(ends):
-                print('start, end {}, {} of {}'.format(i, j, len(ends)))
-                df = single_experiment(experiment, (start, end), depDate, depS, saveFig=True)
-                locS = str((i, j))
-                df.to_excel(writer, sheet_name=locS)
-                df.to_csv(DIR / 'output/{}/single_files/{}_{}_gulf_{}Speed.xlsx'.format(experiment, depS, locS, speedS))
-                dfSummary[locS + '_mean'] = df['mean']
-                dfSummary[locS + '_std'] = df['std']
+        if experiment == 'weather':
+            startEnds = list(startEnds)
+            start, end = startEnds[d]
+            df = single_experiment(experiment, (start, end), depDate, depS, saveFig=True)
+            locS = str(d)
+            df.to_excel(writer, sheet_name=locS)
+            df.to_csv(DIR / 'output/{}/single_files/{}_{}_gulf_{}Speed.xlsx'.format(experiment, depS, locS, speedS))
+            dfSummary[locS + '_mean'] = df['mean']
+            dfSummary[locS + '_std'] = df['std']
+        else:
+            starts, ends = zip(*startEnds)
+            for i, start in enumerate(starts):
+                for j, end in enumerate(ends):
+                    print('start, end {}, {} of {}'.format(i, j, len(ends)))
+                    df = single_experiment(experiment, (start, end), depDate, depS, saveFig=True)
+                    locS = str((i, j))
+                    df.to_excel(writer, sheet_name=locS)
+                    df.to_csv(DIR / 'output/{}/single_files/{}_{}_gulf_{}Speed.xlsx'.format(experiment, depS, locS, speedS))
+                    dfSummary[locS + '_mean'] = df['mean']
+                    dfSummary[locS + '_std'] = df['std']
 
         dfSummary.to_excel(writer, sheet_name='summary')
         writer.save()
     print('DONE TESTING')
 
+
+# Test weather
+# Weather locations
+weatherStarts = [
+    locations['New York'],  # to Paramaribo 2017, 9, 4
+    locations['Keelung'],   # Lin2013: departure 0000Z 28 May 2011, ETA 0000Z 11 June 2011
+    locations['Normandy'],  # Shao2012: Departure: 03:00 p.m. 25/01/2011 ETA: 00:30 p.m. 30/01/2011
+    locations['Normandy'],  # Vettor2016: June 21, 2015 at 00:00
+    locations['Valencia'],  # June 21, 2015 at 00:00
+    # locations['Thessaloniki']
+    ]
+
+weatherEnds = [
+    locations['Paramaribo'],
+    locations['San Francisco'],
+    locations['New York'],
+    locations['Miami'],
+    locations['Malta'],
+    # locations['Agios Nikolaos']
+    ]
+
+dateTimes = [
+    datetime(2017, 9,  4),
+    datetime(2011, 5, 28),
+    datetime(2011, 1, 25),
+    datetime(2015, 6, 21),
+    datetime(2015, 6, 21)
+    ]
+
+weatherStartEnds = zip(weatherStarts, weatherEnds)
+multiple_experiments(weatherStartEnds, 'weather', dateTimes)
 
 # Test current
 currentDepartures = [datetime(2014, 10, 28),
@@ -118,18 +152,11 @@ currentDepartures = [datetime(2014, 10, 28),
                      datetime(2014, 11, 25),
                      datetime(2014, 4, 20),
                      datetime(2015, 5, 4),
-                     datetime(2015, 5, 18)]
+                     datetime(2015, 5, 18)
+                     ]
 currentStartEnds = zip(locations['westLocations'], locations['eastLocations'])
-# multiple_experiments(currentStartEnds, 'current', currentDepartures)
+multiple_experiments(currentStartEnds, 'current', currentDepartures)
 
 # Test ECA
 ecaStartEnds = zip([locations['ECA1: Jacksonville']], [locations['ECA2: New York']])
-# multiple_experiments(ecaStartEnds, 'ecas')
-
-departure = datetime(2019, 3, 1)
-departureS = 'depart' + departure.strftime('%Y_%m_%d')
-
-single_experiment('weather', (locations['Caribbean Sea'], locations['North UK']), datetime(2019, 3, 1), departureS,
-                  saveFig=True)
-plt.show()
-
+multiple_experiments(ecaStartEnds, 'ecas')
