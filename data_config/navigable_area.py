@@ -37,7 +37,7 @@ class NavigableAreaGenerator:
             shorelines = exteriors
 
         if os.path.exists(fp / '.idx'):
-            return {'rtree': Index(fp), 'geometries': shorelines}
+            return {'rtree': Index(fp.as_posix()), 'geometries': shorelines}
         else:
             return populate_rtree(shorelines, fp)
 
@@ -57,7 +57,7 @@ class NavigableAreaGenerator:
             print('Saved to: ', fp)
 
         if os.path.exists(fp / '.idx'):
-            return {'rtree': Index(fp), 'geometries': bathPolys}
+            return {'rtree': Index(fp.as_posix()), 'geometries': bathPolys}
         else:
             return populate_rtree(bathPolys, fp)
 
@@ -177,7 +177,7 @@ class NavigableAreaGenerator:
             ecas = pickle.load(f)
 
         if os.path.exists(fp / '.idx'):
-            return {'rtree': Index(fp), 'geometries': ecas}
+            return {'rtree': Index(fp.as_posix()), 'geometries': ecas}
         else:
             return populate_rtree(ecas, fp)
 
@@ -190,7 +190,7 @@ def populate_rtree(geometries, fn):
         idx.insert(i, geo.bounds)
     idx.close()
 
-    return {'rtree': Index(fn), 'geometries': geometries}
+    return {'rtree': Index(fn.as_posix()), 'geometries': geometries}
 
 
 def cut(line, distance):
