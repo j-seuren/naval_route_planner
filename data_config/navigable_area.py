@@ -3,7 +3,6 @@ import fiona
 import os
 import pickle
 
-from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 from pathlib import Path
 from rtree.index import Index
 from shapely.geometry import box, Polygon, MultiPolygon, GeometryCollection, shape, LineString, Point
