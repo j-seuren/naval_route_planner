@@ -7,6 +7,7 @@ import weather
 
 from functools import lru_cache, wraps
 from math import cos, sin, sqrt, degrees, pow
+from pathlib import Path
 from shapely.geometry import LineString, Point
 # from case_studies.demos import create_currents
 
@@ -183,9 +184,9 @@ class Evaluator:
 
 
 class Vessel:
-    def __init__(self, name='Fairmaster', shipLoading='normal'):
+    def __init__(self, name='Fairmaster', shipLoading='normal', DIR=Path('D:/')):
         self.name = name
-        vesselTableFP = os.path.abspath('D:/data/speed_table.xlsx')
+        vesselTableFP = DIR / 'data/speed_table.xlsx'
         df = pd.read_excel(vesselTableFP, sheet_name=self.name)
         df = df[df['Loading'] == shipLoading].round(1)
         self.fuel_rates = pd.Series(df.Fuel.values, index=df.Speed).to_dict()
@@ -197,7 +198,7 @@ class Vessel:
         D = 20.8  # Ship draft [m]
         vol = 312622  # Displaced volume [m^3]
         blockCoefficient = vol / (Lpp * B * D)  # Block coefficient
-        self.speed_reduction = SemiEmpiricalSpeedReduction(blockCoefficient, shipLoading, Lpp, vol)
+        self.speed_reduction = SemiEmpiricalSpeedReduction(blockCoefficient, shipLoading, Lpp, vol, DIR)
 
     def reduced_speed(self, windDir, heading, BN, boatSpeed):
         return self.speed_reduction.reduced_speed(windDir, heading, BN, boatSpeed)
@@ -207,9 +208,9 @@ class SemiEmpiricalSpeedReduction:
     """Based on Kwon's method for calculating the reduction of ship speed as a function of wind direction and speed.
     Kwon, Y.J., 2008. Speed loss due to added resistance in wind and waves """
 
-    def __init__(self, block, shipLoading, Lpp, volume):
+    def __init__(self, block, shipLoading, Lpp, volume, DIR):
 
-        coefficientTableFP = 'D:/data/kwons_method_coefficient_tables.xlsx'
+        coefficientTableFP = DIR / 'data/kwons_method_coefficient_tables.xlsx'
         # Weather direction reduction table
         df = pd.read_excel(coefficientTableFP, sheet_name='direction_reduction_coefficient')
         self.directionDF = df[['a', 'b', 'c']].to_numpy()

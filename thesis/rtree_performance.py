@@ -10,9 +10,11 @@ import time
 from data_config.navigable_area import NavigableAreaGenerator, populate_rtree
 from matplotlib.collections import LineCollection
 from mpl_toolkits.basemap import Basemap
+from pathlib import Path
 from shapely.geometry import LineString
 # from shapely.prepared import prep
 
+DIR = Path('D:/')
 
 os.chdir('..')
 
@@ -68,7 +70,7 @@ def poly_stats(geos, splitGeos, save=False):
         ax.set_yscale("log")
 
     if save:
-        tikzplotlib.save("D:/output/figures/histogram.tex")
+        tikzplotlib.save(DIR / "output/figures/histogram.tex")
 
 
 # Generate n uniformly random distributed and oriented line segments
@@ -205,7 +207,7 @@ def plot_intersections(lines, intersects, save=True, width=2):
     plt.gca().add_collection(LineCollection(ptsRest, color="gray", linewidths=width))
 
     if save:
-        fp = 'D:/output/figures/RTREE_linesegs_map.pdf'
+        fp = DIR / 'output/figures/RTREE_linesegs_map.pdf'
         fig.savefig(fp,  bbox_inches='tight', pad_inches=0)
         print('saved to: ', fp)
 

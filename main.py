@@ -45,6 +45,8 @@ class RoutePlanner:
                  tb=None):
         # Set parameters
         defaultParameters = {
+                             'saveDIR': Path('D:/'),
+
                              # Navigation area parameters
                              'avoidAntarctic': True,
                              'avoidArctic': True,

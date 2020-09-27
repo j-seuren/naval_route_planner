@@ -4,7 +4,10 @@ import pandas as pd
 import pickle
 
 from mpl_toolkits.basemap import Basemap
+from pathlib import Path
 from shapely.geometry import Polygon, shape
+
+DIR = Path('D:/')
 
 
 def create_from_csv(fp, save=True):
@@ -16,7 +19,7 @@ def create_from_csv(fp, save=True):
         points = [[row['longitude'], row['latitude']] for idx, row in area_df.iterrows()]
         secas.append(Polygon([pt for pt in points]))
     if save:
-        fp = 'D:/data/seca_areas_csv'
+        fp = DIR / 'data/seca_areas_csv'
         with open(fp, 'wb') as file:
             pickle.dump(secas, file)
         print('Saved secas to', fp)
@@ -35,7 +38,7 @@ def create_from_shp(fp, save=True):
         else:
             raise IOError('Shape is not a polygon.')
     if save:
-        fp = 'D:/data/seca_areas_shp'
+        fp = DIR / 'data/seca_areas_shp'
         with open(fp, 'wb') as file:
             pickle.dump(secas, file)
         print('Saved secas to', fp)
@@ -57,8 +60,8 @@ def plot_from_list(secas):
 
 
 if __name__ == '__main__':
-    csv_fp = 'D:/data/seca_areas.csv'
-    shp_fp = 'D:/data/eca_reg14_sox_pm/eca_reg14_sox_pm.shp'
+    csv_fp = DIR / 'data/seca_areas.csv'
+    shp_fp = DIR / 'data/eca_reg14_sox_pm/eca_reg14_sox_pm.shp'
 
     shp_secas = create_from_shp(shp_fp, save=True)
     # csv_secas = create_from_csv(csv_fp, save=False)

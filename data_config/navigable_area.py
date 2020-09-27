@@ -9,20 +9,20 @@ from shapely.geometry import box, Polygon, MultiPolygon, GeometryCollection, sha
 
 
 class NavigableAreaGenerator:
-    def __init__(self, parameters):
+    def __init__(self, parameters, DIR=Path('D:/')):
         self.resolution = parameters['res']
         self.splitThreshold = parameters['splits']
         self.avoidAntarctic = parameters['avoidAntarctic']
         self.avoidArctic = parameters['avoidArctic']
-        self.get_eca_tree = get_eca_rtree
-        self.gshhgDir = Path('D:/data/gshhg-shp-2.3.7/GSHHS_shp')
+        self.gshhgDir = DIR / 'data/gshhg-shp-2.3.7/GSHHS_shp'
         self.shorelinesFP = self.gshhgDir / '{0}/GSHHS_{0}_L1.shp'.format(self.resolution)
         self.antarcticFP = self.gshhgDir / '{0}/GSHHS_{0}_L6.shp'.format(self.resolution)
+        self.DIR = DIR
 
     def get_shoreline_tree(self, getExterior=False):
         aC = 'excl' if self.avoidArctic else 'incl'
         aAc = 'excl' if self.avoidAntarctic else 'incl'
-        fp = 'D:/data/navigation_area/shorelines_{}_split{}_{}Antarc_{}Arc'.format(self.resolution, self.splitThreshold,
+        fp = self.DIR / 'data/navigation_area/shorelines_{}_split{}_{}Antarc_{}Arc'.format(self.resolution, self.splitThreshold,
                                                                                    aAc, aC)
         shorelines = self.get_shorelines(fp, not getExterior)
         if getExterior:
@@ -42,12 +42,12 @@ class NavigableAreaGenerator:
             return populate_rtree(shorelines, fp)
 
     def get_bathymetry_tree(self):
-        fp = 'D:/data/navigation_area/bath_split{}'.format(self.splitThreshold)
+        fp = self.DIR / 'data/navigation_area/bath_split{}'.format(self.splitThreshold)
         if os.path.exists(fp):
             with open(fp, 'rb') as f:
                 bathPolys = pickle.load(f)
         else:
-            bathFP = Path('D:/data/bathymetry_200m/ne_10m_bathymetry_K_200.shp')
+            bathFP = self.DIR / 'data/bathymetry_200m/ne_10m_bathymetry_K_200.shp'
             polygons = [shape(polygon['geometry']) for polygon in iter(fiona.open(bathFP))]
 
             # Split and save polygons
@@ -171,16 +171,15 @@ class NavigableAreaGenerator:
                 finalResult.append(g)
         return finalResult
 
+    def get_eca_rtree(self):
+        fp = self.DIR / 'data/navigation_area/secas'
+        with open(fp, 'rb') as f:
+            ecas = pickle.load(f)
 
-def get_eca_rtree():
-    fp = 'D:/data/navigation_area/secas'
-    with open(fp, 'rb') as f:
-        ecas = pickle.load(f)
-
-    if os.path.exists(fp + '.idx'):
-        return {'rtree': Index(fp), 'geometries': ecas}
-    else:
-        return populate_rtree(ecas, fp)
+        if os.path.exists(fp + '.idx'):
+            return {'rtree': Index(fp), 'geometries': ecas}
+        else:
+            return populate_rtree(ecas, fp)
 
 
 def populate_rtree(geometries, fn):
@@ -213,6 +212,7 @@ if __name__ == '__main__':
     from matplotlib import patches
     from mpl_toolkits.basemap import Basemap
 
+    DIR = Path('D:/')
     os.chdir('..')
     pars = {'res': 'l', 'splits': 10, 'avoidAntarctic': False, 'avoidArctic': False}
     generator = NavigableAreaGenerator(parameters=pars)
@@ -224,7 +224,7 @@ if __name__ == '__main__':
     m.drawmapboundary(fill_color='red', zorder=1)
     m.drawcoastlines(color='black')
     m.fillcontinents(color='lightgray', lake_color='lightgray', zorder=2)
-    m.readshapefile("D:/data/bathymetry_200m/ne_10m_bathymetry_K_200", 'ne_10m_bathymetry_K_200', drawbounds=False)
+    m.readshapefile(DIR / "data/bathymetry_200m/ne_10m_bathymetry_K_200", 'ne_10m_bathymetry_K_200', drawbounds=False)
     ps = [patches.Polygon(np.array(shape), True) for shape in m.ne_10m_bathymetry_K_200]
     _ax.add_collection(PatchCollection(ps, facecolor='white', zorder=2))
 

@@ -5,6 +5,9 @@ import os
 
 from data_config.hexagraph import Hexagraph
 from data_config.navigable_area import NavigableAreaGenerator
+from pathlib import Path
+
+DIR = Path('D:/')
 
 os.chdir('..')
 graph_d = 3
@@ -59,6 +62,6 @@ ax.xaxis.set_major_locator(plt.NullLocator())
 ax.yaxis.set_major_locator(plt.NullLocator())
 ax.zaxis.set_major_locator(plt.NullLocator())
 
-fig.savefig('D:/output/figures/INIT_3D_sphere.pdf', bbox_inches='tight', pad_inches=0)
+fig.savefig(DIR / 'output/figures/INIT_3D_sphere.pdf', bbox_inches='tight', pad_inches=0)
 print('saved graph')
 plt.show()

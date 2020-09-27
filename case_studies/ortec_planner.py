@@ -9,11 +9,11 @@ from pathlib import Path
 
 
 class OrtecPlanner:
-    def __init__(self):
-        self.dataLoc = Path('D:/data/data_20200327')
+    def __init__(self, DIR=Path('D:/')):
+        self.dataLoc = DIR / 'data/data_20200327'
         self.arcsFile = Path('routeplanner_output_waypoints.csv')
         self.portsFile = Path('ports.csv')
-        self.GSavePath = Path('D:/data/ortec_planner/ortec_graph_v1')
+        self.GSavePath = DIR / 'data/ortec_planner/ortec_graph_v1'
         self.graph = None
         self.arcs = None
 

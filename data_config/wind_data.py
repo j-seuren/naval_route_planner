@@ -10,15 +10,15 @@ from pathlib import Path
 
 
 class WindDataRetriever:
-    def __init__(self, startDate, nDays=20):
+    def __init__(self, startDate, nDays=20, DIR=Path('D:/')):
         self.t0 = startDate
         self.t0str = self.t0.strftime('%Y%m%d00')  # Forecast start time; hours should be 00 06 12 or 18
         self.nDays = nDays
 
         # Dataset file path and grib directory
         f = '{}_nDays{}.npz'.format(self.t0.strftime('%Y%m%d'), self.nDays)
-        self.dsFP = Path('D:/data/wind/netcdf_OUT/') / f
-        self.gribDir = Path('D:/data/wind/grib_IN') / self.t0.strftime('%Y')  # directory in which to put the output
+        self.dsFP = DIR / 'data/wind/netcdf_OUT/' / f
+        self.gribDir = DIR / 'data/wind/grib_IN' / self.t0.strftime('%Y')  # directory in which to put the output
 
     def download_grib_files(self, forecast):
         if not os.path.exists(self.gribDir):

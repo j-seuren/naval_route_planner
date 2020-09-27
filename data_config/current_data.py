@@ -80,7 +80,8 @@ class CurrentDataRetriever:
                  nDays,
                  host='eftp.ifremer.fr',
                  user='gg1f3e8',
-                 passwd='xG3jZhT9'
+                 passwd='xG3jZhT9',
+                 DIR=Path('D:/')
                  ):
         # Current data period
         self.nDays = nDays
@@ -92,11 +93,11 @@ class CurrentDataRetriever:
         self.passwd = passwd
 
         # Get dataset file path and download and save directories
-        d = Path('D:/data/currents/netcdf_OUT/')
+        d = DIR / 'data/currents/netcdf_OUT/'
         f = 'Y%d_YDAY%03d_NDAYS%03d.nc' % (t_s.year, t_s.timetuple().tm_yday, nDays)
         self.dataFP = Path(d / f)
         self.dsFTP = Path('/data/globcurrent/v3.0/global_025_deg/total_hs')
-        self.dsSave = Path('D:/data/currents/netcdf_IN')
+        self.dsSave = DIR / 'data/currents/netcdf_IN'
 
     def get_data(self):
         # First check if combined netCDF file exists

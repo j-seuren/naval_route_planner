@@ -83,7 +83,7 @@ def current_test(startEnd, parameters, iterations, saveFig=True):
         print("--- %s seconds ---" % (time.time() - startTime))
         if saveFig:
             timestamp = datetime.datetime.now().strftime("%m%d_%H-%M-%S")
-            fig.savefig("D:/output/figures/{}_current_demo_ITER{}.pdf".format(timestamp, i))
+            fig.savefig(DIR / "output/figures/{}_current_demo_ITER{}.pdf".format(timestamp, i))
         plt.close('all')
 
     return procList
@@ -117,7 +117,7 @@ procDict = {str((i, j)): current_test((west, east), PARAMETERS, ITERATIONS, save
             for i, west in enumerate(locations['westLocations']) for j, east in enumerate(locations['eastLocations'])}
 
 # df = pd.DataFrame.from_dict(procDict)
-# df.to_excel('D:/output/currents/gulf_stream_routes.xlsx')
+# df.to_excel(DIR / 'output/currents/gulf_stream_routes.xlsx')
 
 # eca_test(PARAMETERS, ITERATIONS)
 # general_test(START_END, START_DATE, PARAMETERS)

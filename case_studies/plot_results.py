@@ -8,6 +8,7 @@ from matplotlib import cm, patches
 from matplotlib.collections import PatchCollection
 from mpl_toolkits.basemap import Basemap
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from pathlib import Path
 
 # plt.rcParams.update({
 #     # "text.usetex": True,
@@ -37,8 +38,9 @@ def update(population):
 
 
 class StatisticsPlotter:
-    def __init__(self, rawResults):
+    def __init__(self, rawResults, DIR=Path('D:/')):
         self.rawResults = rawResults
+        self.DIR = DIR
 
     def plot_stats(self):
         logs = self.rawResults['logs']
@@ -102,9 +104,10 @@ def concatenated_front(front):
 
 
 class RoutePlotter:
-    def __init__(self, inputResults=None, rawResults=None, vessel=None):
+    def __init__(self, inputResults=None, rawResults=None, vessel=None, DIR=Path('D:/')):
         self.processedResults = inputResults
         self.rawResults = rawResults
+        self.DIR = DIR
 
         # Colorbar settings
         if vessel is None:
@@ -195,14 +198,14 @@ class RoutePlotter:
             # m = Basemap(projection='lcc', resolution=None, llcrnrlat=bottom, urcrnrlat=top,
             #         llcrnrlon=left, urcrnrlon=right, lat_0=(top+bottom)/2, lon_0=(right+left)/2, ax=ax)
             # m.etopo()
-            m.readshapefile("D:/data/bathymetry_200m/ne_10m_bathymetry_K_200", 'ne_10m_bathymetry_K_200',
+            m.readshapefile(self.DIR / "data/bathymetry_200m/ne_10m_bathymetry_K_200", 'ne_10m_bathymetry_K_200',
                             drawbounds=False)
             ps = [patches.Polygon(np.array(shape), True) for shape in m.ne_10m_bathymetry_K_200]
             ax.add_collection(PatchCollection(ps, facecolor='white', zorder=2))
             m.drawmapboundary(color='black', fill_color='darkblue')
 
         if eca:
-            m.readshapefile("D:/data/eca_reg14_sox_pm/eca_reg14_sox_pm", 'eca_reg14_sox_pm', drawbounds=False)
+            m.readshapefile(self.DIR / "data/eca_reg14_sox_pm/eca_reg14_sox_pm", 'eca_reg14_sox_pm', drawbounds=False)
             ps = [patches.Polygon(np.array(shape), True) for shape in m.eca_reg14_sox_pm]
             ax.add_collection(PatchCollection(ps, facecolor='green', alpha=0.5, zorder=3))
 

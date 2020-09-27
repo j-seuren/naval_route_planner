@@ -1,3 +1,4 @@
+import evaluation
 import folium
 import main
 import math
@@ -6,12 +7,12 @@ import numpy as np
 import weather
 import os
 import pickle
-import support
 
 from matplotlib import cm, patches
 from matplotlib.collections import PatchCollection
 from mpl_toolkits.basemap import Basemap
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from pathlib import Path
 
 
 def plot_stats(path_logs, name):
@@ -43,7 +44,8 @@ def plot_stats(path_logs, name):
 
 class RoutePlotter:
     def __init__(self, bounds, n_plots, vessel=None, titles=None, ecas=None, show_colorbar=True, uin=None, vin=None,
-                 lons=None, lats=None):
+                 lons=None, lats=None, DIR=Path('D:/')):
+        self.DIR = DIR
         self.col_map = cm.rainbow
         if titles:
             self.titles = titles
@@ -57,7 +59,7 @@ class RoutePlotter:
         if vessel:
             self.vessel = vessel
         else:
-            self.vessel = support.Vessel()
+            self.vessel = evaluation.Vessel()
 
         if uin is not None:
             self.uin = uin
@@ -100,7 +102,8 @@ class RoutePlotter:
             m.drawmeridians(np.arange(-180., 180., 10.), labels=[0, 0, 0, 1], fontsize=8)
             m.drawmapboundary(color='black', fill_color='aqua')
             m.fillcontinents(color='lightgray', lake_color='lightgray', zorder=2)
-            m.readshapefile("D:/data/bathymetry_200m/ne_10m_bathymetry_K_200", 'ne_10m_bathymetry_K_200', drawbounds=False)
+            m.readshapefile(self.DIR / 'data/bathymetry_200m/ne_10m_bathymetry_K_200', 'ne_10m_bathymetry_K_200',
+                            drawbounds=False)
 
             ps = [patches.Polygon(np.array(shape), True) for shape in m.ne_10m_bathymetry_K_200]
             ax.add_collection(PatchCollection(ps, facecolor='white', zorder=2))
@@ -208,7 +211,9 @@ if __name__ == "__main__":
     _start_date = None
     planner = main.RoutePlanner()
 
-    with open('D:/data/seca_areas_csv', 'rb') as file:
+    DIR = Path('D:/')
+
+    with open(DIR / 'data/seca_areas_csv', 'rb') as file:
         _ecas = pickle.load(file)
 
     # Get outer bounds of all paths
