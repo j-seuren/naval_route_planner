@@ -155,7 +155,10 @@ class Evaluator:
         return legHours  # Travel time in days
 
     def calc_seg_hours(self, p1, p2, speedKnots, currentHours):
-        now = self.startDate + datetime.timedelta(hours=currentHours)
+        try:
+            now = self.startDate + datetime.timedelta(hours=currentHours)
+        except TypeError:
+            raise TypeError("Date {} ; currHours {}".format(self.startDate, currentHours))
         nauticalMiles, bearingRad = self.geod.distance(p1, p2, bearing=True)
 
         # Coordinates of middle point of leg

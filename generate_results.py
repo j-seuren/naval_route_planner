@@ -12,10 +12,10 @@ from datetime import datetime
 from pathlib import Path
 from support import locations
 
-os.chdir('..')
+# os.chdir('')
 
 DIR = Path('D:/')
-SPEED = True
+SPEED = False
 ITERS = 5
 parameters = {'mutationOperators': ['insert', 'move', 'delete'] if SPEED else ['insert', 'move', 'speed', 'delete']}
 PLANNER = main.RoutePlanner(inputParameters=parameters, criteria={'minimalTime': True, 'minimalCost': True})
@@ -98,15 +98,14 @@ def multiple_experiments(startEnds, experiment, depDates=None):
             DF.to_csv(fp)
         DF_SUMMARY[LOC_S + '_mean'] = DF['mean']
         DF_SUMMARY[LOC_S + '_std'] = DF['std']
-
-        return DF_SUMMARY
+        return DF_SUMMARY.T
 
     depDates = [None] if depDates is None else depDates
     for d, depDate in enumerate(depDates):
         print('date {} of {}'.format(d+1, len(depDates)))
         depS = '' if depDate is None else 'depart' + depDate.strftime('%Y_%m_%d')
         writer = pd.ExcelWriter(DIR / 'output/{}/{}_gulf_{}Speed.xlsx'.format(experiment, depS, speedS))
-        dfSummary = pd.DataFrame(index=['compTime', 'T_fuel', 'T_time', 'C_fuel', 'C_time', 'L_fuel', 'L_time'])
+        dfSummary = pd.DataFrame(columns=['compTime', 'T_fuel', 'T_time', 'C_fuel', 'C_time', 'L_fuel', 'L_time'])
 
         if experiment == 'weather':
             locS = str(d)
@@ -114,7 +113,7 @@ def multiple_experiments(startEnds, experiment, depDates=None):
             start, end = startEnds[d]
             dfSummary = init_experiment(writer, dfSummary, depDate, depS, locS, start, end)
         else:
-            starts, ends = zip(*startEnds)
+            starts, ends = [startEnd[0] for startEnd in startEnds], [startEnd[1] for startEnd in startEnds]
             for i, start in enumerate(starts):
                 for j, end in enumerate(ends):
                     print('start, end {}, {} of {}'.format(i+1, j+1, len(ends)))
@@ -165,9 +164,9 @@ currentDepartures = [datetime(2014, 10, 28),
                      datetime(2015, 5, 4),
                      datetime(2015, 5, 18)
                      ]
-currentStartEnds = zip(locations['westLocations'], locations['eastLocations'])
+currentStartEnds = list(zip(locations['westLocations'], locations['eastLocations']))
 multiple_experiments(currentStartEnds, 'current', currentDepartures)
 
 # Test ECA
-ecaStartEnds = zip([locations['ECA1: Jacksonville']], [locations['ECA2: New York']])
+ecaStartEnds = list(zip([locations['ECA1: Jacksonville']], [locations['ECA2: New York']]))
 multiple_experiments(ecaStartEnds, 'ecas')

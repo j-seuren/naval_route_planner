@@ -14,7 +14,7 @@ from support import locations
 import sklearn.tree
 
 DIR = Path('D:/')
-N_CALLs = 100
+N_CALLs = 200
 N_POINTS = 10
 DEPART = datetime(2016, 1, 1)
 CURRENT = True
@@ -25,19 +25,19 @@ CALLS = 0
 PLANNER = main.RoutePlanner(bathymetry=False)
 
 SPACE = [
-    skopt.space.Integer(50, 100, name='gen'),  # Minimal nr. generations
-    skopt.space.Integer(5, 45, name='maxGDs'),
-    skopt.space.Real(1e-6, 1e-4, name='minVar'),  # Minimal variance generational distance
-    skopt.space.Integer(2, 15, name='nMutations'),
-    skopt.space.Categorical([4 * i for i in range(1, 101)], name='n'),
-    skopt.space.Real(0.5, 1.0, name='cxpb'),
-    skopt.space.Real(0.2, 0.7, name='mutpb'),
+    # skopt.space.Integer(50, 100, name='gen'),  # Minimal nr. generations
+    # skopt.space.Integer(5, 45, name='maxGDs'),
+    # skopt.space.Real(1e-6, 1e-4, name='minVar'),  # Minimal variance generational distance
+    # skopt.space.Integer(2, 15, name='nMutations'),
+    # skopt.space.Categorical([4 * i for i in range(1, 101)], name='n'),
+    # skopt.space.Real(0.5, 1.0, name='cxpb'),
+    # skopt.space.Real(0.2, 0.7, name='mutpb'),
     # skopt.space.Integer(5, 500, name='nBar', prior='log-uniform'),
     # skopt.space.Integer(1, 10, name='recomb'),
     # skopt.space.Integer(1, 20, name='fails'),
     # skopt.space.Integer(1, 20, name='moves'),
-    # skopt.space.Real(0.0001, 10.0, name='widthRatio', prior='log-uniform'),
-    # skopt.space.Real(0.0001, 10.0, name='radius', prior='log-uniform'),
+    skopt.space.Real(0.1, 10.0, name='widthRatio'),
+    skopt.space.Real(0.1, 10.0, name='radius'),
     # skopt.space.Real(0.1, 5.0, name='delFactor')
     ]
 
@@ -99,8 +99,11 @@ def show_results(fp, timestamp):
     plt.savefig(saveFP.as_posix() + 'conv.pdf')
 
 
-_default_parameters = {'mutationOperators': ['insert', 'move', 'delete']}
-FP, STAMP = tune(_default_parameters)
-show_results(FP, STAMP)
+# _default_parameters = {'mutationOperators': ['insert', 'move', 'delete']}
+# FP, STAMP = tune(_default_parameters)
+
+timestamp = datetime.now().strftime('%m%d%H%M')
+fp = 'D:/JobS/Downloads/checkpoint_3.pkl'
+show_results(fp, timestamp)
 
 # plt.show()
