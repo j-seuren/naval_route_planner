@@ -748,7 +748,7 @@ class RoutePlanner:
         if result is None:
             with open(self.procResultsFP, 'rb') as file:
                 processedResults = pickle.load(file)
-            with open(self.procResultsFP / '_raw', 'rb') as file:
+            with open(self.procResultsFP.as_posix() + '_raw', 'rb') as file:
                 result = pickle.load(file)
             return processedResults, result
         elif result == 'equal_start_end':
@@ -842,7 +842,7 @@ class RoutePlanner:
         try:
             with open(self.procResultsFP, 'wb') as file:
                 pickle.dump(processedResults, file)
-            with open(self.procResultsFP / '_raw', 'wb') as file:
+            with open(self.procResultsFP.as_posix() + '_raw', 'wb') as file:
                 pickle.dump(result, file)
         except TypeError:
             print("Save filepath is 'None': Result is not saved")

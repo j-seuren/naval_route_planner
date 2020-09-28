@@ -211,7 +211,7 @@ if __name__ == '__main__':
     DIR = Path('D:/')
     os.chdir('..')
     pars = {'res': 'l', 'splits': 10, 'avoidAntarctic': False, 'avoidArctic': False}
-    generator = NavigableAreaGenerator(parameters=pars)
+    generator = NavigableAreaGenerator(parameters=pars, DIR=DIR)
     bathymetry = generator.get_bathymetry_rtree()
 
     # Plot on Basemap
@@ -220,7 +220,7 @@ if __name__ == '__main__':
     m.drawmapboundary(fill_color='red', zorder=1)
     m.drawcoastlines(color='black')
     m.fillcontinents(color='lightgray', lake_color='lightgray', zorder=2)
-    m.readshapefile(DIR / "data/bathymetry_200m/ne_10m_bathymetry_K_200", 'ne_10m_bathymetry_K_200', drawbounds=False)
+    m.readshapefile(DIR / "data/bathymetry_10m/ne_10m_bathymetry_L_0", 'ne_10m_bathymetry_L_0', drawbounds=False)
     ps = [patches.Polygon(np.array(shape), True) for shape in m.ne_10m_bathymetry_K_200]
     _ax.add_collection(PatchCollection(ps, facecolor='white', zorder=2))
 

@@ -38,6 +38,10 @@ def get_df(procList):
 
 
 def single_experiment(experiment, startEnd, depDate, depS, saveFig=True):
+    rawListFP = DIR / 'output/{}/raw/{}_{}_iters{}'.format(experiment, startEnd, ITERS, depS)
+    if os.path.exists(rawListFP):
+        return None
+
     current = True if experiment == 'current' else False
     weather = True if experiment == 'weather' else False
     ecas = True if experiment == 'ecas' else False
@@ -81,34 +85,40 @@ def single_experiment(experiment, startEnd, depDate, depS, saveFig=True):
 
 
 def multiple_experiments(startEnds, experiment, depDates=None):
+    speedS = 'constant' if SPEED else 'var'
+
+    def init_experiment(WRITER, DF_SUMMARY, DEP_DATE, DEP_S, LOC_S, START, END):
+        fp = DIR / 'output/{}/single_files/{}_{}_gulf_{}Speed.csv'.format(experiment, DEP_S, LOC_S, speedS)
+        DF = single_experiment(experiment, (START, END), DEP_DATE, DEP_S, saveFig=True)
+        if DF is None:
+            DF = pd.read_csv(fp)
+        else:
+            DF.to_excel(WRITER, sheet_name=LOC_S)
+            DF.to_csv(fp)
+        DF_SUMMARY[LOC_S + '_mean'] = DF['mean']
+        DF_SUMMARY[LOC_S + '_std'] = DF['std']
+
+        return DF_SUMMARY
+
     depDates = [None] if depDates is None else depDates
     for d, depDate in enumerate(depDates):
-        print('date {} of {}'.format(d, len(depDates)))
+        print('date {} of {}'.format(d+1, len(depDates)))
         depS = '' if depDate is None else 'depart' + depDate.strftime('%Y_%m_%d')
-        speedS = 'constant' if SPEED else 'var'
         writer = pd.ExcelWriter(DIR / 'output/{}/{}_gulf_{}Speed.xlsx'.format(experiment, depS, speedS))
         dfSummary = pd.DataFrame(index=['compTime', 'T_fuel', 'T_time', 'C_fuel', 'C_time', 'L_fuel', 'L_time'])
 
         if experiment == 'weather':
+            locS = str(d)
             startEnds = list(startEnds)
             start, end = startEnds[d]
-            df = single_experiment(experiment, (start, end), depDate, depS, saveFig=True)
-            locS = str(d)
-            df.to_excel(writer, sheet_name=locS)
-            df.to_csv(DIR / 'output/{}/single_files/{}_{}_gulf_{}Speed.xlsx'.format(experiment, depS, locS, speedS))
-            dfSummary[locS + '_mean'] = df['mean']
-            dfSummary[locS + '_std'] = df['std']
+            dfSummary = init_experiment(writer, dfSummary, depDate, depS, locS, start, end)
         else:
             starts, ends = zip(*startEnds)
             for i, start in enumerate(starts):
                 for j, end in enumerate(ends):
-                    print('start, end {}, {} of {}'.format(i, j, len(ends)))
-                    df = single_experiment(experiment, (start, end), depDate, depS, saveFig=True)
+                    print('start, end {}, {} of {}'.format(i+1, j+1, len(ends)))
                     locS = str((i, j))
-                    df.to_excel(writer, sheet_name=locS)
-                    df.to_csv(DIR / 'output/{}/single_files/{}_{}_gulf_{}Speed.xlsx'.format(experiment, depS, locS, speedS))
-                    dfSummary[locS + '_mean'] = df['mean']
-                    dfSummary[locS + '_std'] = df['std']
+                    dfSummary = init_experiment(writer, dfSummary, depDate, depS, locS, start, end)
 
         dfSummary.to_excel(writer, sheet_name='summary')
         writer.save()
