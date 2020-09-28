@@ -13,6 +13,8 @@ from support import locations
 DIR = 'D:/'
 N_CALLs = 200
 N_POINTS = 10
+DEPART = datetime(2016, 1, 1)
+CURRENT = True
 
 START_END = (locations['Caribbean Sea'], locations['North UK'])
 CALLS = 0
@@ -46,14 +48,12 @@ def tune(default_parameters):
         print('Call', CALLS)
 
         PLANNER.update_parameters(parameters)
-        result = PLANNER.compute(START_END, recompute=True, seed=None)
+        result = PLANNER.compute(START_END, startDate=DEPART, current=CURRENT, recompute=True, seed=None)
 
         # end_func_time = time.time() - start_func_time
         avgFitList = [subLog.chapters["fitness"].select("avg") for log in result['logs'] for subLog in log]
         avgFit = np.sum(np.sum(avgFitList, axis=0), axis=0)
-        # score = np.append(  # end_func_time,
-        #                   avgFit
-        #                   )
+        # score = np.append(  # end_func_time, avgFit )
         weights = np.array([10, 1])
         weightedSum = np.dot(avgFit, weights)
 
