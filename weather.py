@@ -11,7 +11,7 @@ class CurrentOperator:
     def __init__(self, t0, nDays, DIR):
         self.t0 = t0.replace(second=0, microsecond=0, minute=0, hour=0)
         self.nDays = nDays
-        self.data = current_data.CurrentDataRetriever(self.t0, self.nDays, DIR=DIR).get_data()
+        self.data = np.array(current_data.CurrentDataRetriever(self.t0, self.nDays, DIR=DIR).get_data())
 
         cache = Cache(2e9)  # Leverage two gigabytes of memory
         cache.register()  # Turn cache on globally
@@ -90,4 +90,5 @@ if __name__ == '__main__':
     nr_days = 28
     windOp = WindOperator(startDate, nr_days, DIR)
     print(windOp.get_grid_pt_wind(startDate, -86.707108, 27.572103))
+
 

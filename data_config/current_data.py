@@ -150,3 +150,11 @@ def ms_to_knots(ds):
                        'northward_eulerian_current_velocity',
                        'northward_eulerian_current_velocity_error'])
     return ds
+
+
+if __name__ == '__main__':
+    from datetime import datetime
+    from pathlib import Path
+    DIR = Path('D:/')
+
+    data = CurrentDataRetriever(datetime(2014, 10, 28), nDays=6, DIR=DIR).get_data()
