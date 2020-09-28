@@ -48,7 +48,7 @@ class NavigableAreaGenerator:
                 bathPolys = pickle.load(f)
         else:
             bathFP = self.DIR / 'data/bathymetry_200m/ne_10m_bathymetry_K_200.shp'
-            polygons = [shape(polygon['geometry']) for polygon in iter(fiona.open(bathFP))]
+            polygons = [shape(polygon['geometry']) for polygon in iter(fiona.open(bathFP.as_posix()))]
 
             # Split and save polygons
             bathPolys = self.split_polygons(polygons)
@@ -62,14 +62,14 @@ class NavigableAreaGenerator:
         if split and os.path.exists(fp):
             with open(fp, 'rb') as f:
                 return pickle.load(f)
-        shorelines = [shape(shoreline['geometry']) for shoreline in iter(fiona.open(self.shorelinesFP))]
+        shorelines = [shape(shoreline['geometry']) for shoreline in iter(fiona.open(self.shorelinesFP.as_posix()))]
 
         # If Antarctic circle is to be avoided; include as impassable area (latitude < -66),
         if self.avoidAntarctic:
             antarcticCircle = Polygon([(-181, -66), (181, -66), (181, -91), (-181, -91)])
             shorelines.append(antarcticCircle)
         else:  # Otherwise; include Antarctica in shoreline list
-            antarctica = [shape(shoreline['geometry']) for shoreline in iter(fiona.open(self.antarcticFP))]
+            antarctica = [shape(shoreline['geometry']) for shoreline in iter(fiona.open(self.antarcticFP.as_posix()))]
             shorelines.extend(antarctica)
 
         # If Arctic circle is to be avoided; include as impassable area (latitude > 66)

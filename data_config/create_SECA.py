@@ -29,7 +29,7 @@ def create_from_csv(fp, save=True):
 
 def create_from_shp(fp, save=True):
     secas = []
-    shapely_objects = [shape(poly_shape['geometry']) for poly_shape in iter(fiona.open(fp))]
+    shapely_objects = [shape(poly_shape['geometry']) for poly_shape in iter(fiona.open(fp.as_posix()))]
     for shapely_object in shapely_objects:
         if shapely_object.geom_type == 'MultiPolygon':
             secas.extend(list(shapely_object))
