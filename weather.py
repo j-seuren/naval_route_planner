@@ -68,7 +68,7 @@ class WindOperator:
     def get_grid_pt_wind(self, time, lon, lat):
         resolution = 0.5
         lon_idx = int(round((lon + 180) / resolution))
-        # lon_idx = 0 if lon_idx == 720 else lon_idx
+        lon_idx = 0 if lon_idx == 720 else lon_idx  # data has no cyclic column; hence, refer long 180 to -180
         lat_idx = int(round((lat + 90) / resolution))
         step_idx = (time - self.t0).seconds // 3600 // 3
         vals = self.data[:, step_idx, lat_idx, lon_idx]
