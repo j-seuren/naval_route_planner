@@ -611,7 +611,7 @@ class RoutePlanner:
                                                                             self.criteria['minimalTime'],
                                                                             self.criteria['minimalCost'],
                                                                             self.fuelPrice, self.ecaFactor)
-        self.procResultsFP = DIR / "output/processedResults/" + fn
+        self.procResultsFP = DIR / "output/processedResults/" / fn
 
         if not recompute and os.path.exists(self.procResultsFP):
             return None
@@ -748,7 +748,7 @@ class RoutePlanner:
         if result is None:
             with open(self.procResultsFP, 'rb') as file:
                 processedResults = pickle.load(file)
-            with open(self.procResultsFP + '_raw', 'rb') as file:
+            with open(self.procResultsFP / '_raw', 'rb') as file:
                 result = pickle.load(file)
             return processedResults, result
         elif result == 'equal_start_end':
@@ -842,7 +842,7 @@ class RoutePlanner:
         try:
             with open(self.procResultsFP, 'wb') as file:
                 pickle.dump(processedResults, file)
-            with open(self.procResultsFP + '_raw', 'wb') as file:
+            with open(self.procResultsFP / '_raw', 'wb') as file:
                 pickle.dump(result, file)
         except TypeError:
             print("Save filepath is 'None': Result is not saved")
