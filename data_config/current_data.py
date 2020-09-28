@@ -124,7 +124,7 @@ class CurrentDataRetriever:
 
                     # Append files to file_list
                     files = [f for f in ftp.nlst() if '0000' in f]
-                    _saveFPs = [saveDir / f for f in files]
+                    _saveFPs = [Path(saveDir / f).as_posix() for f in files]
                     saveFPs.extend(_saveFPs)
                     for saveFP, loadFP in zip(_saveFPs, files):
                         if not path.isfile(saveFP):  # If files does not exist, download from FTP server

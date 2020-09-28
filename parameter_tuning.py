@@ -6,12 +6,15 @@ import skopt
 
 from datetime import datetime
 from matplotlib.backends.backend_pdf import PdfPages
-from skopt import plots, dump, load
+from pathlib import Path
+from skopt import plots
 from skopt.callbacks import CheckpointSaver
 from support import locations
 
-DIR = 'D:/'
-N_CALLs = 200
+import sklearn.tree
+
+DIR = Path('D:/')
+N_CALLs = 100
 N_POINTS = 10
 DEPART = datetime(2016, 1, 1)
 CURRENT = True
@@ -22,10 +25,10 @@ CALLS = 0
 PLANNER = main.RoutePlanner(bathymetry=False)
 
 SPACE = [
-    skopt.space.Integer(50, 300, name='gen'),  # Minimal nr. generations
-    skopt.space.Integer(10, 50, name='maxGDs'),
-    skopt.space.Real(1e-7, 1e-4, name='minVar'),  # Minimal variance generational distance
-    skopt.space.Integer(2, 20, name='nMutations'),
+    skopt.space.Integer(50, 100, name='gen'),  # Minimal nr. generations
+    skopt.space.Integer(5, 45, name='maxGDs'),
+    skopt.space.Real(1e-6, 1e-4, name='minVar'),  # Minimal variance generational distance
+    skopt.space.Integer(2, 15, name='nMutations'),
     skopt.space.Categorical([4 * i for i in range(1, 101)], name='n'),
     skopt.space.Real(0.5, 1.0, name='cxpb'),
     skopt.space.Real(0.2, 0.7, name='mutpb'),
@@ -71,38 +74,33 @@ def tune(default_parameters):
 
     # Save results
     timestamp = datetime.now().strftime('%m%d%H%M')
-    fn = 'output/tuning/{}_{}calls_{}points_tuned_parameters_result.gz'.format(timestamp, N_CALLs, N_POINTS)
-    fp = DIR + fn
-    dump(res, fp, compress=9, store_objective=False)
+    fp = DIR / 'output/tuning/{}_{}calls_{}points_tuned_parameters_result.gz'.format(timestamp, N_CALLs, N_POINTS)
+    skopt.dump(res, fp, compress=9, store_objective=False)
     print('Saved to', fp)
 
     return fp, timestamp
 
 
 def show_results(fp, timestamp):
-    res = load(fp)
+    res = skopt.load(fp)
 
     # Print results
     best_params = {par.name: res.x[i] for i, par in enumerate(SPACE)}
     print('best result: ', res.fun)
     print('best parameters: ', best_params)
 
+    saveFP = DIR / '/output/tuning/figures/{}_'.format(timestamp)
     # Plot results
-    with PdfPages('/output/tuning/figures/{}.pdf'.format(timestamp)) as pdf:
-        plots.plot_evaluations(res)
-        pdf.savefig()
-        plots.plot_objective(res)
-        pdf.savefig()
-        plots.plot_convergence(res)
-        pdf.savefig()
+    plots.plot_evaluations(res)
+    plt.savefig(saveFP.as_posix() + 'eval.pdf')
+    plots.plot_objective(res)
+    plt.savefig(saveFP.as_posix() + 'obj.pdf')
+    plots.plot_convergence(res)
+    plt.savefig(saveFP.as_posix() + 'conv.pdf')
 
 
-filesInfo = []
 _default_parameters = {'mutationOperators': ['insert', 'move', 'delete']}
 FP, STAMP = tune(_default_parameters)
-filesInfo.append((FP, STAMP))
+show_results(FP, STAMP)
 
-for fileInfo in filesInfo:
-    show_results(fileInfo[0], fileInfo[1])
-
-plt.show()
+# plt.show()

@@ -180,8 +180,6 @@ locations = {'Agios Nikolaos': (25.726617, 35.152255),
              'Valencia': (-0.188091, 39.464972),
              'eastLocations': eastLocations,
              'westLocations': westLocations,
-             'weatherStarts': [],
-             'weatherEnds': []
              }
 
 
@@ -195,9 +193,6 @@ def clear_caches():
 
 
 if __name__ == '__main__':
-
-
-
     # Current locations
     westBot, westTop, eastBot, eastTop = np.array([-72, 32]), np.array([-74, 39]), np.array([-50, 38]), np.array(
         [-55, 46])

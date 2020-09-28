@@ -48,6 +48,7 @@ def single_experiment(experiment, startEnd, depDate, depS, saveFig=True):
 
     rawList, procList = [], []
     for i in range(ITERS):
+        print('ITERATION {} of {}'.format(i+1, ITERS))
         t0 = time.time()
         raw = PLANNER.compute(startEnd, startDate=depDate, recompute=True, weather=weather, current=current)
         t1 = time.time() - t0
