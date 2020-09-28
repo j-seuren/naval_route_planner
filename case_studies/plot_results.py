@@ -172,7 +172,7 @@ class RoutePlotter:
                 for subFront in front:
                     n = len(subFront)
                     midIndexes = np.unique(np.linspace(1, n-2, nRoutes-2).astype(int)).tolist()
-                    ii = [0] + midIndexes + [n-1]
+                    ii = [0] + midIndexes + [n-1] if n > 2 else [0, 1] if n == 2 else [0]
                     for i in ii:
                         line = 'dashed' if 0 < i < n-1 else 'solid'
                         self.route(subFront[i], m, line=line, colors=self.colors)
