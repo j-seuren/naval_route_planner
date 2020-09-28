@@ -15,18 +15,20 @@ N_CALLs = 200
 N_POINTS = 10
 DEPART = datetime(2016, 1, 1)
 CURRENT = True
+BATHYMETRY = False
 
 START_END = (locations['Caribbean Sea'], locations['North UK'])
 CALLS = 0
-PLANNER = main.RoutePlanner()
+PLANNER = main.RoutePlanner(bathymetry=False)
+
 SPACE = [
-    skopt.space.Integer(50, 300, name='gen'),
+    skopt.space.Integer(50, 300, name='gen'),  # Minimal nr. generations
     skopt.space.Integer(10, 50, name='maxGDs'),
+    skopt.space.Real(1e-7, 1e-4, name='minVar'),  # Minimal variance generational distance
     skopt.space.Integer(2, 20, name='nMutations'),
     skopt.space.Categorical([4 * i for i in range(1, 101)], name='n'),
     skopt.space.Real(0.5, 1.0, name='cxpb'),
     skopt.space.Real(0.2, 0.7, name='mutpb'),
-    skopt.space.Real(1e-7, 1e-4, name='minVar'),
     # skopt.space.Integer(5, 500, name='nBar', prior='log-uniform'),
     # skopt.space.Integer(1, 10, name='recomb'),
     # skopt.space.Integer(1, 20, name='fails'),
