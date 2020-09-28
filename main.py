@@ -124,9 +124,9 @@ class RoutePlanner:
                                                       DIR)
 
         # Load previously calculated initial paths
-        self.initPathsDir = Path('output/initialRoutes/RES_{}_D{}_VD_{}'.format(self.p['res'],
-                                                                                self.p['graphDens'],
-                                                                                self.p['graphVarDens']))
+        self.initPathsDir = DIR / 'output/initialRoutes/RES_{}_D{}_VD_{}'.format(self.p['res'],
+                                                                                 self.p['graphDens'],
+                                                                                 self.p['graphVarDens'])
         if not os.path.exists(self.initPathsDir):
             os.mkdir(self.initPathsDir)
         self.initialPaths = []
@@ -611,7 +611,7 @@ class RoutePlanner:
                                                                             self.criteria['minimalTime'],
                                                                             self.criteria['minimalCost'],
                                                                             self.fuelPrice, self.ecaFactor)
-        self.procResultsFP = "output/processedResults/" + fn
+        self.procResultsFP = DIR / "output/processedResults/" + fn
 
         if not recompute and os.path.exists(self.procResultsFP):
             return None
