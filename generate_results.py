@@ -61,7 +61,7 @@ def single_experiment(experiment, startEnd, depDate, depS, saveFig=True):
         procList.append(proc)
 
         if saveFig:
-            statisticsPlotter = plot_results.StatisticsPlotter(raw)
+            statisticsPlotter = plot_results.StatisticsPlotter(raw, DIR=DIR)
             frontFig, _ = statisticsPlotter.plot_fronts()
             statsFig, _ = statisticsPlotter.plot_stats()
 
@@ -74,7 +74,7 @@ def single_experiment(experiment, startEnd, depDate, depS, saveFig=True):
                 currentDict = None
 
             weatherDate = depDate if experiment == 'weather' else None
-            routePlotter = plot_results.RoutePlotter(proc, rawResults=raw, vessel=PLANNER.vessel)
+            routePlotter = plot_results.RoutePlotter(DIR, proc, rawResults=raw, vessel=PLANNER.vessel)
             routeFig, _ = routePlotter.results(initial=False, ecas=ecas, bathymetry=BATHYMETRY, nRoutes=4, weatherDate=weatherDate,
                                                current=currentDict, colorbar=True)
 
@@ -128,38 +128,38 @@ def multiple_experiments(startEnds, experiment, depDates=None):
     print('DONE TESTING')
 
 
-# Test weather
-# Weather locations
-weatherStarts = [
-    locations['New York'],  # to Paramaribo 2017, 9, 4
-    locations['Keelung'],   # Lin2013: departure 0000Z 28 May 2011, ETA 0000Z 11 June 2011
-    locations['Normandy'],  # Shao2012: Departure: 03:00 p.m. 25/01/2011 ETA: 00:30 p.m. 30/01/2011
-    locations['Normandy'],  # Vettor2016: June 21, 2015 at 00:00
-    locations['Valencia'],  # June 21, 2015 at 00:00
-    # locations['Thessaloniki']
-    ]
+# # Test weather
+# # Weather locations
+# weatherStarts = [
+#     locations['New York'],  # to Paramaribo 2017, 9, 4
+#     locations['Keelung'],   # Lin2013: departure 0000Z 28 May 2011, ETA 0000Z 11 June 2011
+#     locations['Normandy'],  # Shao2012: Departure: 03:00 p.m. 25/01/2011 ETA: 00:30 p.m. 30/01/2011
+#     locations['Normandy'],  # Vettor2016: June 21, 2015 at 00:00
+#     locations['Valencia'],  # June 21, 2015 at 00:00
+#     # locations['Thessaloniki']
+#     ]
+#
+# weatherEnds = [
+#     locations['Paramaribo'],
+#     locations['San Francisco'],
+#     locations['New York'],
+#     locations['Miami'],
+#     locations['Malta'],
+#     # locations['Agios Nikolaos']
+#     ]
+#
+# dateTimes = [
+#     datetime(2017, 9,  4),
+#     datetime(2011, 5, 28),
+#     datetime(2011, 1, 25),
+#     datetime(2015, 6, 21),
+#     datetime(2015, 6, 21)
+#     ]
+#
+# weatherStartEnds = zip(weatherStarts, weatherEnds)
+# multiple_experiments(weatherStartEnds, 'weather', dateTimes)
 
-weatherEnds = [
-    locations['Paramaribo'],
-    locations['San Francisco'],
-    locations['New York'],
-    locations['Miami'],
-    locations['Malta'],
-    # locations['Agios Nikolaos']
-    ]
-
-dateTimes = [
-    datetime(2017, 9,  4),
-    datetime(2011, 5, 28),
-    datetime(2011, 1, 25),
-    datetime(2015, 6, 21),
-    datetime(2015, 6, 21)
-    ]
-
-weatherStartEnds = zip(weatherStarts, weatherEnds)
-multiple_experiments(weatherStartEnds, 'weather', dateTimes)
-
-# Test current
+# Test current - Gulf
 currentDepartures = [datetime(2014, 10, 28),
                      datetime(2014, 11, 11),
                      datetime(2014, 11, 25),
@@ -170,6 +170,15 @@ currentDepartures = [datetime(2014, 10, 28),
 currentStartEnds = list(zip(locations['westLocations'], locations['eastLocations']))
 multiple_experiments(currentStartEnds, 'current', currentDepartures)
 
+
+currentDepartures = [datetime(2014, 9, 15), datetime(2015, 3, 15)]
+
+currentStartEnds = list(zip(locations['Keelung'], locations['Tokyo']))
+
+
 # Test ECA
 ecaStartEnds = list(zip([locations['ECA1: Jacksonville']], [locations['ECA2: New York']]))
 multiple_experiments(ecaStartEnds, 'ecas')
+
+
+

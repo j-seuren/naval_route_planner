@@ -883,7 +883,7 @@ if __name__ == "__main__":
         rawResults = planner.compute(**kwargsCompute)
 
     procResults, rawResults = planner.post_process(rawResults)
-    routePlotter = RoutePlotter(procResults, rawResults=rawResults, vessel=planner.vessel)
+    routePlotter = RoutePlotter(DIR, procResults, rawResults=rawResults, vessel=planner.vessel)
     fig, ax = routePlotter.results(initial=True, ecas=False, nRoutes=5, colorbar=True)
 
     # pp = pprint.PrettyPrinter(depth=6)

@@ -38,7 +38,7 @@ def update(population):
 
 
 class StatisticsPlotter:
-    def __init__(self, rawResults, DIR=Path('D:/')):
+    def __init__(self, rawResults, DIR):
         self.rawResults = rawResults
         self.DIR = DIR
 
@@ -105,7 +105,7 @@ def concatenated_front(front):
 
 
 class RoutePlotter:
-    def __init__(self, inputResults=None, rawResults=None, vessel=None, DIR=Path('D:/')):
+    def __init__(self, DIR, inputResults=None, rawResults=None, vessel=None):
         self.processedResults = inputResults
         self.rawResults = rawResults
         self.DIR = DIR
@@ -279,7 +279,7 @@ if __name__ == '__main__':
     import os
 
     os.chdir('..')
-    routePlotter = RoutePlotter()
+    routePlotter = RoutePlotter(DIR=Path('D:/'))
 
     _fig, _ax = plt.subplots()
     routePlotter.navigation_area(_ax, resolution='l', eca=True, bathymetry=True)
