@@ -16,10 +16,10 @@ from support import locations
 
 DIR = Path('D:/')
 SPEED = 'var'  # 'constant' or 'var'
-ITERS = 1
+ITERS = 5
 parameters = {'mutationOperators': ['insert', 'move', 'delete'] if SPEED == 'constant' else ['insert', 'move', 'speed', 'delete']}
-ECA_F = 1.2
-BATHYMETRY = True
+ECA_F = 1
+BATHYMETRY = False
 PLANNER = main.RoutePlanner(inputParameters=parameters, bathymetry=BATHYMETRY, ecaFactor=ECA_F,
                             criteria={'minimalTime': True, 'minimalCost': True})
 CURRENT = True
