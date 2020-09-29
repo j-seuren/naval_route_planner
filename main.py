@@ -862,15 +862,15 @@ if __name__ == "__main__":
     from support import locations
 
     startTime = time.time()
-    _startEnd = (locations['Caribbean Sea'], locations['North UK'])
+    _startEnd = (locations['Salvador'], locations['Lima'])
 
-    parameters = {'gen': 200,  # Min number of generations
-                  'n': 100}    # Population size
+    # parameters = {'gen': 200,  # Min number of generations
+    #               'n': 100}    # Population size
 
-    kwargsPlanner = {'inputParameters': parameters, 'tb': _tb, 'criteria': _criteria}
-    kwargsCompute = {'startEnd': _startEnd, 'startDate': datetime(2019, 3, 1), 'recompute': True, 'current': False,
-                     'weather': True, 'seed': 1}
-    multiprocess = True
+    kwargsPlanner = {'inputParameters': {}, 'tb': _tb, 'criteria': _criteria}
+    kwargsCompute = {'startEnd': _startEnd, 'startDate': datetime(2016, 1, 1), 'recompute': False, 'current': True,
+                     'weather': False, 'seed': 1}
+    multiprocess = False
 
     if multiprocess:
         # with mp.Pool() as pool:
@@ -889,5 +889,5 @@ if __name__ == "__main__":
     # pp = pprint.PrettyPrinter(depth=6)
     # pp.pprint(post_processed_results)
     print("--- %s seconds ---" % (time.time() - startTime))
-
+    plt.savefig('D:/output/figures/Salvador_Lima.pdf')
     plt.show()
