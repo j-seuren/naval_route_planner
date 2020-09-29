@@ -96,14 +96,14 @@ def single_experiment(experiment, inst, startEnd, depDate, locS, depS, saveFig=T
 def init_experiment(writer, experiment, inst, dfSummary, depDate, depS, locS, start, end):
     fp = DIR / 'output/{}/single_files/{}_{}_{}_gulf_{}Speed_B{}_ECA{}.csv'.format(experiment, inst, depS, locS,
                                                                                    SPEED, BATHYMETRY, ECA_F)
-    DF = single_experiment(experiment, inst, (start, end), depDate, locS, depS, saveFig=True)
-    if DF is None:
-        DF = pd.read_csv(fp)
+    df = single_experiment(experiment, inst, (start, end), depDate, locS, depS, saveFig=True)
+    if df is None:
+        df = pd.read_csv(fp)
     else:
-        DF.to_excel(writer, sheet_name=locS)
-        DF.to_csv(fp)
-    dfSummary[locS + '_mean'] = DF['mean']
-    dfSummary[locS + '_std'] = DF['std']
+        df.to_excel(writer, sheet_name=locS)
+        df.to_csv(fp)
+    dfSummary[locS + '_mean'] = df['mean']
+    dfSummary[locS + '_std'] = df['std']
     return dfSummary.T
 
 
@@ -156,10 +156,10 @@ def multiple_experiments(inputDict, experiment):
                                                                                            SPEED, BATHYMETRY, ECA_F))
         dfSummary = pd.DataFrame(columns=['compTime', 'T_fuel', 'T_time', 'C_fuel', 'C_time', 'L_fuel', 'L_time'])
 
-        for i, (startTup, endTup) in enumerate(zip(inputDict['input']['from'], inputDict['input']['to'])):
+        for routeIdx, (startTup, endTup) in enumerate(zip(inputDict['input']['from'], inputDict['input']['to'])):
             startKey, start = startTup
             endKey, end = endTup
-            print('location combination {} of {}'.format(i + 1, len(inputDict['input']['from'])))
+            print('location combination {} of {}'.format(routeIdx + 1, len(inputDict['input']['from'])))
             locS = '{}{}'.format(startKey, endKey)
             dfSummary = init_experiment(writer, experiment, inst, dfSummary, depDate, depS, locS, start, end)
 
@@ -208,8 +208,8 @@ inputGulf = {'instance': 'Gulf',
 for date in gulfDepartures:
     for i, west in enumerate(locations['westLocations']):
         for j, east in enumerate(locations['eastLocations']):
-            inputGulf['input']['from'].append((''.format(i+1), west))
-            inputGulf['input']['to'].append((''.format(j+1), east))
+            inputGulf['input']['from'].append(('{}'.format(i+1), west))
+            inputGulf['input']['to'].append(('{}'.format(j+1), east))
             inputGulf['input']['departureDates'].append(date)
 
 
