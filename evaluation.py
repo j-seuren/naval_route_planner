@@ -24,9 +24,9 @@ def delta_penalty(func):
 class Evaluator:
     def __init__(self,
                  vessel,
-                 treeDict,
-                 ecaTreeDict,
-                 bathTreeDict,
+                 landRtree,
+                 ecaRtree,
+                 bathRtree,
                  ecaFactor,
                  geod,
                  criteria,
@@ -34,9 +34,9 @@ class Evaluator:
                  DIR,
                  startDate=None):
         self.vessel = vessel            # Vessel class instance
-        self.landRtree = treeDict        # R-tree spatial index dictionary for shorelines
-        self.ecaTreeDict = ecaTreeDict  # R-tree spatial index dictionary for ECAs
-        self.bathRtree = bathTreeDict  # R-tree spatial index dictionary for bathymetry
+        self.landRtree = landRtree      # R-tree spatial index dictionary for shorelines
+        self.ecaRtree = ecaRtree        # R-tree spatial index dictionary for ECAs
+        self.bathRtree = bathRtree      # R-tree spatial index dictionary for bathymetry
         self.ecaFactor = ecaFactor      # Multiplication factor for ECA fuel
         self.startDate = startDate      # Start date of voyage
         self.segLengthF = parameters['segLengthF']    # Max segment length (for feasibility)
@@ -46,7 +46,7 @@ class Evaluator:
         self.weatherOperator = None
         self.inclWeather = None
         self.inclCurrent = None
-        self.bathymetry = True if bathTreeDict else False
+        self.bathymetry = True if bathRtree else False
         self.criteria = criteria
         self.revertOutput = not criteria['minimalTime']
         self.penaltyValue = parameters['penaltyValue']
@@ -82,7 +82,7 @@ class Evaluator:
             legCost = self.vessel.fuelCostPerDay[speedKnots] * legHours / 24.  # x1000 EUR or USD
 
             # If leg intersects ECA increase fuel consumption by ecaFactor
-            if geo_x_geos(self.ecaTreeDict, p1, p2):
+            if geo_x_geos(self.ecaRtree, p1, p2):
                 legCost *= self.ecaFactor
 
             # Increment objective values

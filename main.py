@@ -34,6 +34,10 @@ creator.create("Individual", list, fitness=creator.FitnessMin)
 _tb = base.Toolbox()
 
 
+def crowding_distance(pop):
+    return tools.selNSGA2(pop, len(pop))
+
+
 class RoutePlanner:
     def __init__(self,
                  vesselName='Fairmaster_2',
@@ -140,104 +144,69 @@ class RoutePlanner:
         self.tb.register("mate", self.operators.cx_one_point)
         self.tb.register("population", initialization.init_repeat_list)
 
-        # Initialize algorithm classes
-        self.mpaes = self.MPAES(self.tb, self.evaluator, self.get_days, self.p)
-        self.spea2 = self.SPEA2(self.tb, self.evaluator, self.get_days, self.p)
-        self.nsgaii = self.NSGAII(self.tb, self.evaluator, self.get_days, self.p)
-
     class MPAES:
-        def __init__(self, tb, evaluator, get_days, par):
+        def __init__(self, tb, evaluator, p):
+            # Set functions / classes
             self.tb = tb
             self.evaluator = evaluator
-            self.get_days = get_days
+            self.mstats = support.statistics()  # DEAP statistics
 
-            # Parameters
-            self.nBar = par['nBar']
-            self.recomb = par['recomb']
-            self.n = par['n']
-            self.nM = int(self.n / 2 / (self.recomb + 1))
-            self.fails = par['fails']
-            self.moves = par['moves']
-            self.gen = par['gen']
-            self.minVar = par['minVar']
-            self.maxStops = par['maxGDs']
-            self.gds = []
-            self.nStops = 0
-            self.evals = 0
-
-            self.mstats = support.statistics()
+            # MOEA parameters
+            # M-PAES characteristic parameters
+            self.nBar = p['nBar']
+            self.l_opt = p['moves']
+            self.l_fails = p['fails']
+            self.recomb = p['recomb']
+            self.n = int(p['n'] / 2 / (self.recomb + 1))
+            # Termination parameters
+            self.gen = p['gen']
+            self.minVar = p['minVar']
+            self.maxStops = p['maxGDs']
+            self.gds = []  # Initialize generational distance list
+            self.nStops = self.evals = 0  # Initialize counter variables
             self.front = tools.ParetoFront()  # Initialize ParetoFront class
 
-        def test(self, c, m, H):
-            # If the archive is not full
-            if len(H) < self.nBar:
-                H.append(m)
-                support.assign_crowding_dist(H)
-                if m.fitness.crowding_dist < c.fitness.crowding_dist:
-                    cOut = m
-                else:  # Maintain c as current solution
-                    cOut = c
+        def test(self, c, m, archive):
+            if len(archive) < self.nBar:
+                archive.append(m)
+                crowding_distance(archive)
             else:
-                # If m is in a less crowded region of the archive than x for
-                # some member x on the archive
-                x = random.choice(H)
-                support.assign_crowding_dist(H + [m])
+                x = random.choice(archive)
+                crowding_distance(archive + [m])
                 if m.fitness.crowding_dist < x.fitness.crowding_dist:
-                    # Remove a member of the archive from the most crowded region
-                    # and add m to the archive
-                    removeI = np.argmax([ind_.fitness.crowding_dist for ind_ in H])
-                    del H[removeI]
-                    H.append(m)
-                    support.assign_crowding_dist(H)
-                    # If m is in a less crowded region of the archive than c
-                    if m.fitness.crowding_dist < c.fitness.crowding_dist:
-                        # Accept m as the new current solution
-                        cOut = m
-                    else:  # Maintain c as the current solution
-                        cOut = c
-                else:
-                    # If m is in a less crowded region of the archive than c
-                    if m.fitness.crowding_dist < c.fitness.crowding_dist:
-                        # Accept m as the new current solution
-                        cOut = m
-                    else:  # Maintain c as the current solution
-                        cOut = c
-            return cOut
+                    del archive[np.argmax([ind.fitness.crowding_dist for ind in archive])]
+                    archive.append(m)
+                    crowding_distance(archive)
+            return m if m.fitness.crowding_dist < c.fitness.crowding_dist else c
 
-        def paes(self, c, H):
+        def paes(self, c, archive):
             fails = moves = 0
-            while fails < self.fails and moves < self.moves:
-                # Mutate c to produce m, evaluate m
+            while fails < self.l_fails and moves < self.l_opt:
                 m, = self.tb.mutate(self.tb.clone(c))
-                fitM = self.evaluator.evaluate(m)
-                m.fitness.values = fitM
+                m.fitness.values = self.evaluator.evaluate(m)
                 self.evals += 1
 
-                # If c dominates m, discard m
                 if c.fitness.dominates(m.fitness):
                     fails += 1
-                # Else if m dominates c
+                    continue
                 elif m.fitness.dominates(c.fitness):
-                    # Ensure c stays in H
-                    cCopy = self.tb.clone(c)
-                    H.append(cCopy)
-                    # Replace c with m, add m to H
+                    archive.append(m)
                     c = m
-                    H.append(m)
                     fails = 0
                 else:
                     # If m is dominated by any member of H, discard m
                     dominated = False
-                    for ind_ in H:
-                        if ind_.fitness.dominates(m.fitness):
+                    for ind in archive:
+                        if ind.fitness.dominates(m.fitness):
                             dominated = True
                             break
-                    # Else apply test(c,m, H) to determine which becomes the new
-                    # current solution and whether to add m to the archive
-                    if not dominated:
-                        c = self.test(c, m, H)
-                    # Update global Pareto front with m, as necessary
-                    self.front.update([m])
+                    if dominated:
+                        continue
+                    else:
+                        # Determine which becomes the new candidate
+                        # and whether to add m to archive
+                        c = self.test(c, m, archive)
+                self.front.update([m])
                 moves += 1
             return c
 
@@ -252,146 +221,103 @@ class RoutePlanner:
                     return True
             return False
 
-        def optimize(self, startEnd, initPaths, startDate, inclCurr, inclWeather, seed=None):
-            random.seed(seed)
+        def optimize(self, pop, log, result, routeIdx):
+            self.front.clear()
+            self.evals = len(pop)
+            gen = self.nStops = 0
+            while True:
+                # Step 3: Update global Pareto front
+                prevFront = self.front.items[:]
+                self.front.update(pop)
 
-            result = {'startEnd': startEnd, 'initialRoutes': initPaths, 'logs': {}, 'fronts': {}}
-            for pathKey, path in initPaths.items():
-                result['logs'][pathKey], result['fronts'][pathKey] = {}, {}
-                print('Path {0}/{1}'.format(pathKey + 1, len(initPaths)))
-                for subPathKey, subPath in path.items():
-                    print('Sub path {0}/{1}'.format(subPathKey+1, len(path)))
-                    self.tb.register("individual", initialization.init_individual, self.tb,  subPath)
-                    self.front.clear()
-                    log = support.logbook()
+                # Record statistics
+                record = self.mstats.compile(self.front)
+                log.record(gen=gen, evals=self.evals, **record)
+                print('\r', log.stream)
 
-                    # Step 1: Initialization
-                    print('Initializing population from shortest path:', end=' ')
-                    pop = self.tb.population(self.tb.individual,
-                                             int(self.nM / len(subPath.values()))
-                                             )
+                self.evals = 0
 
-                    currGen = self.nStops = 0
-                    print('done')
+                # Step 4: Local search
+                for i, c in enumerate(pop):
+                    # Fill local archive with solutions from Pareto front that do not dominate c
+                    archive = [ind for ind in self.front if not ind.fitness.dominates(c.fitness) and ind is not c]
+                    archive.append(c)  # Copy candidate into H
+                    pop[i] = self.paes(c, archive)  # Replace c with improved version by local search
 
-                    self.evaluator.set_classes(inclCurr, inclWeather, startDate, self.get_days(pop))
-
-                    # Step 2: Fitness and crowding distance assignment
-                    invInds = pop
-                    fits = self.tb.map(self.evaluator.evaluate, invInds)
-                    self.evals = len(invInds)
-                    for ind, fit in zip(invInds, fits):
-                        ind.fitness.values = fit
-
-                    # Begin the generational process
+                # Step 5: Recombination
+                popInter = []  # Initialize intermediate population
+                while len(popInter) < self.n:
+                    cMoreCrowded = childDominated = False
+                    r = 0
                     while True:
-                        # Step 3: Update global Pareto front
-                        prevFront = deepcopy(self.front)
-                        self.front.update(pop)
+                        # Randomly choose two parents from P + G
+                        mom, dad = tools.selRandom(pop + self.front.items, 2)
+                        mom2, dad2 = self.tb.clone(mom), self.tb.clone(dad)
 
-                        # Record statistics
-                        record = self.mstats.compile(self.front)
-                        log.record(gen=currGen, evals=self.evals, **record)
-                        print('\r', log.stream)
+                        # Recombine to form offspring, evaluate
+                        child1, child2 = self.tb.mate(mom2, dad2)
+                        fitChild1, fitChild2 = self.evaluator.evaluate(child1), self.evaluator.evaluate(child2)
+                        child = child1 if child1.fitness.dominates(child2.fitness) else child2
+                        child.fitness.values = fitChild1
+                        self.evals += 2
 
-                        self.evals = 0
+                        for ind in self.front:
+                            if ind.fitness.dominates(child.fitness):
+                                childDominated = True
+                                break
 
-                        # Step 4: Local search
-                        for idx, candidate in enumerate(pop):
-                            # Fill local Pareto front (H) with any solutions from pareto front
-                            # that do not dominate c
-                            localFront = [hofer for hofer in self.front
-                                          if candidate.fitness.dominates(hofer.fitness)]
-
-                            # Copy candidate into H
-                            localFront.append(candidate)
-
-                            # Perform local search using procedure PAES(c, G, H)
-                            improvedInd = self.paes(candidate, localFront)
-
-                            # Replace improved solution back into population
-                            pop[idx] = improvedInd
-
-                        # Step 5: Recombination
-                        popInter = []  # Initialize intermediate population
-                        for g in range(self.nM):
-                            child = cDominated = None
-                            for r in range(self.recomb):
-                                # Randomly choose two parents from P + G
-                                mom, dad = tools.selRandom(pop + self.front.items, 2)
-                                mom, dad = self.tb.clone(mom), self.tb.clone(dad)
-
-                                # Recombine to form offspring, evaluate
-                                child, _ = self.tb.mate(mom, dad)
-                                fitChild = self.evaluator.evaluate(child)
-                                child.fitness.values = fitChild
-                                self.evals += 1
-
-                                support.assign_crowding_dist(pop + self.front.items + [child])
-
-                                cDominated = True
-                                # Check if c is dominated by G
-                                for hofer in self.front:
-                                    if child.fitness.dominates(hofer.fitness):
-                                        cDominated = False
-
+                        cMoreCrowded = childDominated = False
+                        crowding_distance(pop + self.front.items + [child])
+                        if not childDominated:
+                            # Check if c is in more crowded grid location than both parents
+                            if child.fitness.crowding_dist < mom.fitness.crowding_dist and\
+                                    child.fitness.crowding_dist < dad.fitness.crowding_dist:
                                 cMoreCrowded = True
-                                if not cDominated:
-                                    # Check if c is in more crowded grid location than both parents
-                                    if child.fitness.crowding_dist > mom.fitness.crowding_dist and\
-                                            child.fitness.crowding_dist > dad.fitness.crowding_dist:
-                                        cMoreCrowded = True
 
-                                # Update pareto front with c as necessary
-                                self.front.update([child])
-
-                                if not (cMoreCrowded or cDominated):
-                                    break
-
-                            if cDominated:
-                                child = tools.selTournament(self.front.items,
-                                                            k=1, tournsize=2)
-                            else:
-                                child = [child]
-
-                            popInter.extend(self.tb.clone(child))
-
-                        # Step 4: Termination
-                        if self.termination(prevFront, currGen):
-                            result['logs'][pathKey][subPathKey] = log[:]
-                            result['fronts'][pathKey][subPathKey] = self.front[:]
-                            self.tb.unregister("individual")
+                            # Update pareto front with c as necessary
+                            self.front.update([child])
+                        r += 1
+                        if not (cMoreCrowded and childDominated) or r >= self.recomb:
                             break
 
-                        pop = popInter
+                    childList = tools.selTournament(self.front.items, k=1, tournsize=2) if childDominated else [child]
 
-                        currGen += 1
+                    popInter.extend(childList)
+
+                # Step 4: Termination
+                if self.termination(prevFront, gen):
+                    hypervolume = indicators.hypervolume(self.front)
+                    print('hypervolume', hypervolume)
+                    result['indicators'][routeIdx]['hypervolume'] = hypervolume
+                    result['logs'][routeIdx].append(deepcopy(log))
+                    result['fronts'][routeIdx].append(deepcopy(self.front))
+                    self.tb.unregister("individual")
+                    break
+
+                pop = popInter
+                gen += 1
 
             return result
 
     class NSGAII:
-        def __init__(self, tb, evaluator, get_days, par):
+        def __init__(self, tb, evaluator, p):
+            # Set functions / classes
             self.tb = tb
             self.evaluator = evaluator
-            self.get_days = get_days
+            self.tb.register("select", tools.selNSGA2)  # Set NSGA2 selection
+            self.mstats = support.statistics()  # DEAP statistics
 
-            # Parameters
-            self.gen = par['gen']
-            self.n = par['n']
-            self.cxpb = par['cxpb']
-            self.mutpb = par['mutpb']
-            self.minVar = par['minVar']
-            self.maxStops = par['maxGDs']
-            self.gds = []
-
-            # Initialize mutation selection weights, scores, and probabilities
-            # self.mutW = {op: 0 for op in par['mutationOperators']}
-            # self.mutP = {op: 0 for op in par['mutationOperators']}
-            # self.mutS = {op: 0 for op in par['mutationOperators']}
-
-            self.mstats = support.statistics()
+            # MOEA parameters
+            self.n = p['n']
+            self.cxpb = p['cxpb']
+            self.mutpb = p['mutpb']
+            # Termination parameters
+            self.gen = p['gen']
+            self.minVar = p['minVar']
+            self.maxStops = p['maxGDs']
+            self.gds = []  # Initialize generational distance list
+            self.nStops = self.evals = 0  # Initialize counter variables
             self.front = tools.ParetoFront()  # Initialize ParetoFront class
-            self.tb.register("select", tools.selNSGA2)
 
         def termination(self, prevFront, t):
             gd = indicators.generational_distance(prevFront, self.front)
@@ -402,99 +328,69 @@ class RoutePlanner:
                 if np.var(self.gds) < self.minVar:
                     print('STOPPING: Generational distance')
                     return True
-            # if t >= self.gen:
-            #     print('STOPPING: Max generations')
-            #     return True
             return False
 
-        def optimize(self, startEnd, initRoutes, startDate, current, weather, seed):
-            random.seed(seed)
+        def optimize(self, pop, log, result, routeIdx):
+            self.front.clear()
+            evals = len(pop)
+            gen = self.nStops = 0
+            offspring = []
+            while True:
+                # Step 3: Environmental selection (and update HoF)
+                pop = self.tb.select(pop + offspring, self.n)
+                prevFront = deepcopy(self.front)
+                self.front.update(pop)
 
-            result = {'startEnd': startEnd, 'initialRoutes': initRoutes, 'indicators': [None] * len(initRoutes),
-                      'logs': [None] * len(initRoutes), 'fronts': [None] * len(initRoutes)}
-            for routeIdx, route in enumerate(initRoutes):
-                print('Computing route {0}/{1}'.format(routeIdx + 1, len(initRoutes)))
-                for subIdx, subRoute in enumerate(route['route']):
-                    result['logs'][routeIdx], result['fronts'][routeIdx], result['indicators'][routeIdx] = [], [], {}
-                    print('Computing sub route {0}/{1}'.format(subIdx+1, len(route['route'])))
+                # Record statistics
+                record = self.mstats.compile(self.front)
+                log.record(gen=gen, evals=evals, **record)
+                print('\r', log.stream)
 
-                    # Reset functions and caches
-                    self.tb.register("individual", initialization.init_individual, self.tb, subRoute)
-                    self.front.clear()
-                    log = support.logbook()
+                # Step 4: Termination
+                if self.termination(prevFront, gen):
+                    hypervolume = indicators.hypervolume(self.front)
+                    print('hypervolume', hypervolume)
+                    result['indicators'][routeIdx]['hypervolume'] = hypervolume
+                    result['logs'][routeIdx].append(deepcopy(log))
+                    result['fronts'][routeIdx].append(deepcopy(self.front))
+                    self.tb.unregister("individual")
+                    break
 
-                    # Step 1: Initialization
-                    print('Initializing population from shortest path:', end='\n ')
-                    pop = self.tb.population(self.tb.individual, int(self.n / len(subRoute.values())))
-                    offspring, currGen = [], 0
-                    print('done')
+                # Step 5: Variation
+                offspring = algorithms.varAnd(pop, self.tb, self.cxpb, self.mutpb)
 
-                    self.evaluator.set_classes(current, weather, startDate, self.get_days(pop))
+                # Step 2: Fitness assignment
+                invInds = [ind for ind in offspring if not ind.fitness.valid]
+                fits = self.tb.map(self.evaluator.evaluate, invInds)
+                for ind, fit in zip(invInds, fits):
+                    ind.fitness.values = fit
 
-                    # Step 2: Fitness assignment
-                    print('Fitness assignment:', end=' ')
-                    evals = len(pop)
-                    fits = self.tb.map(self.evaluator.evaluate, pop)
-                    for ind, fit in zip(pop, fits):
-                        ind.fitness.values = fit
-                    print('assigned')
+                evals = len(invInds)
 
-                    # Begin the generational process
-                    while True:
-                        # Step 3: Environmental selection (and update HoF)
-                        pop = self.tb.select(pop + offspring, self.n)
-                        prevFront = deepcopy(self.front)
-                        self.front.update(pop)
-
-                        # Record statistics
-                        record = self.mstats.compile(self.front)
-                        log.record(gen=currGen, evals=evals, **record)
-                        print('\r', log.stream)
-
-                        # Step 4: Termination
-                        if self.termination(prevFront, currGen):
-                            hypervolume = indicators.hypervolume(self.front)
-                            print('hypervolume', hypervolume)
-                            result['indicators'][routeIdx]['hypervolume'] = hypervolume
-                            result['logs'][routeIdx].append(deepcopy(log))
-                            result['fronts'][routeIdx].append(deepcopy(self.front))
-                            self.tb.unregister("individual")
-                            break
-
-                        # Step 5: Variation
-                        offspring = algorithms.varAnd(pop, self.tb, self.cxpb, self.mutpb)
-
-                        # Step 2: Fitness assignment
-                        invInds = [ind for ind in offspring if not ind.fitness.valid]
-                        fits = self.tb.map(self.evaluator.evaluate, invInds)
-                        for ind, fit in zip(invInds, fits):
-                            ind.fitness.values = fit
-
-                        evals = len(invInds)
-
-                        currGen += 1
+                gen += 1
 
             return result
 
     class SPEA2:
-        def __init__(self, tb, evaluator, get_days, par):
+        def __init__(self, tb, evaluator, p):
+            # Set functions / classes
             self.tb = tb
             self.evaluator = evaluator
-            self.get_days = get_days
+            self.tb.register("select", tools.selSPEA2)  # Set SPEA2 selection
+            self.mstats = support.statistics()  # DEAP statistics
 
-            # Parameters
-            self.gen = par['gen']
-            self.n = par['n']
-            self.nBar = par['nBar']
-            self.cxpb = par['cxpb']
-            self.mutpb = par['mutpb']
-            self.minVar = par['minVar']
-            self.maxStops = par['maxGDs']
-            self.gds = []
-
-            self.mstats = support.statistics()
+            # MOEA Parameters
+            self.n = p['n']
+            self.cxpb = p['cxpb']
+            self.mutpb = p['mutpb']
+            self.nBar = p['nBar']  # SPEA2 characteristic parameter
+            # Termination parameters
+            self.gen = p['gen']
+            self.minVar = p['minVar']
+            self.maxStops = p['maxGDs']
+            self.gds = []  # Initialize generational distance list
+            self.nStops = self.evals = 0  # Initialize counter variables
             self.front = tools.ParetoFront()  # Initialize ParetoFront class
-            self.tb.register("select", tools.selSPEA2)
 
         def termination(self, prevFront, t):
             gd = indicators.generational_distance(prevFront, self.front)
@@ -507,78 +403,47 @@ class RoutePlanner:
                     return True
             return False
 
-        def optimize(self, startEnd, initPaths, startDate, inclCurr, inclWeather, seed):
-            random.seed(seed)
+        def optimize(self, pop, log, result, routeIdx):
+            self.front.clear()
+            evals = len(pop)
+            archive, gen = [], 0
+            while True:
+                # Step 3: Environmental selection
+                archive = self.tb.select(pop + archive, k=self.nBar)
+                prevFront = deepcopy(self.front)
+                self.front.update(archive)
 
-            result = {'startEnd': startEnd, 'initialRoutes': initPaths, 'logs': {}, 'fronts': {}}
-            for pathKey, path in initPaths.items():
-                result['logs'][pathKey], result['fronts'][pathKey] = {}, {}
-                print('Path {0}/{1}'.format(pathKey + 1, len(initPaths)))
-                for subPathKey, subPath in path.items():
-                    print('Sub path {0}/{1}'.format(subPathKey+1, len(path)))
-                    self.tb.register("individual", initialization.init_individual, self.tb, subPath)
-                    self.front.clear()
-                    log = support.logbook()
+                # Record statistics
+                record = self.mstats.compile(self.front)
+                log.record(gen=gen, evals=evals, **record)
+                print('\r', log.stream)
 
-                    # Step 1: Initialization
-                    print('Initializing population from shortest path:', end=' ')
-                    pop = self.tb.population(self.tb.individual,
-                                             int(self.n / len(subPath.values()))
-                                             )
-                    archive = []
-                    currGen = 0
-                    print('done')
+                # Step 4: Termination
+                if self.termination(prevFront, gen):
+                    hypervolume = indicators.hypervolume(self.front)
+                    print('hypervolume', hypervolume)
+                    result['indicators'][routeIdx]['hypervolume'] = hypervolume
+                    result['logs'][routeIdx].append(deepcopy(log))
+                    result['fronts'][routeIdx].append(deepcopy(self.front))
+                    self.tb.unregister("individual")
+                    break
 
-                    self.evaluator.set_classes(inclCurr, inclWeather, startDate, self.get_days(pop))
+                # Step 5: Mating Selection
+                matingPool = tools.selTournament(archive, k=self.n, tournsize=2)
 
-                    # Step 2: Fitness assignment
-                    invInds = pop
-                    evals = len(invInds)
-                    fits = self.tb.map(self.evaluator.evaluate, invInds)
-                    for ind, fit in zip(invInds, fits):
-                        ind.fitness.values = fit
+                # Step 6: Variation
+                pop = algorithms.varAnd(matingPool, self.tb, cxpb=1, mutpb=self.mutpb)
 
-                    # Begin the generational process
-                    while True:
-                        # Step 3: Environmental selection
-                        archive = self.tb.select(pop + archive, k=self.nBar)
-                        prevFront = deepcopy(self.front)
-                        self.front.update(archive)
+                # Step 2: Fitness assignment of both pop and archive
+                archive_ex_pop = [ind for ind in archive if ind not in pop]
+                invInds = [ind for ind in pop + archive_ex_pop if not ind.fitness.valid]
+                fits = self.tb.map(self.evaluator.evaluate, invInds)
+                for ind, fit in zip(invInds, fits):
+                    ind.fitness.values = fit
 
-                        # Record statistics
-                        record = self.mstats.compile(self.front)
-                        log.record(gen=currGen, evals=evals, **record)
-                        print('\r', log.stream)
+                evals = len(invInds)
 
-                        # Step 4: Termination
-                        if self.termination(prevFront, currGen):
-                            result['logs'][pathKey][subPathKey] = log
-                            result['fronts'][pathKey][subPathKey] = self.front[:]
-                            self.tb.unregister("individual")
-                            break
-
-                        # Step 5: Mating Selection
-                        matingPool = tools.selTournament(archive, k=self.n, tournsize=2)
-
-                        # Step 6: Variation
-                        pop = algorithms.varAnd(matingPool, self.tb, self.cxpb, self.mutpb)
-
-                        # Step 2: Fitness assignment
-                        # Population
-                        invInds1 = [ind for ind in pop if not ind.fitness.valid]
-                        fits = self.tb.map(self.evaluator.evaluate, invInds1)
-                        for ind, fit in zip(invInds1, fits):
-                            ind.fitness.values = fit
-
-                        # Archive
-                        invInds2 = [ind for ind in archive if not ind.fitness.valid]
-                        fits = self.tb.map(self.evaluator.evaluate, invInds2)
-                        for ind, fit in zip(invInds2, fits):
-                            ind.fitness.values = fit
-
-                        evals = len(invInds1) + len(invInds2)
-
-                        currGen += 1
+                gen += 1
 
             return result
 
@@ -628,19 +493,19 @@ class RoutePlanner:
 
         key = tuple(sorted([start, end]))
         # Get initial paths
-        initialPaths = None
+        initRoutes = None
         for path in self.initialPaths:
             if path['startEndKey'] == key and path['avoidAntarctic'] == avoidAntarctic and \
                     path['avoidArctic'] == avoidArctic:
-                initialPaths = path['paths']
+                initRoutes = path['paths']
                 break
-        if not initialPaths:
-            initialPaths = self.initializer.get_initial_routes(start, end)
+        if not initRoutes:
+            initRoutes = self.initializer.get_initial_routes(start, end)
 
             pathOutput = {'avoidAntarctic': avoidAntarctic,
                           'avoidArctic': avoidArctic,
                           'startEndKey': key,
-                          'paths': initialPaths}
+                          'paths': initRoutes}
 
             self.initialPaths.append(pathOutput)
 
@@ -649,69 +514,57 @@ class RoutePlanner:
                 pickle.dump(pathOutput, file)
 
         if algorithm == 'MPAES':
-            GA = self.mpaes.optimize
+            MOEA = self.MPAES(self.tb, self.evaluator, self.p)
         elif algorithm == 'SPEA2':
-            GA = self.spea2.optimize
+            MOEA = self.SPEA2(self.tb, self.evaluator, self.p)
         else:
-            GA = self.nsgaii.optimize
+            MOEA = self.NSGAII(self.tb, self.evaluator, self.p)
 
-        return GA(startEnd, initialPaths, startDate, current, weather, seed)
+        random.seed(seed)
+
+        result = {'startEnd': startEnd, 'initialRoutes': initRoutes, 'indicators': [None] * len(initRoutes),
+                  'logs': [None] * len(initRoutes), 'fronts': [None] * len(initRoutes)}
+        for routeIdx, route in enumerate(initRoutes):
+            print('Computing route {0}/{1}'.format(routeIdx + 1, len(initRoutes)))
+            for subIdx, subRoute in enumerate(route['route']):
+                result['logs'][routeIdx], result['fronts'][routeIdx], result['indicators'][routeIdx] = [], [], {}
+                print('Computing sub route {0}/{1}'.format(subIdx + 1, len(route['route'])))
+
+                # Reset functions and caches
+                self.tb.register("individual", initialization.init_individual, self.tb, subRoute)
+                log = support.logbook()
+
+                # Step 1: Initialization
+                print('Initializing population from shortest path:', end='\n ')
+                initialPop = self.tb.population(self.tb.individual, int(MOEA.n / len(subRoute.values())))
+                print('done')
+
+                # Step 2: Fitness assignment
+                print('Fitness assignment:', end='')
+                fits = self.tb.map(self.evaluator.evaluate, initialPop)
+                for ind, fit in zip(initialPop, fits):
+                    ind.fitness.values = fit
+                print('\rFitness assigned')
+                self.evaluator.set_classes(current, weather, startDate, self.get_days(initialPop))
+                self.tb.register("individual", initialization.init_individual, self.tb, subRoute)
+
+                # Begin the generational process
+                result = MOEA.optimize(initialPop, log, result, routeIdx)
+
+        return result
 
     def update_parameters(self, newParameters, reinitialize=False):
-        def set_attrs(_self, **kwargs):
-            for k, v in kwargs.items():
-                setattr(_self, k, v)
-
         self.p = {**self.p, **newParameters}
-
-        # M-PAES class
-        set_attrs(self.mpaes,
-                  gen=self.p['gen'],
-                  n=self.p['n'],
-                  nBar=self.p['nBar'],
-                  recomb=self.p['recomb'],
-                  nM=int(self.mpaes.n / 2 / (self.mpaes.recomb + 1)),
-                  fails=self.p['fails'],
-                  moves=self.p['moves'])
-
-        # SPEA2 class
-        set_attrs(self.spea2,
-                  gen=self.p['gen'],
-                  n=self.p['n'],
-                  nBar=self.p['nBar'],
-                  cxpb=self.p['cxpb'],
-                  mutpb=self.p['mutpb'])
-
-        # NSGA-II class
-        set_attrs(self.nsgaii,
-                  gen=self.p['gen'],
-                  n=self.p['n'],
-                  cxpb=self.p['cxpb'],
-                  mutpb=self.p['mutpb'])
-
-        # Operator class
-        set_attrs(self.operators,
-                  radius=self.p['radius'],
-                  cov=[[self.operators.radius, 0],
-                       [0, self.operators.radius]],
-                  widthRatio=self.p['widthRatio'],
-                  shape=self.p['shape'],
-                  scaleFactor=self.p['scaleFactor'],
-                  delFactor=self.p['delFactor'],
-                  ops=self.p['mutationOperators'],
-                  gauss=self.p['gauss'])
+        self.operators = Operators(self.evaluator.e_feasible, self.vessel, self.geod, self.p)
 
         if reinitialize:
             # Re-populate R-Tree structures
             navAreaGenerator = NavigableAreaGenerator(self.p, DIR=DIR)
-            landTree = navAreaGenerator.get_shoreline_rtree()
-            ecaTree = navAreaGenerator.get_eca_rtree()
-
-            set_attrs(self.evaluator,
-                      treeDict=landTree,
-                      ecaTreeDict=ecaTree)
-            self.initializer = initialization.Initializer(self.evaluator, self.vessel, landTree, ecaTree,
-                                                          self.geod, self.p, creator.Individual, DIR)
+            self.evaluator.landRtree = navAreaGenerator.get_shoreline_rtree()
+            self.evaluator.ecaRtree = navAreaGenerator.get_eca_rtree()
+            self.initializer = initialization.Initializer(self.evaluator, self.vessel, self.evaluator.landRtree,
+                                                          self.evaluator.ecaRtree, self.geod, self.p,
+                                                          creator.Individual, DIR)
 
     def get_days(self, pop):
         """
@@ -770,7 +623,7 @@ class RoutePlanner:
             current = True if 'current' in inclEnvironment else False
             weather = True if 'weather' in inclEnvironment else False
             startDate = inclEnvironment['current'] if current else inclEnvironment['weather']
-            self.evaluator.evaluate.set_classes(current, weather, startDate, 10)
+            self.evaluator.set_classes(current, weather, startDate, 10)
 
         nFits = len([included for included in self.criteria.values() if included])
         objKeys = [obj for obj, included in self.criteria.items() if included]
@@ -874,8 +727,8 @@ if __name__ == "__main__":
     #               'n': 100}    # Population size
 
     kwargsPlanner = {'inputParameters': {}, 'tb': _tb, 'criteria': _criteria}
-    kwargsCompute = {'startEnd': _startEnd, 'startDate': datetime(2016, 1, 1), 'recompute': False, 'current': True,
-                     'weather': False, 'seed': 1}
+    kwargsCompute = {'startEnd': _startEnd, 'startDate': datetime(2016, 1, 1), 'recompute': True, 'current': False,
+                     'weather': False, 'seed': 1, 'algorithm': 'SPEA2'}
     multiprocess = False
 
     if multiprocess:
