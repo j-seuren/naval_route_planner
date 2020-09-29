@@ -206,10 +206,10 @@ inputGulf = {'instance': 'Gulf',
                        'departureDates': []}
              }
 for date in gulfDepartures:
-    for west in locations['westLocations']:
-        for east in locations['eastLocations']:
-            inputGulf['input']['from'].append(west)
-            inputGulf['input']['to'].append(east)
+    for i, west in enumerate(locations['westLocations']):
+        for j, east in enumerate(locations['eastLocations']):
+            inputGulf['input']['from'].append((''.format(i+1), west))
+            inputGulf['input']['to'].append((''.format(j+1), east))
             inputGulf['input']['departureDates'].append(date)
 
 
@@ -234,7 +234,7 @@ inputECA = {'instance': 'ECA',
                       'departureDates': [None]}
             }
 
-multiple_experiments(inputSalLim, 'current')  # TEST FOR [GC, CONSTANT] [CURRENT, CONSTANT] [CURRENT, VAR]
+multiple_experiments(inputGulf, 'current')  # TEST FOR [GC, CONSTANT] [CURRENT, CONSTANT] [CURRENT, VAR]
 # multiple_experiments(inputKC, 'current')
 # multiple_experiments(inputGulf, 'current')
 # multiple_experiments(inputWeather, 'weather')
