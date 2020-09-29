@@ -17,12 +17,14 @@ from support import locations
 DIR = Path('D:/')
 SPEED = 'var'  # 'constant' or 'var'
 ITERS = 5
-parameters = {'mutationOperators': ['insert', 'move', 'delete'] if SPEED == 'constant' else ['insert', 'move', 'speed', 'delete']}
+speedOps = ['insert', 'move', 'delete'] if SPEED == 'constant' else ['insert', 'move', 'speed', 'delete']
+par = {'mutationOperators': speedOps}
 ECA_F = 1
-BATHYMETRY = False
-PLANNER = main.RoutePlanner(inputParameters=parameters, bathymetry=BATHYMETRY, ecaFactor=ECA_F,
+DEPTH = False
+PLANNER = main.RoutePlanner(inputParameters=par, bathymetry=DEPTH, ecaFactor=ECA_F,
                             criteria={'minimalTime': True, 'minimalCost': True})
-CURRENT = True
+CURRENT = False
+BL = 'BLANK_' if not CURRENT else ''
 
 
 def get_df(procList):
@@ -42,8 +44,14 @@ def get_df(procList):
 
 
 def single_experiment(experiment, inst, startEnd, depDate, locS, depS, saveFig=True):
-    rawListFP = DIR / 'output/{}/raw/{}_{}_{}_iters{}_B{}_ECA{}'.format(experiment, inst, locS, depS, ITERS, BATHYMETRY,
-                                                                        ECA_F)
+    rawListFP = DIR / 'output/{}/raw/{}{}_{}_{}_iters{}_B{}_ECA{}'.format(experiment,
+                                                                          BL,
+                                                                          inst,
+                                                                          locS,
+                                                                          depS,
+                                                                          ITERS,
+                                                                          DEPTH,
+                                                                          ECA_F)
     if os.path.exists(rawListFP):
         return None
 
@@ -52,8 +60,8 @@ def single_experiment(experiment, inst, startEnd, depDate, locS, depS, saveFig=T
     ecas = True if ECA_F != 1 else False
 
     rawList, procList = [], []
-    for i in range(ITERS):
-        print('ITERATION {} of {}'.format(i+1, ITERS))
+    for itr in range(ITERS):
+        print('ITERATION {} of {}'.format(itr+1, ITERS))
         t0 = time.time()
         raw = PLANNER.compute(startEnd, startDate=depDate, recompute=True, weather=weather, current=current)
         t1 = time.time() - t0
@@ -77,25 +85,43 @@ def single_experiment(experiment, inst, startEnd, depDate, locS, depS, saveFig=T
 
             weatherDate = depDate if experiment == 'weather' else None
             routePlotter = plot_results.RoutePlotter(DIR, proc, rawResults=raw, vessel=PLANNER.vessel)
-            routeFig, _ = routePlotter.results(initial=False, ecas=ecas, bathymetry=BATHYMETRY, nRoutes=4,
+            routeFig, _ = routePlotter.results(initial=False, ecas=ecas, bathymetry=DEPTH, nRoutes=4,
                                                weatherDate=weatherDate, current=currentDict, colorbar=True)
 
             for name, fig in {'front': frontFig, 'stats': statsFig, 'routes': routeFig}.items():
-                fig.savefig(DIR / "output/{}/figures/{}_{}_{}_iter{}_B{}_ECA{}_{}.pdf".format(experiment, inst,
-                                                                                              startEnd, depS, i,
-                                                                                              BATHYMETRY, ECA_F, name))
+                fig.savefig(DIR / "output/{}/figures/{}{}_{}_{}_iter{}_B{}_ECA{}_{}.pdf".format(experiment,
+                                                                                                BL,
+                                                                                                inst,
+                                                                                                startEnd,
+                                                                                                depS,
+                                                                                                itr,
+                                                                                                DEPTH,
+                                                                                                ECA_F,
+                                                                                                name))
             plt.close('all')
 
-    with open(DIR / 'output/{}/raw/{}_{}_{}_iters{}_B{}_ECA{}'.format(experiment, inst, startEnd, depS, ITERS,
-                                                                      BATHYMETRY, ECA_F), 'wb') as f:
+    with open(DIR / 'output/{}/raw/{}{}_{}_{}_iters{}_B{}_ECA{}'.format(experiment,
+                                                                        BL,
+                                                                        inst,
+                                                                        startEnd,
+                                                                        depS,
+                                                                        ITERS,
+                                                                        DEPTH,
+                                                                        ECA_F), 'wb') as f:
         pickle.dump(rawList, f)
 
     return get_df(procList)
 
 
 def init_experiment(writer, experiment, inst, dfSummary, depDate, depS, locS, start, end):
-    fp = DIR / 'output/{}/single_files/{}_{}_{}_gulf_{}Speed_B{}_ECA{}.csv'.format(experiment, inst, depS, locS,
-                                                                                   SPEED, BATHYMETRY, ECA_F)
+    fp = DIR / 'output/{}/single_files/{}{}_{}_{}_{}_B{}_ECA{}.csv'.format(experiment,
+                                                                           BL,
+                                                                           inst,
+                                                                           depS,
+                                                                           locS,
+                                                                           SPEED,
+                                                                           DEPTH,
+                                                                           ECA_F)
     df = single_experiment(experiment, inst, (start, end), depDate, locS, depS, saveFig=True)
     if df is None:
         df = pd.read_csv(fp)
@@ -107,53 +133,14 @@ def init_experiment(writer, experiment, inst, dfSummary, depDate, depS, locS, st
     return dfSummary.T
 
 
-# def multiple_experiments(startEnds, experiment, depDates=None):
-#
-#     def init_experiment(WRITER, DF_SUMMARY, DEP_DATE, DEP_S, LOC_S, START, END):
-#         fp = DIR / 'output/{}/single_files/{}_{}_gulf_{}Speed.csv'.format(experiment, DEP_S, LOC_S, SPEED)
-#         DF = single_experiment(experiment, (START, END), DEP_DATE, DEP_S, saveFig=True)
-#         if DF is None:
-#             DF = pd.read_csv(fp)
-#         else:
-#             DF.to_excel(WRITER, sheet_name=LOC_S)
-#             DF.to_csv(fp)
-#         DF_SUMMARY[LOC_S + '_mean'] = DF['mean']
-#         DF_SUMMARY[LOC_S + '_std'] = DF['std']
-#         return DF_SUMMARY.T
-#
-#     depDates = [None] if depDates is None else depDates
-#     for d, depDate in enumerate(depDates):
-#         print('date {} of {}'.format(d+1, len(depDates)))
-#         depS = '' if depDate is None else 'depart' + depDate.strftime('%Y_%m_%d')
-#         writer = pd.ExcelWriter(DIR / 'output/{}/{}_gulf_{}Speed.xlsx'.format(experiment, depS, SPEED))
-#         dfSummary = pd.DataFrame(columns=['compTime', 'T_fuel', 'T_time', 'C_fuel', 'C_time', 'L_fuel', 'L_time'])
-#
-#         if experiment == 'weather':
-#             locS = str(d)
-#             startEnds = list(startEnds)
-#             start, end = startEnds[d]
-#             dfSummary = init_experiment(writer, dfSummary, depDate, depS, locS, start, end)
-#         else:
-#             starts, ends = [startEnd[0] for startEnd in startEnds], [startEnd[1] for startEnd in startEnds]
-#             for i, start in enumerate(starts):
-#                 for j, end in enumerate(ends):
-#                     print('start, end {}, {} of {}'.format(i+1, j+1, len(ends)))
-#                     locS = str((i, j))
-#                     dfSummary = init_experiment(writer, dfSummary, depDate, depS, locS, start, end)
-#
-#         dfSummary.to_excel(writer, sheet_name='summary')
-#         writer.save()
-#     print('DONE TESTING')
-
-
-def multiple_experiments(inputDict, experiment):
+def multiple_experiments(inputDict, exp):
     inst = inputDict['instance']
     depDates = inputDict['input']['departureDates']
     for d, depDate in enumerate(depDates):
         print('date {} of {}'.format(d+1, len(depDates)))
         depS = '' if depDate is None else 'depart' + depDate.strftime('%Y_%m_%d')
-        writer = pd.ExcelWriter(DIR / 'output/{}/{}_{}_gulf_{}Speed_B{}_ECA{}.xlsx'.format(experiment, inst, depS,
-                                                                                           SPEED, BATHYMETRY, ECA_F))
+        writer = pd.ExcelWriter(DIR / 'output/{}/{}{}_{}_{}_B{}_ECA{}.xlsx'.format(exp, BL, inst, depS, SPEED,
+                                                                                   DEPTH, ECA_F))
         dfSummary = pd.DataFrame(columns=['compTime', 'T_fuel', 'T_time', 'C_fuel', 'C_time', 'L_fuel', 'L_time'])
 
         for routeIdx, (startTup, endTup) in enumerate(zip(inputDict['input']['from'], inputDict['input']['to'])):
@@ -161,7 +148,7 @@ def multiple_experiments(inputDict, experiment):
             endKey, end = endTup
             print('location combination {} of {}'.format(routeIdx + 1, len(inputDict['input']['from'])))
             locS = '{}{}'.format(startKey, endKey)
-            dfSummary = init_experiment(writer, experiment, inst, dfSummary, depDate, depS, locS, start, end)
+            dfSummary = init_experiment(writer, exp, inst, dfSummary, depDate, depS, locS, start, end)
 
         dfSummary.to_excel(writer, sheet_name='summary')
         writer.save()
@@ -234,7 +221,7 @@ inputECA = {'instance': 'ECA',
                       'departureDates': [None]}
             }
 
-multiple_experiments(inputGulf, 'current')  # TEST FOR [GC, CONSTANT] [CURRENT, CONSTANT] [CURRENT, VAR]
+multiple_experiments(inputKC, exp='current')  # TEST FOR [GC, CONSTANT] [CURRENT, CONSTANT] [CURRENT, VAR]
 # multiple_experiments(inputKC, 'current')
 # multiple_experiments(inputGulf, 'current')
 # multiple_experiments(inputWeather, 'weather')
