@@ -5,6 +5,7 @@ import numpy as np
 import os
 import indicators
 import pickle
+import pprint
 import random
 import support
 import uuid
@@ -18,6 +19,7 @@ from pathlib import Path
 from shapely.geometry import Point, Polygon
 
 
+pp = pprint.PrettyPrinter()
 _criteria = {'minimalTime': True, 'minimalCost': True}
 timeWeight, costWeight = -5, -1
 
@@ -449,6 +451,9 @@ class RoutePlanner:
 
     def compute(self, startEnd, recompute=False, startDate=None, current=False,
                 weather=False, algorithm='NSGA2', seed=None, avoidArctic=True, avoidAntarctic=True):
+        pp.pprint({'startEnd': startEnd, 'recompute': recompute, 'startDate': startDate, 'current': current,
+                   'weather': weather, 'algorithm': algorithm, 'seed': seed, 'avoidArctic': avoidArctic,
+                   'avoidAntarctic': avoidAntarctic})
         support.clear_caches()  # Clear caches
 
         if startEnd[0] == startEnd[1]:
