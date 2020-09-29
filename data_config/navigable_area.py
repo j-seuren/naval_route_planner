@@ -220,7 +220,8 @@ if __name__ == '__main__':
     m.drawmapboundary(fill_color='red', zorder=1)
     m.drawcoastlines(color='black')
     m.fillcontinents(color='lightgray', lake_color='lightgray', zorder=2)
-    m.readshapefile(DIR / "data/bathymetry_10m/ne_10m_bathymetry_L_0", 'ne_10m_bathymetry_L_0', drawbounds=False)
+    m.readshapefile(Path(DIR / "data/bathymetry_200m/ne_10m_bathymetry_K_200").as_posix(), 'ne_10m_bathymetry_K_200',
+                    drawbounds=False)
     ps = [patches.Polygon(np.array(shape), True) for shape in m.ne_10m_bathymetry_K_200]
     _ax.add_collection(PatchCollection(ps, facecolor='white', zorder=2))
 

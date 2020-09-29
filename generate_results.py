@@ -15,13 +15,14 @@ from support import locations
 # os.chdir('')
 
 DIR = Path('D:/')
-SPEED = False
+SPEED = 'constant'  # 'constant' or 'var'
 ITERS = 5
-parameters = {'mutationOperators': ['insert', 'move', 'delete'] if SPEED else ['insert', 'move', 'speed', 'delete']}
+parameters = {'mutationOperators': ['insert', 'move', 'delete'] if SPEED == 'constant' else ['insert', 'move', 'speed', 'delete']}
 ECA_FACTOR = 1.2
 BATHYMETRY = True
 PLANNER = main.RoutePlanner(inputParameters=parameters, bathymetry=BATHYMETRY, ecaFactor=ECA_FACTOR,
                             criteria={'minimalTime': True, 'minimalCost': True})
+CURRENT = True
 
 
 def get_df(procList):
@@ -41,11 +42,11 @@ def get_df(procList):
 
 
 def single_experiment(experiment, startEnd, depDate, depS, saveFig=True):
-    rawListFP = DIR / 'output/{}/raw/{}_{}_iters{}'.format(experiment, startEnd, ITERS, depS)
+    rawListFP = DIR / 'output/{}/raw/{}_{}_iters{}_B{}_ECA{}'.format(experiment, startEnd, ITERS, depS, BATHYMETRY, ECA_FACTOR)
     if os.path.exists(rawListFP):
         return None
 
-    current = True if experiment == 'current' else False
+    current = True if experiment == 'current' and CURRENT else False
     weather = True if experiment == 'weather' else False
     ecas = True if ECA_FACTOR != 1 else False
 
@@ -65,7 +66,7 @@ def single_experiment(experiment, startEnd, depDate, depS, saveFig=True):
             frontFig, _ = statisticsPlotter.plot_fronts()
             statsFig, _ = statisticsPlotter.plot_stats()
 
-            if experiment == 'current':
+            if current:
                 cData = PLANNER.evaluator.currentOperator.data
                 lons0 = np.linspace(-179.875, 179.875, 1440)
                 lats0 = np.linspace(-89.875, 89.875, 720)
@@ -75,24 +76,23 @@ def single_experiment(experiment, startEnd, depDate, depS, saveFig=True):
 
             weatherDate = depDate if experiment == 'weather' else None
             routePlotter = plot_results.RoutePlotter(DIR, proc, rawResults=raw, vessel=PLANNER.vessel)
-            routeFig, _ = routePlotter.results(initial=False, ecas=ecas, bathymetry=BATHYMETRY, nRoutes=4, weatherDate=weatherDate,
-                                               current=currentDict, colorbar=True)
+            routeFig, _ = routePlotter.results(initial=False, ecas=ecas, bathymetry=BATHYMETRY, nRoutes=4,
+                                               weatherDate=weatherDate, current=currentDict, colorbar=True)
 
             for name, fig in {'front': frontFig, 'stats': statsFig, 'routes': routeFig}.items():
-                fig.savefig(DIR / "output/{}/figures/{}_{}_iters{}.pdf".format(experiment, startEnd, name, i, depS))
+                fig.savefig(DIR / "output/{}/figures/{}_{}_iters{}_B{}_ECA{}.pdf".format(experiment, startEnd, name, i, depS, BATHYMETRY, ECA_FACTOR))
             plt.close('all')
 
-    with open(DIR / 'output/{}/raw/{}_{}_iters{}'.format(experiment, startEnd, ITERS, depS), 'wb') as f:
+    with open(DIR / 'output/{}/raw/{}_{}_iters{}_B{}_ECA{}'.format(experiment, startEnd, ITERS, depS, BATHYMETRY, ECA_FACTOR), 'wb') as f:
         pickle.dump(rawList, f)
 
     return get_df(procList)
 
 
 def multiple_experiments(startEnds, experiment, depDates=None):
-    speedS = 'constant' if SPEED else 'var'
 
     def init_experiment(WRITER, DF_SUMMARY, DEP_DATE, DEP_S, LOC_S, START, END):
-        fp = DIR / 'output/{}/single_files/{}_{}_gulf_{}Speed.csv'.format(experiment, DEP_S, LOC_S, speedS)
+        fp = DIR / 'output/{}/single_files/{}_{}_gulf_{}Speed.csv'.format(experiment, DEP_S, LOC_S, SPEED)
         DF = single_experiment(experiment, (START, END), DEP_DATE, DEP_S, saveFig=True)
         if DF is None:
             DF = pd.read_csv(fp)
@@ -107,7 +107,7 @@ def multiple_experiments(startEnds, experiment, depDates=None):
     for d, depDate in enumerate(depDates):
         print('date {} of {}'.format(d+1, len(depDates)))
         depS = '' if depDate is None else 'depart' + depDate.strftime('%Y_%m_%d')
-        writer = pd.ExcelWriter(DIR / 'output/{}/{}_gulf_{}Speed.xlsx'.format(experiment, depS, speedS))
+        writer = pd.ExcelWriter(DIR / 'output/{}/{}_gulf_{}Speed.xlsx'.format(experiment, depS, SPEED))
         dfSummary = pd.DataFrame(columns=['compTime', 'T_fuel', 'T_time', 'C_fuel', 'C_time', 'L_fuel', 'L_time'])
 
         if experiment == 'weather':
@@ -127,6 +127,40 @@ def multiple_experiments(startEnds, experiment, depDates=None):
         writer.save()
     print('DONE TESTING')
 
+
+def multiple_experiments2(inputDict, experiment):
+
+    def init_experiment(WRITER, DF_SUMMARY, DEP_DATE, DEP_S, LOC_S, START, END):
+        fp = DIR / 'output/{}/single_files/{}_{}_gulf_{}Speed_B{}_ECA{}.csv'.format(experiment, DEP_S, LOC_S, SPEED,
+                                                                                    BATHYMETRY, ECA_FACTOR)
+        DF = single_experiment(experiment, (START, END), DEP_DATE, DEP_S, saveFig=True)
+        if DF is None:
+            DF = pd.read_csv(fp)
+        else:
+            DF.to_excel(WRITER, sheet_name=LOC_S)
+            DF.to_csv(fp)
+        DF_SUMMARY[LOC_S + '_mean'] = DF['mean']
+        DF_SUMMARY[LOC_S + '_std'] = DF['std']
+        return DF_SUMMARY.T
+
+    depDates = inputDict['departureDates']
+    for d, depDate in enumerate(depDates):
+        print('date {} of {}'.format(d+1, len(depDates)))
+        depS = '' if depDate is None else 'depart' + depDate.strftime('%Y_%m_%d')
+        writer = pd.ExcelWriter(DIR / 'output/{}/{}_gulf_{}Speed_B{}_ECA{}.xlsx'.format(experiment, depS, SPEED,
+                                                                                        BATHYMETRY, ECA_FACTOR))
+        dfSummary = pd.DataFrame(columns=['compTime', 'T_fuel', 'T_time', 'C_fuel', 'C_time', 'L_fuel', 'L_time'])
+
+        for i, (startTup, endTup) in enumerate(zip(inputDict['from'], inputDict['to'])):
+            startKey, start = startTup
+            endKey, end = endTup
+            print('location combination {} of {}'.format(i + 1, len(inputDict['from'])))
+            locS = '{}{}'.format(startKey, endKey)
+            dfSummary = init_experiment(writer, dfSummary, depDate, depS, locS, start, end)
+
+        dfSummary.to_excel(writer, sheet_name='summary')
+        writer.save()
+    print('DONE TESTING')
 
 # # Test weather
 # # Weather locations
@@ -159,7 +193,8 @@ def multiple_experiments(startEnds, experiment, depDates=None):
 # weatherStartEnds = zip(weatherStarts, weatherEnds)
 # multiple_experiments(weatherStartEnds, 'weather', dateTimes)
 
-# Test current - Gulf
+
+# Test currents
 currentDepartures = [datetime(2014, 10, 28),
                      datetime(2014, 11, 11),
                      datetime(2014, 11, 25),
@@ -167,18 +202,27 @@ currentDepartures = [datetime(2014, 10, 28),
                      datetime(2015, 5, 4),
                      datetime(2015, 5, 18)
                      ]
-currentStartEnds = list(zip(locations['westLocations'], locations['eastLocations']))
-multiple_experiments(currentStartEnds, 'current', currentDepartures)
+
+inputGulf = {'from': [],
+             'to': [],
+             'departureDates': []}
+for date in currentDepartures:
+    for west in locations['westLocations']:
+        for east in locations['eastLocations']:
+            inputGulf['from'].append(west)
+            inputGulf['to'].append(east)
+            inputGulf['departureDates'].append(date)
 
 
-currentDepartures = [datetime(2014, 9, 15), datetime(2015, 3, 15)]
+inputKC = {'from': [('K', locations['KeelungC']),
+                    ('T', locations['Tokyo'])],
+           'to': [('T', locations['Tokyo']),
+                  ('K', locations['KeelungC'])],
+           'departureDates': [datetime(2014, 9, 15),
+                              datetime(2015, 3, 15)]}
 
-currentStartEnds = list(zip(locations['Keelung'], locations['Tokyo']))
+multiple_experiments2(inputKC, 'current')  # TEST FOR [GC, CONSTANT] [CURRENT, CONSTANT] [CURRENT, VAR]
 
-
-# Test ECA
-ecaStartEnds = list(zip([locations['ECA1: Jacksonville']], [locations['ECA2: New York']]))
-multiple_experiments(ecaStartEnds, 'ecas')
-
-
-
+# # Test ECA
+# ecaStartEnds = list(zip([locations['ECA1: Jacksonville']], [locations['ECA2: New York']]))
+# multiple_experiments(ecaStartEnds, 'ecas')
