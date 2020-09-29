@@ -203,7 +203,7 @@ class RoutePlotter:
                             drawbounds=False)
             ps = [patches.Polygon(np.array(shape), True) for shape in m.ne_10m_bathymetry_K_200]
             ax.add_collection(PatchCollection(ps, facecolor='white', zorder=2))
-            m.drawmapboundary(color='black', fill_color='darkblue')
+            m.drawmapboundary(color='black', fill_color='khaki')
 
         if eca:
             m.readshapefile(Path(self.DIR / "data/eca_reg14_sox_pm/eca_reg14_sox_pm").as_posix(), 'eca_reg14_sox_pm', drawbounds=False)

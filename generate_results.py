@@ -15,8 +15,8 @@ from support import locations
 # os.chdir('')
 
 DIR = Path('D:/')
-SPEED = 'constant'  # 'constant' or 'var'
-ITERS = 5
+SPEED = 'var'  # 'constant' or 'var'
+ITERS = 1
 parameters = {'mutationOperators': ['insert', 'move', 'delete'] if SPEED == 'constant' else ['insert', 'move', 'speed', 'delete']}
 ECA_FACTOR = 1.2
 BATHYMETRY = True
@@ -221,7 +221,11 @@ inputKC = {'from': [('K', locations['KeelungC']),
            'departureDates': [datetime(2014, 9, 15),
                               datetime(2015, 3, 15)]}
 
-multiple_experiments2(inputKC, 'current')  # TEST FOR [GC, CONSTANT] [CURRENT, CONSTANT] [CURRENT, VAR]
+inputSalLim = {'from': [('S', locations['Salvador'])],
+               'to': [('L', locations['Lima'])],
+               'departureDates': [datetime(2014, 11, 11)]}
+
+multiple_experiments2(inputSalLim, 'current')  # TEST FOR [GC, CONSTANT] [CURRENT, CONSTANT] [CURRENT, VAR]
 
 # # Test ECA
 # ecaStartEnds = list(zip([locations['ECA1: Jacksonville']], [locations['ECA2: New York']]))
