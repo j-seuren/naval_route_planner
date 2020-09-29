@@ -18,7 +18,10 @@ DIR = Path('D:/')
 SPEED = False
 ITERS = 5
 parameters = {'mutationOperators': ['insert', 'move', 'delete'] if SPEED else ['insert', 'move', 'speed', 'delete']}
-PLANNER = main.RoutePlanner(inputParameters=parameters, criteria={'minimalTime': True, 'minimalCost': True})
+ECA_FACTOR = 1.2
+BATHYMETRY = True
+PLANNER = main.RoutePlanner(inputParameters=parameters, bathymetry=BATHYMETRY, ecaFactor=ECA_FACTOR,
+                            criteria={'minimalTime': True, 'minimalCost': True})
 
 
 def get_df(procList):
@@ -44,7 +47,7 @@ def single_experiment(experiment, startEnd, depDate, depS, saveFig=True):
 
     current = True if experiment == 'current' else False
     weather = True if experiment == 'weather' else False
-    ecas = True if experiment == 'ecas' else False
+    ecas = True if ECA_FACTOR != 1 else False
 
     rawList, procList = [], []
     for i in range(ITERS):
@@ -72,7 +75,7 @@ def single_experiment(experiment, startEnd, depDate, depS, saveFig=True):
 
             weatherDate = depDate if experiment == 'weather' else None
             routePlotter = plot_results.RoutePlotter(proc, rawResults=raw, vessel=PLANNER.vessel)
-            routeFig, _ = routePlotter.results(initial=False, ecas=ecas, nRoutes=4, weatherDate=weatherDate,
+            routeFig, _ = routePlotter.results(initial=False, ecas=ecas, bathymetry=BATHYMETRY, nRoutes=4, weatherDate=weatherDate,
                                                current=currentDict, colorbar=True)
 
             for name, fig in {'front': frontFig, 'stats': statsFig, 'routes': routeFig}.items():

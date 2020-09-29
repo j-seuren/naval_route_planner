@@ -5,13 +5,10 @@ import skopt
 # import time
 
 from datetime import datetime
-from matplotlib.backends.backend_pdf import PdfPages
 from pathlib import Path
 from skopt import plots
 from skopt.callbacks import CheckpointSaver
 from support import locations
-
-import sklearn.tree
 
 DIR = Path('D:/')
 N_CALLs = 200
@@ -99,11 +96,11 @@ def show_results(fp, timestamp):
     plt.savefig(saveFP.as_posix() + 'conv.pdf')
 
 
-# _default_parameters = {'mutationOperators': ['insert', 'move', 'delete']}
-# FP, STAMP = tune(_default_parameters)
+_default_parameters = {'mutationOperators': ['insert', 'move', 'delete']}
+FP, STAMP = tune(_default_parameters)
 
-timestamp = datetime.now().strftime('%m%d%H%M')
-fp = 'D:/JobS/Downloads/checkpoint_3.pkl'
-show_results(fp, timestamp)
+# timestamp = datetime.now().strftime('%m%d%H%M')
+# fp = 'D:/JobS/Downloads/checkpoint_3.pkl'
+# show_results(fp, timestamp)
 
 # plt.show()
