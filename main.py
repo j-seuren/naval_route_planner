@@ -60,7 +60,7 @@ class RoutePlanner:
                              'splits': 3,          # Threshold for split_polygon (val 3 yields best performance)
 
                              # MOEA parameters
-                             'n': 100,             # Population size
+                             'n': 150,             # Population size
                              'nBar': 50,           # Local archive size (M-PAES, SPEA2)
                              'cxpb': 0.75,         # Crossover probability (NSGAII, SPEA2)
                              'mutpb': 0.51,        # Mutation probability (NSGAII, SPEA2)
