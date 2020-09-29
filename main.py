@@ -52,7 +52,7 @@ class RoutePlanner:
                              # Navigation area parameters
                              'avoidAntarctic': True,
                              'avoidArctic': True,
-                             'res': 'l',           # Resolution of shorelines
+                             'res': 'i',           # Resolution of shorelines
                              'penaltyValue': {'time': criteria['minimalTime'],
                                               'cost': criteria['minimalCost']},
                              'graphDens': 4,       # Recursion level graph
@@ -744,7 +744,7 @@ class RoutePlanner:
                                'speed': wp[1]} for wp in wps],
                 'crossedCanals': xCanals}
 
-    def post_process(self, result, ID=None):
+    def post_process(self, result, inclEnvironment=None, ID=None):
         if result is None:
             with open(self.procResultsFP, 'rb') as file:
                 processedResults = pickle.load(file)
@@ -765,6 +765,12 @@ class RoutePlanner:
                                                           'waypoints': [],
                                                           'crossedCanals': []})
             return processedResults
+
+        if inclEnvironment is not None:
+            current = True if 'current' in inclEnvironment else False
+            weather = True if 'weather' in inclEnvironment else False
+            startDate = inclEnvironment['current'] if current else inclEnvironment['weather']
+            self.evaluator.evaluate.set_classes(current, weather, startDate, 10)
 
         nFits = len([included for included in self.criteria.values() if included])
         objKeys = [obj for obj, included in self.criteria.items() if included]

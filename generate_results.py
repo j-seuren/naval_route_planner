@@ -43,8 +43,8 @@ def get_df(procList):
     return df
 
 
-def single_experiment(experiment, inst, startEnd, depDate, locS, depS, saveFig=True):
-    rawListFP = DIR / 'output/{}/raw/{}{}_{}_{}_iters{}_B{}_ECA{}'.format(experiment,
+def single_experiment(exp, inst, startEnd, depDate, locS, depS, saveFig=True):
+    rawListFP = DIR / 'output/{}/raw/{}{}_{}_{}_iters{}_B{}_ECA{}'.format(exp,
                                                                           BL,
                                                                           inst,
                                                                           locS,
@@ -55,8 +55,8 @@ def single_experiment(experiment, inst, startEnd, depDate, locS, depS, saveFig=T
     if os.path.exists(rawListFP):
         return None
 
-    current = True if experiment == 'current' and CURRENT else False
-    weather = True if experiment == 'weather' else False
+    current = True if exp == 'current' and CURRENT else False
+    weather = True if exp == 'weather' else False
     ecas = True if ECA_F != 1 else False
 
     rawList, procList = [], []
@@ -65,7 +65,7 @@ def single_experiment(experiment, inst, startEnd, depDate, locS, depS, saveFig=T
         t0 = time.time()
         raw = PLANNER.compute(startEnd, startDate=depDate, recompute=True, weather=weather, current=current)
         t1 = time.time() - t0
-        proc, raw = PLANNER.post_process(raw)
+        proc, raw = PLANNER.post_process(raw, inclEnvironment={exp: depDate})
         proc['computationTime'] = t1
         rawList.append(raw)
         procList.append(proc)
@@ -83,13 +83,13 @@ def single_experiment(experiment, inst, startEnd, depDate, locS, depS, saveFig=T
             else:
                 currentDict = None
 
-            weatherDate = depDate if experiment == 'weather' else None
+            weatherDate = depDate if exp == 'weather' else None
             routePlotter = plot_results.RoutePlotter(DIR, proc, rawResults=raw, vessel=PLANNER.vessel)
             routeFig, _ = routePlotter.results(initial=False, ecas=ecas, bathymetry=DEPTH, nRoutes=4,
                                                weatherDate=weatherDate, current=currentDict, colorbar=True)
 
             for name, fig in {'front': frontFig, 'stats': statsFig, 'routes': routeFig}.items():
-                fig.savefig(DIR / "output/{}/figures/{}{}_{}_{}_iter{}_B{}_ECA{}_{}.pdf".format(experiment,
+                fig.savefig(DIR / "output/{}/figures/{}{}_{}_{}_iter{}_B{}_ECA{}_{}.pdf".format(exp,
                                                                                                 BL,
                                                                                                 inst,
                                                                                                 startEnd,
@@ -100,7 +100,7 @@ def single_experiment(experiment, inst, startEnd, depDate, locS, depS, saveFig=T
                                                                                                 name))
             plt.close('all')
 
-    with open(DIR / 'output/{}/raw/{}{}_{}_{}_iters{}_B{}_ECA{}'.format(experiment,
+    with open(DIR / 'output/{}/raw/{}{}_{}_{}_iters{}_B{}_ECA{}'.format(exp,
                                                                         BL,
                                                                         inst,
                                                                         startEnd,
