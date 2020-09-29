@@ -12,7 +12,7 @@ import uuid
 from copy import deepcopy
 from data_config.navigable_area import NavigableAreaGenerator
 from deap import base, creator, tools, algorithms
-from analysis import geodesic
+import geodesic
 from operations import Operators
 from pathlib import Path
 from shapely.geometry import Point, Polygon

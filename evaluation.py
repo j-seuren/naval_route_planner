@@ -6,7 +6,7 @@ import support
 import weather
 
 from functools import lru_cache, wraps
-from math import cos, sin, sqrt, degrees, pow
+from math import cos, sin, sqrt, radians, pow
 from pathlib import Path
 from shapely.geometry import LineString, Point
 # from case_studies.demos import create_currents
@@ -159,7 +159,7 @@ class Evaluator:
             now = self.startDate + datetime.timedelta(hours=currentHours)
         except TypeError:
             raise TypeError("Date {} ; currHours {}".format(self.startDate, currentHours))
-        nauticalMiles, bearingRad = self.geod.distance(p1, p2, bearing=True)
+        nauticalMiles, bearingDeg = self.geod.distance(p1, p2, bearing=True)
 
         # Coordinates of middle point of leg
         if abs(p1[0] - p2[0]) > 300:  # If segment crosses datum line (-180 degrees), choose p1 as middle point
@@ -170,7 +170,7 @@ class Evaluator:
         if self.inclWeather:
             # Beaufort number (BN) and true wind direction (TWD) at (lon, lat)
             BN, windDeg = self.weatherOperator.get_grid_pt_wind(now, lon, lat)
-            headingDeg = degrees(bearingRad)
+            headingDeg = bearingDeg
             speedKnots = self.vessel.reduced_speed(windDeg, headingDeg, BN, speedKnots)
 
         if self.inclCurrent:
@@ -178,7 +178,7 @@ class Evaluator:
             uKnots, vKnots = self.currentOperator.get_grid_pt_current(now, lon, lat)
 
             # Calculate speed over ground (actualSpeed)
-            actualSpeedKnots = calc_sog(bearingRad, uKnots, vKnots, speedKnots)
+            actualSpeedKnots = calc_sog(radians(bearingDeg), uKnots, vKnots, speedKnots)
         else:
             actualSpeedKnots = speedKnots
 
@@ -273,14 +273,14 @@ class SemiEmpiricalSpeedReduction:
         return reducedSpeedKnots
 
 
-def calc_sog(bearing, Se, Sn, V):
+def calc_sog(bearingRad, Se, Sn, V):
     """
     Determine speed over ground (sog) between points p1 and p2 in knots.
     see thesis section Ship Speed
     """
 
     # Calculate speed over ground (sog)
-    sinB, cosB = sin(bearing), cos(bearing)
+    sinB, cosB = sin(bearingRad), cos(bearingRad)
     return Se * sinB + Sn * cosB + sqrt(V * V - (Se * cosB - Sn * sinB) ** 2)
 
 

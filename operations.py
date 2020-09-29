@@ -111,8 +111,14 @@ class Operators:
             print('insert trials exceeded')
 
     def move_wp(self, ind, initializing=False):
+        # Find waypoints with largest angles
+        legs = list(zip([leg[0] for leg in ind[:-1]], [leg[0] for leg in ind[1:]]))
+        bearings = np.array([self.geod.distance(leg[0], leg[1], bearing=True)[1] for leg in legs])    # Get bearings
+        normDeg = (bearings[:-1] - bearings[1:]) % 360  # Normalize the difference
+        absDiffsDeg = np.minimum(360 - normDeg, normDeg)  # in range [0, 180]
+
         # Draw gamma int for number of to be moved (tbm) waypoints
-        tbm = self.sample_sequence(start=1, stop=len(ind)-1, reverse=False)
+        tbm = self.sample_sequence(start=1, stop=len(ind)-1, reverse=False, weights=absDiffsDeg)
         for i in tbm:
             p = np.asarray(ind[i][0])
             trials = 0
@@ -171,7 +177,7 @@ class Operators:
         for wp in ind[i:i+k]:
             wp[1] = newSpeed
 
-    def sample_sequence(self, stop, start=0, reverse=True, exponential=True):
+    def sample_sequence(self, stop, start=0, reverse=True, exponential=True, weights=None):
         k = 0
         scale = stop * self.scaleFactor
         while not start <= k < stop:
@@ -180,7 +186,10 @@ class Operators:
             else:
                 k = np.ceil((np.random.gamma(shape=self.shape, scale=scale, size=1))).item()
 
-        seq = random.sample(range(start, stop), k=int(k))
+        if weights is None:
+            seq = random.sample(range(start, stop), k=int(k))
+        else:
+            seq = random.choices(range(start, stop), weights=weights, k=int(k))
 
         if reverse:
             return sorted(seq, reverse=True)

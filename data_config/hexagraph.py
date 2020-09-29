@@ -7,10 +7,9 @@ import sys
 from copy import deepcopy
 from data_config.navigable_area import NavigableAreaGenerator
 from evaluation import geo_x_geos
-from analysis.geodesic import Geodesic
+from geodesic import Geodesic
 from mpl_toolkits.mplot3d import Axes3D
 from math import atan2, degrees, sqrt, radians, cos, sin
-from pathlib import Path
 from heapq import nsmallest
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
