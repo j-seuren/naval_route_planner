@@ -11,8 +11,8 @@ from skopt.callbacks import CheckpointSaver
 from support import locations
 
 DIR = Path('D:/')
-N_CALLs = 1
-N_POINTS = 1
+N_CALLs = 100
+N_POINTS = 10
 DEPART = datetime(2016, 1, 1)
 CURRENT = False
 BATHYMETRY = False
@@ -26,7 +26,7 @@ inputParameters = {'n': 120,
                    'segLengthF': 100,
                    'mutationOperators': ['speed', 'insert', 'move', 'delete'],
                    'mutpb': 0.7}
-PLANNER = main.RoutePlanner(bathymetry=False, inputParameters=inputParameters)
+PLANNER = main.RoutePlanner(bathymetry=BATHYMETRY, inputParameters=inputParameters)
 
 SPACE = [
     # skopt.space.Integer(50, 100, name='gen'),  # Minimal nr. generations
@@ -104,6 +104,7 @@ def show_results(fp, timestamp):
     plt.savefig(saveFP.as_posix() + 'obj.pdf')
     plots.plot_convergence(res)
     plt.savefig(saveFP.as_posix() + 'conv.pdf')
+
 
 FP, STAMP = tune()
 
