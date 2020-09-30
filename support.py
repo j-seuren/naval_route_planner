@@ -2,6 +2,7 @@ import functools
 import gc
 import numpy as np
 
+from datetime import datetime
 from deap import tools
 
 
@@ -186,6 +187,48 @@ locations = {'Agios Nikolaos': (25.726617, 35.152255),
              'eastLocations': eastLocations,
              'westLocations': westLocations,
              }
+
+# Test weather
+# Weather locations
+inputWeather = {'from': [('Ny', locations['New York']),  # Kuhlemann
+                         ('K', locations['Keelung']),  # Lin2013
+                         ('No', locations['Normandy']),  # Shao2012
+                         ('No', locations['Normandy']),  # Vettor2016
+                         ('V', locations['Valencia'])  # Vettor2016
+                         ],
+                'to': [('P', locations['Paramaribo']), ('S', locations['San Francisco']), ('Ny', locations['New York']),
+                       ('Mi', locations['Miami']), ('Ma', locations['Malta'])],
+                'departureDates': [datetime(2017, 9, 4), datetime(2011, 5, 28),
+                                   # DEP 0000Z 28 May 2011, ETA 0000Z 11 June 2011
+                                   datetime(2011, 1, 25),  # DEP 03:00 p.m. ETA: 00:30 p.m. 30/01/2011
+                                   datetime(2015, 6, 21),  # June 21, 2015 at 00:00
+                                   datetime(2015, 6, 21)  # June 21, 2015 at 00:00
+                                   ]}
+
+# locations['Thessaloniki']
+# locations['Agios Nikolaos']
+
+# Test currents
+gulfDepartures = [datetime(2014, 10, 28), datetime(2014, 11, 11), datetime(2014, 11, 25), datetime(2014, 4, 20),
+                  datetime(2015, 5, 4), datetime(2015, 5, 18)]
+
+inputGulf = {'instance': 'Gulf', 'input': {'from': [], 'to': [], 'departureDates': []}}
+for date in gulfDepartures:
+    for i, west in enumerate(locations['westLocations']):
+        for j, east in enumerate(locations['eastLocations']):
+            inputGulf['input']['from'].append(('{}'.format(i + 1), west))
+            inputGulf['input']['to'].append(('{}'.format(j + 1), east))
+            inputGulf['input']['departureDates'].append(date)
+
+inputKC = {'instance': 'KC', 'input': {'from': [('K', locations['KeelungC']), ('T', locations['Tokyo'])],
+                                       'to': [('T', locations['Tokyo']), ('K', locations['KeelungC'])],
+                                       'departureDates': [datetime(2014, 9, 15), datetime(2015, 3, 15)]}}
+
+inputSalLim = {'instance': 'SalLim', 'input': {'from': [('S', locations['Salvador'])], 'to': [('L', locations['Lima'])],
+                                               'departureDates': [datetime(2014, 11, 11)]}}
+
+inputECA = {'instance': 'ECA', 'input': {'from': [('ECA1', locations['ECA1: Jacksonville'])],
+                                         'to': [('ECA2', locations['ECA2: New York'])], 'departureDates': [None]}}
 
 
 def clear_caches():
