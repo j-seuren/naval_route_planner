@@ -144,7 +144,8 @@ class RoutePlotter:
         else:
             self.extent = (-180, -80, 180, 80)
 
-    def results(self, resolution='i',
+    def results(self, ax,
+                resolution='i',
                 weatherDate=None,
                 current=None,
                 initial=False,
@@ -153,8 +154,6 @@ class RoutePlotter:
                 ecas=False,
                 colorbar=True
                 ):
-        fig, ax = plt.subplots()
-
         if weatherDate:
             bathymetry = False
 
@@ -185,7 +184,8 @@ class RoutePlotter:
                     for i in ii:
                         line = 'dashed' if 0 < i < n-1 else 'solid'
                         self.route(subFront[i], m, line=line, colors=self.cmap)
-        return fig, ax
+
+        return ax
 
     def navigation_area(self, ax, resolution='c', current=None, bathymetry=False, eca=False, weather=None):
         left, bottom, right, top = self.extent

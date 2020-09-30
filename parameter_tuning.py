@@ -99,17 +99,17 @@ def show_results(fp, timestamp):
     saveFP = DIR / '/output/tuning/figures/{}_'.format(timestamp)
     # Plot results
     plots.plot_evaluations(res)
-    plt.savefig(saveFP + saveFP.as_posix() + 'eval.pdf')
+    plt.savefig(saveFP.as_posix() + 'eval.pdf')
     plots.plot_objective(res)
-    plt.savefig(saveFP + saveFP.as_posix() + 'obj.pdf')
+    plt.savefig(saveFP.as_posix() + 'obj.pdf')
     plots.plot_convergence(res)
-    plt.savefig(saveFP + saveFP.as_posix() + 'conv.pdf')
+    plt.savefig(saveFP.as_posix() + 'conv.pdf')
 
 
 FP, STAMP = tune()
 
-timestamp = datetime.now().strftime('%m%d%H%M')
+# timestamp = datetime.now().strftime('%m%d%H%M')
 # fp = 'D:/JobS/Downloads/checkpoint_3.pkl'
-show_results(FP, timestamp)
+show_results(FP, STAMP)
 
 # plt.show()

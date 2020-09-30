@@ -52,6 +52,14 @@ class RoutePlanner:
                  criteria=None):
         if criteria is None:
             criteria = _criteria
+        else:
+            if criteria['minimalTime'] and criteria['minimalCost']:
+                weights = (-1, -1)
+            else:
+                weights = (-1,)
+
+            creator.create("FitnessMin", base.Fitness, weights=weights)
+            creator.create("Individual", list, fitness=creator.FitnessMin)
 
         # Set parameters
         defaultParameters = {
@@ -66,11 +74,11 @@ class RoutePlanner:
                              'splits': 3,          # Threshold for split_polygon (val 3 yields best performance)
 
                              # MOEA parameters
-                             'n': 200,             # Population size
+                             'n': 300,             # Population size
                              'nBar': 50,           # Local archive size (M-PAES, SPEA2)
                              'cxpb': 0.75,         # Crossover probability (NSGAII, SPEA2)
-                             'mutpb': 0.51,        # Mutation probability (NSGAII, SPEA2)
-                             'nMutations': 2,      # Max. number of mutations per selected individual
+                             'mutpb': 0.60,        # Mutation probability (NSGAII, SPEA2)
+                             'nMutations': 4,      # Max. number of mutations per selected individual
                              'recomb': 5,          # Max recombination trials (M-PAES)
                              'fails': 5,           # Max fails (M-PAES)
                              'moves': 10,          # Max moves (M-PAES)
@@ -78,7 +86,7 @@ class RoutePlanner:
                              # Stopping parameters
                              'gen': 100,           # Minimal number of generations
                              'maxGDs': 30,         # Max length of generational distance list
-                             'minVar': 4.8e-5,       # Minimal variance of generational distance list
+                             'minVar': 1e-5,       # Minimal variance of generational distance list
 
                              # Mutation parameters
                              'mutationOperators': ['speed', 'insert', 'move', 'delete'],  # Operators to be included
@@ -320,6 +328,7 @@ class RoutePlanner:
             self.gds = []  # Initialize generational distance list
             self.nStops = self.evals = 0  # Initialize counter variables
             self.front = tools.ParetoFront()
+
         def termination(self, prevFront, front, t):
             gd = indicators.generational_distance(prevFront, front)
             self.gds.append(gd)
@@ -332,7 +341,7 @@ class RoutePlanner:
             return False
 
         def optimize(self, pop, log, result, routeIdx):
-            front = tools.ParetoFront() # Initialize ParetoFront class
+            front = tools.ParetoFront()  # Initialize ParetoFront class
             evals = len(pop)
             gen = self.nStops = 0
             offspring = []

@@ -75,6 +75,13 @@ class OrtecPlanner:
             pos[key] = m(val[0], val[1])
         nx.draw(self.graph, pos=pos, node_size=2, ax=ax)
 
+    def plot_cc(self):
+        sorted_cc = sorted(nx.connected_components(self.graph), key=len, reverse=True)
+        sgs = (self.graph.subgraph(c).copy() for c in sorted_cc)
+        for index, component in enumerate(sgs):
+            pos = nx.get_node_attributes(component, 'pos')
+            nx.draw(component, pos=pos)
+
     def save_graph(self):
         if self.graph:
             nx.write_gpickle(self.graph, self.GSavePath)
@@ -86,8 +93,9 @@ if __name__ == '__main__':
     planner = OrtecPlanner()
     graph = planner.get_graph()
     sorted_cc = sorted(nx.connected_components(graph), key=len, reverse=True)
-    planner.plot_graph()
+    planner.plot_cc()
 
     print(len(sorted_cc))
+    print(sorted_cc)
 
-    plt.show()
+    plt.savefig('figure.png')

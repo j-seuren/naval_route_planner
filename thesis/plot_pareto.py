@@ -13,11 +13,11 @@ from pathlib import Path
 # KC_((123, 26), (139, 34))_depart2015_03_15_iters5_BFalse_ECA1_NSGA2
 # KC_((139, 34), (123, 26))_depart2014_09_15_iters5_BFalse_ECA1_NSGA2
 
-currentDir = Path('D:/output/current/rawListColab_1504/KC constant')
+currentDir = Path('D:/output/current/rawListColab_1504/KC')
 os.chdir(currentDir)
 
 fileList = os.listdir()
-fileList = [file for file in fileList if '1729' in file]
+fileList = [file for file in fileList if '' in file]
 
 pp = pprint.PrettyPrinter()
 pp.pprint(fileList)
@@ -42,7 +42,11 @@ for i, rawFile in enumerate(fileList):
 
     for j, raw in enumerate(rawList):
         proc, raw = PLANNER.post_process(raw, inclEnvironment={exp: depDate})
-
+        for response in proc['routeResponse']:
+            print('distance', response['distance'],
+                  'fuelCost', response['fuelCost'],
+                  'travelTime', response['travelTime'],
+                  'fitValues', response['fitValues'], )
         statisticsPlotter = plot_results.StatisticsPlotter(raw, DIR=DIR)
         frontFig, _ = statisticsPlotter.plot_fronts()
         statsFig, _ = statisticsPlotter.plot_stats()
@@ -57,10 +61,15 @@ for i, rawFile in enumerate(fileList):
 
         weatherDate = depDate if exp == 'weather' else None
         routePlotter = plot_results.RoutePlotter(DIR, proc, rawResults=raw, vessel=PLANNER.vessel)
-        routeFig, _ = routePlotter.results(initial=False, ecas=False, bathymetry=DEPTH, nRoutes='all',
-                                           weatherDate=weatherDate, current=currentDict, colorbar=True)
+
+        routeFig, ax = plt.subplots()
+        ax = routePlotter.results(ax, initial=False, ecas=False, bathymetry=DEPTH, nRoutes=None,
+                                  weatherDate=weatherDate, current=currentDict, colorbar=True)
+
         # frontFig.savefig('front_{}_v{}.png'.format(i, j), dpi=300)
         # statsFig.savefig('stats_{}_v{}.png'.format(i, j), dpi=300)
+        fn = 'route_{}_v{}.png'.format(i, j) if 'BLANK' not in rawFile else 'route_{}_v{}_B.png'.format(i, j)
         routeFig.savefig('route_{}_v{}.png'.format(i, j), dpi=300)
 
         plt.close('all')
+
