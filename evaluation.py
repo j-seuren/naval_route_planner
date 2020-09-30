@@ -186,13 +186,41 @@ class Evaluator:
 
 
 class Vessel:
-    def __init__(self, fuelPrice, name='Fairmaster_2', shipLoading='normal', DIR=Path('D:/')):
+    def __init__(self, fuelPrice, name='Fairmaster_2', shipLoading='normal', DIR=Path('D:/'), speeds=None):
         self.name = name
         vesselTableFP = DIR / 'data/speed_table.xlsx'
-        df = pd.read_excel(vesselTableFP, sheet_name=self.name)
-        df = df[df['Loading'] == shipLoading].round(1)
-        self.fuelCostPerDay = pd.Series(df.Fuel.values * fuelPrice / 1000., index=df.Speed).to_dict()
-        self.speeds = list(self.fuelCostPerDay.keys())
+
+        if os.path.exists(vesselTableFP):
+            df = pd.read_excel(vesselTableFP, sheet_name=self.name)
+            df = df[df['Loading'] == shipLoading].round(1)
+            self.fuelCostPerDay = pd.Series(df.Fuel.values * fuelPrice / 1000., index=df.Speed).to_dict()
+            if speeds is None:
+                self.speeds = list(self.fuelCostPerDay.keys())
+            elif isinstance(speeds, float) or isinstance(speeds, int):
+                self.speeds = [speeds]
+            elif isinstance(speeds, list):
+                self.speeds = speeds
+            else:
+                raise ValueError('Provide speed profile as list, float or integer')
+        else:  # Use empirical formula for fuel consumption
+            print('Approximate fuel consumption with nonlinear function')
+
+            def fc(v):
+                """Approximate fuel consumption per day nonlinear function from (Psaraftis and Kontovas, 2013)
+                    Arguments:
+                        v: Vessel speed in knots
+                    Returns:
+                        Fuel consumption in tonnes per day
+                  """
+                return 5.466e-4 * v**3 * 24
+
+            if isinstance(speeds, float) or isinstance(speeds, int):
+                self.speeds = [speeds]
+            elif isinstance(speeds, list):
+                self.speeds = speeds
+            else:
+                raise ValueError('Vessel speed profile not provided')
+            self.fuelCostPerDay = {speed: fc(speed) for speed in self.speeds}
 
         # Set parameters for ship speed reduction calculations
         Lpp = 320  # Ship length between perpendiculars [m]
@@ -307,10 +335,10 @@ if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import pprint
 
-    os.chdir('')
+    os.chdir('...')
 
     _heading = 0
-    _vessel = Vessel()
+    _vessel = Vessel(300)
     _speed = 16.8  # knots
     windDirs = np.linspace(0, 180, 181)
     BNs = np.linspace(0, 12, 13)

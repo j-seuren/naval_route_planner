@@ -32,10 +32,12 @@ class Operators:
         self.ops = par['mutationOperators']     # Mutation operators list
         self.gauss = par['gauss']
         self.nMutations = par['nMutations']
+        self.moves = np.zeros(len(self.ops))
 
     def mutate(self, ind, initializing=False, k=None):
-        weights = [1] * len(self.ops)
-        weights[-1] = self.delFactor
+        inverseWeights = np.round(self.moves / np.linalg.norm(self.moves), 2)
+        weights = 1 - inverseWeights
+        weights[-1] = weights[-1] * self.delFactor
         if initializing:
             weights[-1] = 10
         if k is None:
@@ -102,10 +104,12 @@ class Operators:
                 if initializing:
                     if self.e_feasible(ind[i][0], newWP) and self.e_feasible(newWP, ind[i+1][0]):
                         ind.insert(i+1, [newWP, ind[i][1]])
+                        self.moves[-3] += 1
                         return
                     else:
                         trials += 1
                 else:
+                    self.moves[-3] += 1
                     ind.insert(i+1, [newWP, ind[i][1]])
                     return
             print('insert trials exceeded')
@@ -147,6 +151,7 @@ class Operators:
                     else:
                         continue
                 ind[i][0] = newWP
+                self.moves[-2] += 1
                 break
     
     def delete_wps(self, ind, initializing=False):
@@ -163,9 +168,11 @@ class Operators:
                     del tbd[i:j+1]
         for i in tbd:
             del ind[i]
+            self.moves[-1] += 1
             while ind[i-1][0] == ind[i][0]:
                 assert i < len(ind) - 1, 'last waypoint cannot be deleted'
                 del ind[i]
+                self.moves[-1] += 1
 
     def change_speeds(self, ind):
         size = len(ind)
@@ -176,15 +183,18 @@ class Operators:
         newSpeed = random.choice([s for s in self.vessel.speeds if s != avgCurrentSpeed])
         for wp in ind[i:i+k]:
             wp[1] = newSpeed
+            self.moves[0] += 1
 
     def sample_sequence(self, stop, start=0, reverse=True, exponential=True, weights=None):
-        k = 0
         scale = stop * self.scaleFactor
-        while not start <= k < stop:
+        while True:
             if exponential:
                 k = np.ceil((np.random.exponential(scale=scale, size=1))).item()
             else:
                 k = np.ceil((np.random.gamma(shape=self.shape, scale=scale, size=1))).item()
+
+            if 0 < k <= stop - start:
+                break
 
         if weights is None:
             seq = random.sample(range(start, stop), k=int(k))

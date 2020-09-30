@@ -1,5 +1,6 @@
 import evaluation
 import itertools
+import matplotlib.colors as cl
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -114,7 +115,12 @@ class RoutePlotter:
         if vessel is None:
             vessel = evaluation.Vessel(fuelPrice=0.3)
         self.vMin, self.vMax = min(vessel.speeds), max(vessel.speeds)
-        self.colors = cm.rainbow
+
+        cmap = cm.get_cmap('jet', 12)
+        cmapList = [cmap(i) for i in range(cmap.N)][1:-1]
+        self.cmap = cl.LinearSegmentedColormap.from_list('Custom cmap', cmapList, cmap.N-2)
+        # bounds = np.linspace(self.vMin, self.vMax, 9)
+        # self.norm = cl.BoundaryNorm(bounds, self.cmap.N)
 
         # Set extent
         minx, miny, maxx, maxy = 180, 85, -180, -85
@@ -161,21 +167,24 @@ class RoutePlotter:
                     for objRoute in subInitRoute.values():
                         self.route(objRoute, m)
         if colorbar:
-            self.colorbar(ax, self.colors)
+            self.colorbar(ax, self.cmap)
         # Plot route responses
         if nRoutes is None:
             for route in self.processedResults['routeResponse']:
                 route = [((leg['lon'], leg['lat']), leg['speed']) for leg in route['waypoints']]
-                self.route(route, m, colors=self.colors)
+                self.route(route, m, colors=self.cmap)
         else:
             for front in self.rawResults['fronts']:
                 for subFront in front:
                     n = len(subFront)
-                    midIndexes = np.unique(np.linspace(1, n-2, nRoutes-2).astype(int)).tolist()
-                    ii = [0] + midIndexes + [n-1] if n > 2 else [0, 1] if n == 2 else [0]
+                    if nRoutes == 'all':
+                        ii = range(n)
+                    else:
+                        midIndexes = np.unique(np.linspace(1, n-2, nRoutes-2).astype(int)).tolist()
+                        ii = [0] + midIndexes + [n-1] if n > 2 else [0, 1] if n == 2 else [0]
                     for i in ii:
                         line = 'dashed' if 0 < i < n-1 else 'solid'
-                        self.route(subFront[i], m, line=line, colors=self.colors)
+                        self.route(subFront[i], m, line=line, colors=self.cmap)
         return fig, ax
 
     def navigation_area(self, ax, resolution='c', current=None, bathymetry=False, eca=False, weather=None):
@@ -256,11 +265,11 @@ class RoutePlotter:
             if colors is None:
                 color = 'k'
             else:
-                color = colors(normalized_speeds[i])
-            m.drawgreatcircle(a[0][0], a[0][1], a[1][0], a[1][1], linewidth=2, linestyle=line,
+                color = colors(1-normalized_speeds[i])
+            m.drawgreatcircle(a[0][0], a[0][1], a[1][0], a[1][1], linewidth=1, linestyle=line,
                               color=color, zorder=3)
         for i, (x, y) in enumerate(waypoints):
-            m.scatter(x, y, latlon=True, color='dimgray', marker='o', s=5, zorder=4)
+            m.scatter(x, y, latlon=True, color='black', marker='o', s=1, zorder=4)
 
 
 def plot_weather(m, dateTime):

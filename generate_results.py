@@ -12,11 +12,10 @@ from datetime import datetime
 from pathlib import Path
 from support import locations
 
-# os.chdir('')
-
+T = datetime.now().strftime('%m%d-%H%M')
 DIR = Path('D:/')
-SPEED = 'var'  # 'constant' or 'var'
-ITERS = 5
+SPEED = 'constant'  # 'constant' or 'var'
+ITERS = 1
 speedOps = ['insert', 'move', 'delete'] if SPEED == 'constant' else ['insert', 'move', 'speed', 'delete']
 par = {'mutationOperators': speedOps}
 ECA_F = 1
@@ -43,16 +42,18 @@ def get_df(procList):
     return df
 
 
-def single_experiment(exp, inst, startEnd, depDate, locS, depS, algorithm, saveFig=True):
-    rawListFP = DIR / 'output/{}/raw/{}{}_{}_{}_iters{}_B{}_ECA{}_{}'.format(exp,
-                                                                          BL,
-                                                                          inst,
-                                                                          locS,
-                                                                          depS,
-                                                                          ITERS,
-                                                                          DEPTH,
-                                                                          ECA_F,
-                                                                          algorithm)
+def single_experiment(exp, startEnd, depDate, fileString, algorithm, generalFP, saveFig=True):
+    rawListFP = generalFP / 'raw/{}'.format(fileString)
+
+    # rawListFP = DIR / 'output/{}/raw/{}{}_{}_{}_iters{}_B{}_ECA{}_{}'.format(exp,
+    #                                                                       BL,
+    #                                                                       inst,
+    #                                                                       locS,
+    #                                                                       depS,
+    #                                                                       ITERS,
+    #                                                                       DEPTH,
+    #                                                                       ECA_F,
+    #                                                                       algorithm)
     if os.path.exists(rawListFP):
         return None
 
@@ -91,61 +92,55 @@ def single_experiment(exp, inst, startEnd, depDate, locS, depS, algorithm, saveF
                                                weatherDate=weatherDate, current=currentDict, colorbar=True)
 
             for name, fig in {'front': frontFig, 'stats': statsFig, 'routes': routeFig}.items():
-                fig.savefig(DIR / "output/{}/figures/{}{}_{}_{}_iter{}_B{}_ECA{}_{}_{}.pdf".format(exp,
-                                                                                                BL,
-                                                                                                inst,
-                                                                                                startEnd,
-                                                                                                depS,
-                                                                                                itr,
-                                                                                                DEPTH,
-                                                                                                ECA_F,
-                                                                                                name,
-                                                                                                algorithm))
+                # fp = DIR / "output/{}/figures/{}{}_{}_{}_iter{}_B{}_ECA{}_{}_{}.pdf".format(exp,
+                #                                                                                    BL,
+                #                                                                                     inst,
+                #                                                                                     startEnd,
+                #                                                                                     depS,
+                #                                                                                     itr,
+                #                                                                                     DEPTH,
+                #                                                                                     ECA_F,
+                #                                                                                     name,
+                #                                                                                     algorithm)
+                fig.savefig(generalFP / 'figures/{}_{}.png'.format(fileString, itr), dpi=300)
             plt.close('all')
 
-    with open(DIR / 'output/{}/raw/{}{}_{}_{}_iters{}_B{}_ECA{}_{}'.format(exp,
-                                                                        BL,
-                                                                        inst,
-                                                                        startEnd,
-                                                                        depS,
-                                                                        ITERS,
-                                                                        DEPTH,
-                                                                        ECA_F,
-                                                                        algorithm), 'wb') as f:
+    with open(rawListFP, 'wb') as f:
         pickle.dump(rawList, f)
 
     return get_df(procList)
 
 
-def init_experiment(writer, experiment, inst, dfSummary, depDate, depS, locS, start, end, algorithm):
-    fp = DIR / 'output/{}/single_files/{}{}_{}_{}_{}_B{}_ECA{}_{}.csv'.format(experiment,
-                                                                           BL,
-                                                                           inst,
-                                                                           depS,
-                                                                           locS,
-                                                                           SPEED,
-                                                                           DEPTH,
-                                                                           ECA_F,
-                                                                           algorithm)
-    df = single_experiment(experiment, inst, (start, end), depDate, locS, depS, algorithm, saveFig=True)
+def init_experiment(writer, exp, dfSummary, depDate, locS, fileString, start, end, algorithm, generalFP):
+    fp = generalFP / 'tables/csv/{}.csv'.format(fileString)
+    df = single_experiment(exp, (start, end), depDate, fileString, algorithm, generalFP, saveFig=True)
     if df is None:
         df = pd.read_csv(fp)
     else:
-        df.to_excel(writer, sheet_name=locS)
         df.to_csv(fp)
+    df.to_excel(writer, sheet_name=locS)
     dfSummary[locS + '_mean'] = df['mean']
     dfSummary[locS + '_std'] = df['std']
     return dfSummary.T
 
 
 def multiple_experiments(inputDict, exp, algorithm='NSGA2'):
-    inst = inputDict['instance']
     depDates = inputDict['input']['departureDates']
+
+    # Create directories
+    generalFP = DIR / 'output' / exp / inputDict['instance'] / '{}_{}SP_B{}_ECA{}'.format(algorithm,
+                                                                                          SPEED,
+                                                                                          DEPTH,
+                                                                                          ECA_F)
+    testDirs = [generalFP / 'tables/csv', generalFP / 'figures', generalFP / 'raw']
+    for directory in testDirs:
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
     for d, depDate in enumerate(depDates):
         print('date {} of {}'.format(d+1, len(depDates)))
         depS = '' if depDate is None else 'depart' + depDate.strftime('%Y_%m_%d')
-        writer = pd.ExcelWriter(DIR / 'output/{}/{}{}_{}_{}_B{}_ECA{}.xlsx'.format(exp, BL, inst, depS, SPEED,
-                                                                                   DEPTH, ECA_F))
+        writer = pd.ExcelWriter(generalFP / 'tables' / '{}departure_{}.xlsx'.format(BL, depS))
         dfSummary = pd.DataFrame(columns=['compTime', 'T_fuel', 'T_time', 'C_fuel', 'C_time', 'L_fuel', 'L_time'])
 
         for routeIdx, (startTup, endTup) in enumerate(zip(inputDict['input']['from'], inputDict['input']['to'])):
@@ -153,7 +148,9 @@ def multiple_experiments(inputDict, exp, algorithm='NSGA2'):
             endKey, end = endTup
             print('location combination {} of {}'.format(routeIdx + 1, len(inputDict['input']['from'])))
             locS = '{}{}'.format(startKey, endKey)
-            dfSummary = init_experiment(writer, exp, inst, dfSummary, depDate, depS, locS, start, end, algorithm)
+            fileString = '{}_{}location{}_departure{}'.format(T, BL, locS, depS)
+            dfSummary = init_experiment(writer, exp, dfSummary, depDate, locS, fileString, start, end, algorithm,
+                                        generalFP)
 
         dfSummary.to_excel(writer, sheet_name='summary')
         writer.save()
@@ -226,9 +223,13 @@ inputECA = {'instance': 'ECA',
                       'departureDates': [None]}
             }
 
-for algorithm in ['SPEA2', 'MPAES']:
-    multiple_experiments(inputKC, exp='current', algorithm='SPEA2')  # TEST FOR [GC, CONSTANT] [CURRENT, CONSTANT] [CURRENT, VAR]
-# multiple_experiments(inputKC, 'current')
-# multiple_experiments(inputGulf, 'current')
-# multiple_experiments(inputWeather, 'weather')
-# multiple_experiments(inputECA, 'ecas')
+if __name__ == '__main__':
+    # for alg in ['NSGA2', 'SPEA2', 'MPAES']:
+    #     multiple_experiments(inputKC, exp='current', algorithm=alg)
+    #     # TEST FOR [GC, CONSTANT] [CURRENT, CONSTANT] [CURRENT, VAR]
+    multiple_experiments(inputKC, exp='current')
+
+    # multiple_experiments(inputKC, 'current')
+    # multiple_experiments(inputGulf, 'current')
+    # multiple_experiments(inputWeather, 'weather')
+    # multiple_experiments(inputECA, 'ecas')

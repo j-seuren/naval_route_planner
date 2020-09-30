@@ -70,20 +70,20 @@ class RoutePlanner:
                              'nBar': 50,           # Local archive size (M-PAES, SPEA2)
                              'cxpb': 0.75,         # Crossover probability (NSGAII, SPEA2)
                              'mutpb': 0.51,        # Mutation probability (NSGAII, SPEA2)
-                             'nMutations': 5,      # Max. number of mutations per selected individual
+                             'nMutations': 2,      # Max. number of mutations per selected individual
                              'recomb': 5,          # Max recombination trials (M-PAES)
                              'fails': 5,           # Max fails (M-PAES)
                              'moves': 10,          # Max moves (M-PAES)
 
                              # Stopping parameters
-                             'gen': 400,           # Minimal number of generations
+                             'gen': 100,           # Minimal number of generations
                              'maxGDs': 30,         # Max length of generational distance list
                              'minVar': 4.8e-5,       # Minimal variance of generational distance list
 
                              # Mutation parameters
                              'mutationOperators': ['speed', 'insert', 'move', 'delete'],  # Operators to be included
                              'widthRatio': 1.5,  # 7.5e-4 obtained from hyp param tuning
-                             'radius': 0.4,       # 0.39 obtained from hyp param tuning
+                             'radius': 0.,       # 0.39 obtained from hyp param tuning
                              'shape': 3,           # Shape parameter for Gamma distribution
                              'scaleFactor': 0.1,   # Scale factor for Gamma and Exponential distribution
                              'delFactor': 1,       # Factor of deletions
@@ -224,7 +224,7 @@ class RoutePlanner:
             return False
 
         def optimize(self, pop, log, result, routeIdx):
-            self.front.clear()
+            self.front = tools.ParetoFront()
             self.evals = len(pop)
             gen = self.nStops = 0
             while True:
@@ -319,10 +319,9 @@ class RoutePlanner:
             self.maxStops = p['maxGDs']
             self.gds = []  # Initialize generational distance list
             self.nStops = self.evals = 0  # Initialize counter variables
-            self.front = tools.ParetoFront()  # Initialize ParetoFront class
-
-        def termination(self, prevFront, t):
-            gd = indicators.generational_distance(prevFront, self.front)
+            self.front = tools.ParetoFront()
+        def termination(self, prevFront, front, t):
+            gd = indicators.generational_distance(prevFront, front)
             self.gds.append(gd)
             if len(self.gds) > self.maxStops:
                 self.gds.pop(0)
@@ -333,28 +332,28 @@ class RoutePlanner:
             return False
 
         def optimize(self, pop, log, result, routeIdx):
-            self.front.clear()
+            front = tools.ParetoFront() # Initialize ParetoFront class
             evals = len(pop)
             gen = self.nStops = 0
             offspring = []
             while True:
                 # Step 3: Environmental selection (and update HoF)
                 pop = self.tb.select(pop + offspring, self.n)
-                prevFront = deepcopy(self.front)
-                self.front.update(pop)
+                prevFront = deepcopy(front)
+                front.update(pop)
 
                 # Record statistics
-                record = self.mstats.compile(self.front)
+                record = self.mstats.compile(front)
                 log.record(gen=gen, evals=evals, **record)
                 print('\r', log.stream)
 
                 # Step 4: Termination
-                if self.termination(prevFront, gen):
-                    hypervolume = indicators.hypervolume(self.front)
+                if self.termination(prevFront, front, gen):
+                    hypervolume = indicators.hypervolume(front)
                     print('hypervolume', hypervolume)
                     result['indicators'][routeIdx]['hypervolume'] = hypervolume
                     result['logs'][routeIdx].append(deepcopy(log))
-                    result['fronts'][routeIdx].append(deepcopy(self.front))
+                    result['fronts'][routeIdx].append(deepcopy(front))
                     self.tb.unregister("individual")
                     break
 
