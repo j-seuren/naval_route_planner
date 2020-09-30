@@ -40,8 +40,8 @@ SPACE = [
     # skopt.space.Integer(1, 10, name='recomb'),
     # skopt.space.Integer(1, 20, name='fails'),
     # skopt.space.Integer(1, 20, name='moves'),
-    skopt.space.Real(0.001, 10., name='widthRatio'),
-    skopt.space.Real(0.001, 10., name='radius'),
+    # skopt.space.Real(0.001, 10., name='widthRatio'),
+    # skopt.space.Real(0.001, 10., name='radius'),
     # skopt.space.Real(0.1, 5.0, name='delFactor')
     ]
 
