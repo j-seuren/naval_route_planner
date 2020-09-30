@@ -11,15 +11,22 @@ from skopt.callbacks import CheckpointSaver
 from support import locations
 
 DIR = Path('D:/')
-N_CALLs = 200
-N_POINTS = 10
+N_CALLs = 1
+N_POINTS = 1
 DEPART = datetime(2016, 1, 1)
-CURRENT = True
+CURRENT = False
 BATHYMETRY = False
 
 START_END = (locations['Caribbean Sea'], locations['North UK'])
 CALLS = 0
-PLANNER = main.RoutePlanner(bathymetry=False)
+
+
+inputParameters = {'n': 120,
+                   'gen': 100,
+                   'segLengthF': 100,
+                   'mutationOperators': ['speed', 'insert', 'move', 'delete'],
+                   'mutpb': 0.7}
+PLANNER = main.RoutePlanner(bathymetry=False, inputParameters=inputParameters)
 
 SPACE = [
     # skopt.space.Integer(50, 100, name='gen'),  # Minimal nr. generations
@@ -33,13 +40,16 @@ SPACE = [
     # skopt.space.Integer(1, 10, name='recomb'),
     # skopt.space.Integer(1, 20, name='fails'),
     # skopt.space.Integer(1, 20, name='moves'),
-    skopt.space.Real(0.1, 10.0, name='widthRatio'),
-    skopt.space.Real(0.1, 10.0, name='radius'),
+    skopt.space.Real(0.001, 10., name='widthRatio'),
+    skopt.space.Real(0.001, 10., name='radius'),
     # skopt.space.Real(0.1, 5.0, name='delFactor')
     ]
 
 
-def tune(default_parameters):
+def tune(default_parameters=None):
+    if default_parameters is None:
+        default_parameters = {}
+
     def train_evaluate(search_params):
         global CALLS
         # start_func_time = time.time()
@@ -95,9 +105,7 @@ def show_results(fp, timestamp):
     plots.plot_convergence(res)
     plt.savefig(saveFP.as_posix() + 'conv.pdf')
 
-
-_default_parameters = {'mutationOperators': ['insert', 'move', 'delete']}
-FP, STAMP = tune(_default_parameters)
+FP, STAMP = tune()
 
 # timestamp = datetime.now().strftime('%m%d%H%M')
 # fp = 'D:/JobS/Downloads/checkpoint_3.pkl'
