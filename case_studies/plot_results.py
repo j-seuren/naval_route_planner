@@ -11,12 +11,12 @@ from mpl_toolkits.basemap import Basemap
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from pathlib import Path
 
-# plt.rcParams.update({
-#     # "text.usetex": True,
-#     "font.size": 10,
-#     "font.family": "serif",
-#     "font.serif": ["TeX Gyre Pagella"],
-# })
+plt.rcParams.update({
+    # "text.usetex": True,
+    "font.size": 10,
+    "font.family": "serif",
+    "font.serif": ["TeX Gyre Pagella"],
+})
 
 
 def update(population):
@@ -152,7 +152,8 @@ class RoutePlotter:
                 nRoutes=None,
                 bathymetry=False,
                 ecas=False,
-                colorbar=True
+                colorbar=True,
+                wps=True
                 ):
         if weatherDate:
             bathymetry = False
@@ -171,7 +172,7 @@ class RoutePlotter:
         if nRoutes is None:
             for route in self.processedResults['routeResponse']:
                 route = [((leg['lon'], leg['lat']), leg['speed']) for leg in route['waypoints']]
-                self.route(route, m, colors=self.cmap)
+                self.route(route, m, colors=self.cmap, wps=wps)
         else:
             for front in self.rawResults['fronts']:
                 for subFront in front:
@@ -183,7 +184,7 @@ class RoutePlotter:
                         ii = [0] + midIndexes + [n-1] if n > 2 else [0, 1] if n == 2 else [0]
                     for i in ii:
                         line = 'dashed' if 0 < i < n-1 else 'solid'
-                        self.route(subFront[i], m, line=line, colors=self.cmap)
+                        self.route(subFront[i], m, line=line, colors=self.cmap, wps=wps)
 
         return ax
 
@@ -249,7 +250,7 @@ class RoutePlotter:
         cb.ax.set_yticklabels(['%.1f' % round(self.vMin + i * vDif / (nTicks - 1), 1) for i in range(nTicks)], fontsize=8)
         cb.set_label('Calm water speed [knots]', rotation=270, labelpad=15)
 
-    def route(self, route, m, line='solid', colors=None):
+    def route(self, route, m, wps, line='solid', colors=None):
         waypoints = [leg[0] for leg in route]
         speeds = [leg[1] for leg in route]
         for i, speed in enumerate(speeds):
@@ -268,8 +269,9 @@ class RoutePlotter:
                 color = colors(1-normalized_speeds[i])
             m.drawgreatcircle(a[0][0], a[0][1], a[1][0], a[1][1], linewidth=1, linestyle=line,
                               color=color, zorder=3)
-        for i, (x, y) in enumerate(waypoints):
-            m.scatter(x, y, latlon=True, color='black', marker='o', s=1, zorder=4)
+        if wps:
+            for i, (x, y) in enumerate(waypoints):
+                m.scatter(x, y, latlon=True, color='black', marker='o', s=1, zorder=4)
 
 
 def plot_weather(m, dateTime):

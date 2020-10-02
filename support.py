@@ -4,6 +4,7 @@ import numpy as np
 
 from datetime import datetime
 from deap import tools
+from shapely.geometry import Polygon
 
 
 def find_closest(A, target):
@@ -146,10 +147,15 @@ def update(front, population, prevLocalFront):
     return currLocalFront, len(dominatedHofers), len(dominatedInds)
 
 
+antarctic_circle = Polygon([(-180, -66), (180, -66), (180, -89), (-180, -89)])
+arctic_circle = Polygon([(-180, 66), (180, 66), (180, 89), (-180, 89)])
+
+
 eastLocations = [(-51., 39.6), (-52., 41.2), (-53., 42.8), (-54., 44.4)]
 westLocations = [(-72.4, 33.4), (-72.8, 34.8), (-73.2, 36.2), (-73.6, 37.6)]
 
 locations = {'Agios Nikolaos': (25.726617, 35.152255),
+             'Banjul': (-16.852247, 13.532402),
              'Brazil': (-23.4166, -7.2574),
              'Canada': (-53.306878, 46.423969),
              'Caribbean Sea': (-72.3352, 12.8774),
@@ -158,6 +164,7 @@ locations = {'Agios Nikolaos': (25.726617, 35.152255),
              'Current2': (5, 0),
              'ECA1: Jacksonville': (-78.044447, 27.616446),
              'ECA2: New York': (-67.871890, 40.049950),
+             'Freetown': (-13.819225, 8.366437),
              'Gulf of Aden': (48.1425, 12.5489),
              'Gulf of Bothnia': (20.89, 58.46),
              'Gulf of Guinea': (3.14516, 4.68508),
@@ -166,6 +173,7 @@ locations = {'Agios Nikolaos': (25.726617, 35.152255),
              'Keelung': (121.75, 25.15),
              'KeelungC': (123, 26),
              'Lima': (-77.165124, -12.052136),
+             'Luanda': (12.175094, -8.692481),
              'Malta': (14.061035, 34.996707),
              'Miami': (-75.724478, 26.152992),
              'Mediterranean Sea': (29.188952, 32.842985),
@@ -174,9 +182,11 @@ locations = {'Agios Nikolaos': (25.726617, 35.152255),
              'North UK': (3.3, 60),
              'Panama North': (-79.931675, 9.472317),
              'Paramaribo': (-55.218390, 5.956055),
+             'Perth': (115.027243, -32.071678),
              'Rotterdam': (4.02, 52.01),
              'Salvador': (-38.585086, -13.057614),
              'San Francisco': (-123, 37.75),
+             'Sao Paulo': (-46.288550, -24.267331),
              'Singapore': (103.746969, 1.141331),
              'South UK': (-7.5, 47),
              'Sri Lanka': (78, 5),
@@ -184,13 +194,14 @@ locations = {'Agios Nikolaos': (25.726617, 35.152255),
              'Tokyo': (139, 34),
              'Yemen': (49, 12),
              'Valencia': (-0.188091, 39.464972),
+             'Wellington': (174.814171, -41.486011),
              'eastLocations': eastLocations,
              'westLocations': westLocations,
              }
 
 # Test weather
 # Weather locations
-inputWeather = {'from': [('Ny', locations['New York']),  # Kuhlemann
+inputWeather = {'instance': 'WTH', 'input': {'from': [('Ny', locations['New York']),  # Kuhlemann
                          ('K', locations['Keelung']),  # Lin2013
                          ('No', locations['Normandy']),  # Shao2012
                          ('No', locations['Normandy']),  # Vettor2016
@@ -203,7 +214,7 @@ inputWeather = {'from': [('Ny', locations['New York']),  # Kuhlemann
                                    datetime(2011, 1, 25),  # DEP 03:00 p.m. ETA: 00:30 p.m. 30/01/2011
                                    datetime(2015, 6, 21),  # June 21, 2015 at 00:00
                                    datetime(2015, 6, 21)  # June 21, 2015 at 00:00
-                                   ]}
+                                   ]} }
 
 # locations['Thessaloniki']
 # locations['Agios Nikolaos']
@@ -223,6 +234,9 @@ for date in gulfDepartures:
 inputKC = {'instance': 'KC', 'input': {'from': [('K', locations['KeelungC']), ('T', locations['Tokyo'])],
                                        'to': [('T', locations['Tokyo']), ('K', locations['KeelungC'])],
                                        'departureDates': [datetime(2014, 9, 15), datetime(2015, 3, 15)]}}
+inputKC_2 = {'instance': 'KC', 'input': {'from': [('K', locations['KeelungC']), ('T', locations['Tokyo'])],
+                                       'to': [('T', locations['Tokyo']), ('K', locations['KeelungC'])],
+                                       'departureDates': [datetime(2014, 9, 15)]}}
 
 inputSalLim = {'instance': 'SalLim', 'input': {'from': [('S', locations['Salvador'])], 'to': [('L', locations['Lima'])],
                                                'departureDates': [datetime(2014, 11, 11)]}}
@@ -241,28 +255,38 @@ def clear_caches():
 
 
 if __name__ == '__main__':
-    # Current locations
-    westBot, westTop, eastBot, eastTop = np.array([-72, 32]), np.array([-74, 39]), np.array([-50, 38]), np.array(
-        [-55, 46])
+    import json
 
-    west = np.array([westBot, westTop])
-    east = np.array([eastBot, eastTop])
+    exDic1 = {'x': 1235}
+    exDic2 = {'y': 13245}
 
-    lenWest = np.linalg.norm(west)
-    lenEast = np.linalg.norm(east)
+    for exDict in [exDic1, exDic2]:
 
-    westVec = westTop - westBot
-    eastVec = eastTop - eastBot
+        with open('file.txt', 'wb') as file:
+            file.write(json.dumps(exDict))
 
-    westNorm = westVec / lenWest
-    eastNorm = eastVec / lenEast
-
-    locRange = np.linspace(0.2, 0.8, 4)
-    westLocations, eastLocations = [], []
-    for f in locRange:
-        eastLocations.append(f * eastVec + eastBot)
-        westLocations.append(f * westVec + westBot)
-
-    print(eastLocations, '\n', westLocations)
+    # # Current locations
+    # westBot, westTop, eastBot, eastTop = np.array([-72, 32]), np.array([-74, 39]), np.array([-50, 38]), np.array(
+    #     [-55, 46])
+    #
+    # west = np.array([westBot, westTop])
+    # east = np.array([eastBot, eastTop])
+    #
+    # lenWest = np.linalg.norm(west)
+    # lenEast = np.linalg.norm(east)
+    #
+    # westVec = westTop - westBot
+    # eastVec = eastTop - eastBot
+    #
+    # westNorm = westVec / lenWest
+    # eastNorm = eastVec / lenEast
+    #
+    # locRange = np.linspace(0.2, 0.8, 4)
+    # westLocations, eastLocations = [], []
+    # for f in locRange:
+    #     eastLocations.append(f * eastVec + eastBot)
+    #     westLocations.append(f * westVec + westBot)
+    #
+    # print(eastLocations, '\n', westLocations)
 
 

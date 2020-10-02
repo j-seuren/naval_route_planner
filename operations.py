@@ -51,7 +51,7 @@ class Operators:
                 self.delete_wps(ind, initializing)
             elif op == 'speed':
                 self.change_speeds(ind)
-            else:
+            elif op == 'insert':
                 self.insert_wps(ind, initializing)
         del ind.fitness.values
         return ind,
@@ -201,10 +201,8 @@ class Operators:
         else:
             seq = random.choices(range(start, stop), weights=weights, k=int(k))
 
-        if reverse:
-            return sorted(seq, reverse=True)
-        else:
-            return seq
+        seq = sorted(seq, reverse=True) if reverse else seq
+        return seq
 
     def cx_one_point(self, ind1, ind2):
         if min(len(ind1), len(ind2)) > 2:

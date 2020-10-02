@@ -16,7 +16,7 @@ from deap import base, creator, tools, algorithms
 import geodesic
 from operations import Operators
 from pathlib import Path
-from shapely.geometry import Point, Polygon
+from shapely.geometry import Point
 
 
 pp = pprint.PrettyPrinter()
@@ -53,10 +53,7 @@ class RoutePlanner:
         if criteria is None:
             criteria = _criteria
         else:
-            if criteria['minimalTime'] and criteria['minimalCost']:
-                weights = (-1, -1)
-            else:
-                weights = (-1,)
+            weights = (-1, -1) if criteria['minimalTime'] and criteria['minimalCost'] else (-1,)
 
             creator.create("FitnessMin", base.Fitness, weights=weights)
             creator.create("Individual", list, fitness=creator.FitnessMin)
@@ -74,14 +71,14 @@ class RoutePlanner:
                              'splits': 3,          # Threshold for split_polygon (val 3 yields best performance)
 
                              # MOEA parameters
-                             'n': 300,             # Population size
-                             'nBar': 50,           # Local archive size (M-PAES, SPEA2)
-                             'cxpb': 0.75,         # Crossover probability (NSGAII, SPEA2)
-                             'mutpb': 0.60,        # Mutation probability (NSGAII, SPEA2)
+                             'n': 322,             # Population size
+                             'nBar': 50,           # Local archive size (M-PAES)
+                             'cxpb': 0.9,          # Crossover probability (NSGAII, SPEA2)
+                             'mutpb': 0.33,        # Mutation probability (NSGAII, SPEA2)
                              'nMutations': 4,      # Max. number of mutations per selected individual
-                             'recomb': 5,          # Max recombination trials (M-PAES)
-                             'fails': 5,           # Max fails (M-PAES)
-                             'moves': 10,          # Max moves (M-PAES)
+                             'cr_trials': 25,      # Max recombination trials (M-PAES)
+                             'l_fails': 20,        # Max fails (M-PAES)
+                             'l_opt': 100,         # Max moves (M-PAES)
 
                              # Stopping parameters
                              'gen': 100,           # Minimal number of generations
@@ -143,10 +140,10 @@ class RoutePlanner:
                                                                                  self.p['graphVarDens'])
         if not os.path.exists(self.initPathsDir):
             os.mkdir(self.initPathsDir)
-        self.initialPaths = []
+        self.initRoutesList = []
         for fp in os.listdir(self.initPathsDir):
             with open(self.initPathsDir / fp, 'rb') as file:
-                self.initialPaths.append(pickle.load(file))
+                self.initRoutesList.append(pickle.load(file))
 
         # Initialize "Operator" and register it's functions
         self.operators = Operators(self.evaluator.e_feasible, self.vessel, self.geod, self.p)
@@ -159,22 +156,20 @@ class RoutePlanner:
             # Set functions / classes
             self.tb = tb
             self.evaluator = evaluator
-            self.mstats = support.statistics()  # DEAP statistics
 
             # MOEA parameters
             # M-PAES characteristic parameters
             self.nBar = p['nBar']
-            self.l_opt = p['moves']
-            self.l_fails = p['fails']
-            self.recomb = p['recomb']
-            self.n = int(p['n'] / 2 / (self.recomb + 1))
+            self.l_opt = p['l_opt']
+            self.l_fails = p['l_fails']
+            self.cr_trials = p['cr_trials']
+            self.n = p['n']
+
             # Termination parameters
-            self.gen = p['gen']
+            self.minGen = p['gen']
             self.minVar = p['minVar']
             self.maxStops = p['maxGDs']
-            self.gds = []  # Initialize generational distance list
-            self.nStops = self.evals = 0  # Initialize counter variables
-            self.front = tools.ParetoFront()  # Initialize ParetoFront class
+            self.evals = 0  # Initialize counter variables
 
         def test(self, c, m, archive):
             if len(archive) < self.nBar:
@@ -189,7 +184,7 @@ class RoutePlanner:
                     crowding_distance(archive)
             return m if m.fitness.crowding_dist < c.fitness.crowding_dist else c
 
-        def paes(self, c, archive):
+        def paes(self, c, archive, front):
             fails = moves = 0
             while fails < self.l_fails and moves < self.l_opt:
                 m, = self.tb.mutate(self.tb.clone(c))
@@ -216,32 +211,34 @@ class RoutePlanner:
                         # Determine which becomes the new candidate
                         # and whether to add m to archive
                         c = self.test(c, m, archive)
-                self.front.update([m])
+                front.update([m])
                 moves += 1
             return c
 
-        def termination(self, prevFront, t):
-            gd = indicators.generational_distance(prevFront, self.front)
-            self.gds.append(gd)
-            if len(self.gds) > self.maxStops:
-                self.gds.pop(0)
-            if t >= self.gen:
-                if np.var(self.gds) < self.minVar:
+        def termination(self, prevFront, front, gen, gds):
+            gd = indicators.generational_distance(prevFront, front)
+            gds.append(gd)
+            if len(gds) > self.maxStops:
+                gds.pop(0)
+            if gen >= self.minGen:
+                if np.var(gds) < self.minVar:
                     print('STOPPING: Generational distance')
                     return True
             return False
 
-        def optimize(self, pop, log, result, routeIdx):
-            self.front = tools.ParetoFront()
+        def optimize(self, pop, result, routeIdx):
+            mstats, log = support.statistics(), support.logbook()  # DEAP statistics and logbook
+            front = tools.ParetoFront()  # Initialize ParetoFront class
             self.evals = len(pop)
-            gen = self.nStops = 0
+            gds = []  # Initialize generational distance list
+            gen = 0
             while True:
                 # Step 3: Update global Pareto front
-                prevFront = self.front.items[:]
-                self.front.update(pop)
+                prevFront = front.items[:]
+                front.update(pop)
 
                 # Record statistics
-                record = self.mstats.compile(self.front)
+                record = mstats.compile(front)
                 log.record(gen=gen, evals=self.evals, **record)
                 print('\r', log.stream)
 
@@ -250,9 +247,9 @@ class RoutePlanner:
                 # Step 4: Local search
                 for i, c in enumerate(pop):
                     # Fill local archive with solutions from Pareto front that do not dominate c
-                    archive = [ind for ind in self.front if not ind.fitness.dominates(c.fitness) and ind is not c]
+                    archive = [ind for ind in front if not ind.fitness.dominates(c.fitness) and ind is not c]
                     archive.append(c)  # Copy candidate into H
-                    pop[i] = self.paes(c, archive)  # Replace c with improved version by local search
+                    pop[i] = self.paes(c, archive, front)  # Replace c with improved version by local search
 
                 # Step 5: Recombination
                 popInter = []  # Initialize intermediate population
@@ -261,7 +258,7 @@ class RoutePlanner:
                     r = 0
                     while True:
                         # Randomly choose two parents from P + G
-                        mom, dad = tools.selRandom(pop + self.front.items, 2)
+                        mom, dad = tools.selRandom(pop + front.items, 2)
                         mom2, dad2 = self.tb.clone(mom), self.tb.clone(dad)
 
                         # Recombine to form offspring, evaluate
@@ -271,36 +268,37 @@ class RoutePlanner:
                         child.fitness.values = fitChild1
                         self.evals += 2
 
-                        for ind in self.front:
+                        childDominated = False
+                        for ind in front:
                             if ind.fitness.dominates(child.fitness):
                                 childDominated = True
                                 break
 
-                        cMoreCrowded = childDominated = False
-                        crowding_distance(pop + self.front.items + [child])
                         if not childDominated:
+                            cMoreCrowded = False
+                            crowding_distance(pop + front.items + [child])
                             # Check if c is in more crowded grid location than both parents
                             if child.fitness.crowding_dist < mom.fitness.crowding_dist and\
                                     child.fitness.crowding_dist < dad.fitness.crowding_dist:
                                 cMoreCrowded = True
 
                             # Update pareto front with c as necessary
-                            self.front.update([child])
+                            front.update([child])
                         r += 1
-                        if not (cMoreCrowded and childDominated) or r >= self.recomb:
+                        if not (cMoreCrowded and childDominated) or r >= self.cr_trials:
                             break
 
-                    childList = tools.selTournament(self.front.items, k=1, tournsize=2) if childDominated else [child]
+                    childList = tools.selTournament(front.items, k=1, tournsize=2) if childDominated else [child]
 
                     popInter.extend(childList)
 
                 # Step 4: Termination
-                if self.termination(prevFront, gen):
-                    hypervolume = indicators.hypervolume(self.front)
+                if self.termination(prevFront, front, gen, gds):
+                    hypervolume = indicators.hypervolume(front)
                     print('hypervolume', hypervolume)
                     result['indicators'][routeIdx]['hypervolume'] = hypervolume
                     result['logs'][routeIdx].append(deepcopy(log))
-                    result['fronts'][routeIdx].append(deepcopy(self.front))
+                    result['fronts'][routeIdx].append(deepcopy(front))
                     self.tb.unregister("individual")
                     break
 
@@ -315,49 +313,46 @@ class RoutePlanner:
             self.tb = tb
             self.evaluator = evaluator
             self.tb.register("select", tools.selNSGA2)  # Set NSGA2 selection
-            self.mstats = support.statistics()  # DEAP statistics
 
             # MOEA parameters
-            self.n = p['n']
+            self.sizePop = p['n']
             self.cxpb = p['cxpb']
             self.mutpb = p['mutpb']
             # Termination parameters
-            self.gen = p['gen']
+            self.minGen = p['gen']
             self.minVar = p['minVar']
             self.maxStops = p['maxGDs']
-            self.gds = []  # Initialize generational distance list
-            self.nStops = self.evals = 0  # Initialize counter variables
-            self.front = tools.ParetoFront()
 
-        def termination(self, prevFront, front, t):
+        def termination(self, prevFront, front, gen, gds):
             gd = indicators.generational_distance(prevFront, front)
-            self.gds.append(gd)
-            if len(self.gds) > self.maxStops:
-                self.gds.pop(0)
-            if t >= self.gen:
-                if np.var(self.gds) < self.minVar:
+            gds.append(gd)
+            if len(gds) > self.maxStops:
+                gds.pop(0)
+            if gen >= self.minGen:
+                if np.var(gds) < self.minVar:
                     print('STOPPING: Generational distance')
                     return True
             return False
 
-        def optimize(self, pop, log, result, routeIdx):
+        def optimize(self, pop, result, routeIdx):
+            mstats, log = support.statistics(), support.logbook()  # DEAP statistics and logbook
             front = tools.ParetoFront()  # Initialize ParetoFront class
             evals = len(pop)
-            gen = self.nStops = 0
-            offspring = []
+            offspring, gds = [], []  # Initialize offspring and generational distance list
+            gen = 0
             while True:
                 # Step 3: Environmental selection (and update HoF)
-                pop = self.tb.select(pop + offspring, self.n)
+                pop = self.tb.select(pop + offspring, self.sizePop)
                 prevFront = deepcopy(front)
                 front.update(pop)
 
                 # Record statistics
-                record = self.mstats.compile(front)
+                record = mstats.compile(front)
                 log.record(gen=gen, evals=evals, **record)
                 print('\r', log.stream)
 
                 # Step 4: Termination
-                if self.termination(prevFront, front, gen):
+                if self.termination(prevFront, front, gen, gds):
                     hypervolume = indicators.hypervolume(front)
                     print('hypervolume', hypervolume)
                     result['indicators'][routeIdx]['hypervolume'] = hypervolume
@@ -387,59 +382,58 @@ class RoutePlanner:
             self.tb = tb
             self.evaluator = evaluator
             self.tb.register("select", tools.selSPEA2)  # Set SPEA2 selection
-            self.mstats = support.statistics()  # DEAP statistics
 
             # MOEA Parameters
-            self.n = p['n']
+            self.sizePop = p['n']
             self.cxpb = p['cxpb']
             self.mutpb = p['mutpb']
-            self.nBar = p['nBar']  # SPEA2 characteristic parameter
+            self.sizeArchive = self.sizePop  # SPEA2 characteristic parameter
+
             # Termination parameters
-            self.gen = p['gen']
+            self.minGen = p['gen']
             self.minVar = p['minVar']
             self.maxStops = p['maxGDs']
-            self.gds = []  # Initialize generational distance list
-            self.nStops = self.evals = 0  # Initialize counter variables
-            self.front = tools.ParetoFront()  # Initialize ParetoFront class
 
-        def termination(self, prevFront, t):
-            gd = indicators.generational_distance(prevFront, self.front)
-            self.gds.append(gd)
-            if len(self.gds) > self.maxStops:
-                self.gds.pop(0)
-            if t >= self.gen:
-                if np.var(self.gds) < self.minVar:
+        def termination(self, prevFront, front, gen, gds):
+            gd = indicators.generational_distance(prevFront, front)
+            gds.append(gd)
+            if len(gds) > self.maxStops:
+                gds.pop(0)
+            if gen >= self.minGen:
+                if np.var(gds) < self.minVar:
                     print('STOPPING: Generational distance')
                     return True
             return False
 
-        def optimize(self, pop, log, result, routeIdx):
-            self.front.clear()
+        def optimize(self, pop, result, routeIdx):
+            mstats, log = support.statistics(), support.logbook()  # DEAP statistics and logbook
+            front = tools.ParetoFront()  # Initialize ParetoFront class
             evals = len(pop)
-            archive, gen = [], 0
+            archive, gds = [], []  # Initialize offspring and generational distance list
+            gen = 0
             while True:
                 # Step 3: Environmental selection
-                archive = self.tb.select(pop + archive, k=self.nBar)
-                prevFront = deepcopy(self.front)
-                self.front.update(archive)
+                archive = self.tb.select(pop + archive, k=self.sizeArchive)
+                prevFront = deepcopy(front)
+                front.update(archive)
 
                 # Record statistics
-                record = self.mstats.compile(self.front)
+                record = mstats.compile(front)
                 log.record(gen=gen, evals=evals, **record)
                 print('\r', log.stream)
 
                 # Step 4: Termination
-                if self.termination(prevFront, gen):
-                    hypervolume = indicators.hypervolume(self.front)
+                if self.termination(prevFront, front, gen, gds):
+                    hypervolume = indicators.hypervolume(front)
                     print('hypervolume', hypervolume)
                     result['indicators'][routeIdx]['hypervolume'] = hypervolume
                     result['logs'][routeIdx].append(deepcopy(log))
-                    result['fronts'][routeIdx].append(deepcopy(self.front))
+                    result['fronts'][routeIdx].append(deepcopy(front))
                     self.tb.unregister("individual")
                     break
 
                 # Step 5: Mating Selection
-                matingPool = tools.selTournament(archive, k=self.n, tournsize=2)
+                matingPool = tools.selTournament(archive, k=self.sizePop, tournsize=2)
 
                 # Step 6: Variation
                 pop = algorithms.varAnd(matingPool, self.tb, cxpb=1, mutpb=self.mutpb)
@@ -459,29 +453,22 @@ class RoutePlanner:
 
     def compute(self, startEnd, recompute=False, startDate=None, current=False,
                 weather=False, algorithm='NSGA2', seed=None, avoidArctic=True, avoidAntarctic=True):
+        random.seed(seed)
         pp.pprint({'startEnd': startEnd, 'recompute': recompute, 'startDate': startDate, 'current': current,
                    'weather': weather, 'algorithm': algorithm, 'seed': seed, 'avoidArctic': avoidArctic,
                    'avoidAntarctic': avoidAntarctic})
         support.clear_caches()  # Clear caches
-
-        if startEnd[0] == startEnd[1]:
+        start, end = startEnd
+        if start == end:
             return 'equal_start_end'
 
-        antarctic_circle = Polygon([(-180, -66), (180, -66), (180, -89), (-180, -89)])
-        arctic_circle = Polygon([(-180, 66), (180, 66), (180, 89), (-180, 89)])
+        for point in startEnd:
+            if avoidAntarctic and support.antarctic_circle.contains(Point(point)):
+                avoidAntarctic = False
+            if avoidArctic and support.arctic_circle.contains(Point(point)):
+                avoidArctic = False
 
-        start, end = startEnd
-        startPoint, endPoint = Point(start), Point(end)
-
-        if antarctic_circle.contains(startPoint) or arctic_circle.contains(endPoint):
-            avoidAntarctic = False
-        if arctic_circle.contains(startPoint) or arctic_circle.contains(endPoint):
-            avoidArctic = False
-
-        if startDate is not None:
-            dateString = startDate.strftime('%Y%m%d')
-        else:
-            dateString = None
+        dateString = None if startDate is None else startDate.strftime('%Y%m%d')
 
         fn = "{}_C{}_W{}_d{}_inclS{}_inclN{}_V{}_T{}_C{}_FP{}_ECA{}".format(startEnd, current, weather,
                                                                             dateString, avoidAntarctic,
@@ -495,24 +482,21 @@ class RoutePlanner:
             return None
 
         newParameters, reinitialize = {}, False
-        if self.p['avoidAntarctic'] != avoidAntarctic:
+        if self.p['avoidAntarctic'] != avoidAntarctic or self.p['avoidArctic'] != avoidArctic:
             reinitialize = True
             newParameters['avoidAntarctic'] = avoidAntarctic
-        if self.p['avoidArctic'] != avoidArctic:
             newParameters['avoidArctic'] = avoidArctic
-            reinitialize = True
+            self.update_parameters(newParameters, reinitialize=reinitialize)
 
-        self.update_parameters(newParameters, reinitialize=reinitialize)
-
-        key = tuple(sorted([start, end]))
+        key = tuple(sorted(startEnd))
         # Get initial paths
         initRoutes = None
-        for path in self.initialPaths:
-            if path['startEndKey'] == key and path['avoidAntarctic'] == avoidAntarctic and \
-                    path['avoidArctic'] == avoidArctic:
-                initRoutes = path['paths']
+        for initRouteDict in self.initRoutesList:
+            if initRouteDict['startEndKey'] == key and initRouteDict['avoidAntarctic'] == avoidAntarctic and \
+                    initRouteDict['avoidArctic'] == avoidArctic:
+                initRoutes = initRouteDict['paths']
                 break
-        if not initRoutes:
+        if initRoutes is None:
             initRoutes = self.initializer.get_initial_routes(start, end)
 
             pathOutput = {'avoidAntarctic': avoidAntarctic,
@@ -520,7 +504,7 @@ class RoutePlanner:
                           'startEndKey': key,
                           'paths': initRoutes}
 
-            self.initialPaths.append(pathOutput)
+            self.initRoutesList.append(pathOutput)
 
             fn = str(uuid.uuid4())
             with open(self.initPathsDir / fn, 'wb') as file:
@@ -533,8 +517,6 @@ class RoutePlanner:
         else:
             MOEA = self.NSGAII(self.tb, self.evaluator, self.p)
 
-        random.seed(seed)
-
         result = {'startEnd': startEnd, 'initialRoutes': initRoutes, 'indicators': [None] * len(initRoutes),
                   'logs': [None] * len(initRoutes), 'fronts': [None] * len(initRoutes)}
         for routeIdx, route in enumerate(initRoutes):
@@ -545,11 +527,10 @@ class RoutePlanner:
 
                 # Reset functions and caches
                 self.tb.register("individual", initialization.init_individual, self.tb, subRoute)
-                log = support.logbook()
 
                 # Step 1: Initialization
                 print('Initializing population from shortest path:', end='\n ')
-                initialPop = self.tb.population(self.tb.individual, int(MOEA.n / len(subRoute.values())))
+                initialPop = self.tb.population(self.tb.individual, int(MOEA.sizePop / len(subRoute.values())))
                 print('done')
 
                 # Step 2: Fitness assignment
@@ -562,7 +543,7 @@ class RoutePlanner:
                 self.tb.register("individual", initialization.init_individual, self.tb, subRoute)
 
                 # Begin the generational process
-                result = MOEA.optimize(initialPop, log, result, routeIdx)
+                result = MOEA.optimize(initialPop, result, routeIdx)
 
         return result
 
@@ -741,7 +722,7 @@ if __name__ == "__main__":
 
     kwargsPlanner = {'inputParameters': {}, 'tb': _tb, 'criteria': _criteria}
     kwargsCompute = {'startEnd': _startEnd, 'startDate': datetime(2016, 1, 1), 'recompute': True, 'current': False,
-                     'weather': False, 'seed': 1, 'algorithm': 'SPEA2'}
+                     'weather': False, 'seed': 1, 'algorithm': 'NSGA2'}
     multiprocess = False
 
     if multiprocess:
@@ -756,7 +737,8 @@ if __name__ == "__main__":
 
     procResults, rawResults = planner.post_process(rawResults)
     routePlotter = RoutePlotter(DIR, procResults, rawResults=rawResults, vessel=planner.vessel)
-    fig, ax = routePlotter.results(initial=True, ecas=False, nRoutes=5, colorbar=True)
+    fig, ax = plt.subplots()
+    ax = routePlotter.results(ax, initial=True, ecas=False, nRoutes=5, colorbar=True)
 
     # pp = pprint.PrettyPrinter(depth=6)
     # pp.pprint(post_processed_results)

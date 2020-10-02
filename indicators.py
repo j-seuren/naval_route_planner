@@ -4,10 +4,43 @@ from deap.tools.indicator import hv
 
 
 def hypervolume(front):
-    wobj = np.array([ind.fitness.wvalues for ind in front]) * -1
-    ref = np.max(wobj, axis=0) + 1
+    obj = np.array([ind.fitness.values for ind in front])
+    ref = np.max(obj, axis=0) + 1
 
-    return hv.hypervolume(wobj, ref)
+    return hv.hypervolume(obj, ref)
+
+
+def binary_hypervolume(A, B):
+    objA = np.array([ind.fitness.values for ind in A])
+    objB = np.array([ind.fitness.values for ind in B])
+    objAB = np.append(objA, objB, axis=0)
+    ref = np.max(objAB, axis=0) + 1
+
+    hvAB = hv.hypervolume(objAB, ref)
+    hvB = hv.hypervolume(objB, ref)
+
+    return hvAB - hvB
+
+
+def two_sets_coverage(A, B):
+    objA = np.array([ind.fitness.values for ind in A])
+    objB = np.array([ind.fitness.values for ind in B])
+
+    dominatedB = 0
+    for fitIndB in objB:
+        B_dominated = False
+        for fitIndA in objA:
+            A_dominates = True
+            for valA, valB in zip(fitIndA, fitIndB):
+                if valA >= valB:
+                    A_dominates = False
+            if A_dominates:
+                B_dominated = True
+                break
+        if B_dominated:
+            dominatedB += 1
+
+    return dominatedB / len(B)
 
 
 def generational_distance(pop, ref):
@@ -18,3 +51,5 @@ def generational_distance(pop, ref):
         return np.average(np.min(dist, axis=0))
     else:
         return 1e+6
+
+
