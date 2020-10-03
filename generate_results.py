@@ -41,7 +41,7 @@ for SPEED in ['var', 'constant']:
         # -------------------------------------------------
 
         #  Other parameters
-        T = datetime.now().strftime('%m%d-%H%M')
+        timestamp = datetime.now().strftime('%m%d-%H%M')
         DIR = Path('D:/')
         speedOps = ['insert', 'move', 'delete'] if SPEED == 'constant' else ['speed', 'insert', 'move', 'delete']
         par = {'mutationOperators': speedOps}
@@ -104,7 +104,7 @@ for SPEED in ['var', 'constant']:
             return get_df(procList)
 
 
-        def init_experiment(writer, exp, summary, depDate, locS, fileString, start, end, algorithm, generalFP):
+        def init_experiment(writer, exp, summary, depDate, fileString, start, end, algorithm, generalFP):
             fp = generalFP / 'tables/csv/{}.csv'.format(fileString)
             df = single_experiment(exp, (start, end), depDate, fileString, algorithm, generalFP, saveFig=True)
             if df is None:
@@ -113,9 +113,9 @@ for SPEED in ['var', 'constant']:
             else:
                 df.to_csv(fp)
                 print('saved', fp)
-            df.to_excel(writer, sheet_name=locS)
-            summary[locS + '_mean'] = df['mean']
-            summary[locS + '_std'] = df['std']
+            df.to_excel(writer, sheet_name=fileString)
+            summary[fileString + '_mean'] = df['mean']
+            summary[fileString + '_std'] = df['std']
             return summary
 
 
@@ -135,16 +135,16 @@ for SPEED in ['var', 'constant']:
             for d, depDate in enumerate(depDates):
                 print('date {} of {}'.format(d+1, len(depDates)))
                 depS = '' if depDate is None else 'depart' + depDate.strftime('%Y_%m_%d')
-                writer = pd.ExcelWriter(genDir / 'tables' / '{}departure_{}.xlsx'.format(BL, depS))
+                fileString = '{}{}'.format(BL, depS)
+                writer = pd.ExcelWriter(genDir / 'tables' / '{}_{}.xlsx'.format(timestamp, fileString))
                 summary = pd.DataFrame(index=['compTime', 'T_fuel', 'T_time', 'C_fuel', 'C_time', 'L_fuel', 'L_time'])
 
                 for routeIdx, (startTup, endTup) in enumerate(zip(_input['input']['from'], _input['input']['to'])):
                     startKey, start = startTup
                     endKey, end = endTup
                     print('location combination {} of {}'.format(routeIdx + 1, len(_input['input']['from'])))
-                    locS = '{}{}'.format(startKey, endKey)
-                    fileString = '{}_{}location{}_departure{}'.format(T, BL, locS, depS)
-                    summary = init_experiment(writer, exp, summary, depDate, locS, fileString, start, end, algorithm,
+                    fileString2 = fileString + '_location{}{}'.format(startKey, endKey)
+                    summary = init_experiment(writer, exp, summary, depDate, fileString2, start, end, algorithm,
                                               genDir)
 
                 summary.to_excel(writer, sheet_name='summary')

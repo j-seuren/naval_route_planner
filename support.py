@@ -224,12 +224,13 @@ gulfDepartures = [datetime(2014, 10, 28), datetime(2014, 11, 11), datetime(2014,
                   datetime(2015, 5, 4), datetime(2015, 5, 18)]
 
 inputGulf = {'instance': 'Gulf', 'input': {'from': [], 'to': [], 'departureDates': []}}
+for i, west in enumerate(locations['westLocations']):
+    for j, east in enumerate(locations['eastLocations']):
+        inputGulf['input']['from'].append(('{}'.format(i + 1), west))
+        inputGulf['input']['to'].append(('{}'.format(j + 1), east))
+
 for date in gulfDepartures:
-    for i, west in enumerate(locations['westLocations']):
-        for j, east in enumerate(locations['eastLocations']):
-            inputGulf['input']['from'].append(('{}'.format(i + 1), west))
-            inputGulf['input']['to'].append(('{}'.format(j + 1), east))
-            inputGulf['input']['departureDates'].append(date)
+    inputGulf['input']['departureDates'].append(date)
 
 inputKC = {'instance': 'KC', 'input': {'from': [('K', locations['KeelungC']), ('T', locations['Tokyo'])],
                                        'to': [('T', locations['Tokyo']), ('K', locations['KeelungC'])],

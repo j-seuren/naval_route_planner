@@ -132,15 +132,15 @@ for SPACE in spaces:
             skopt.dump(_res, resFP, compress=9, store_objective=False)
             print('Saved tuning results to', resFP)
 
-            # Plot results
-            figFP = figDir / '{}_'.format(timestamp)
-            plots.plot_evaluations(res)
-            plt.savefig(figFP.as_posix() + 'eval.pdf')
-            plots.plot_objective(res)
-            plt.savefig(figFP.as_posix() + 'obj.pdf')
-            plots.plot_convergence(res)
-            plt.savefig(figFP.as_posix() + 'conv.pdf')
-            print('Saved figures to', figDir)
+            # # Plot results
+            # figFP = figDir / '{}_'.format(timestamp)
+            # plots.plot_evaluations(res)
+            # plt.savefig(figFP.as_posix() + 'eval.pdf')
+            # plots.plot_objective(res)
+            # plt.savefig(figFP.as_posix() + 'obj.pdf')
+            # plots.plot_convergence(res)
+            # plt.savefig(figFP.as_posix() + 'conv.pdf')
+            # print('Saved figures to', figDir)
 
             return df
 
