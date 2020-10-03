@@ -1,5 +1,5 @@
 output/
-case_studies/project_locations/
+case_studies/
 api/
 api/routes_OUT/*
 api/start_end_IN/*
@@ -8,6 +8,7 @@ bath_test.py
 *.png
 *.pdf
 *.pkl
+thesis/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
