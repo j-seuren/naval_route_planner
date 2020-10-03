@@ -4,7 +4,10 @@ api/
 api/routes_OUT/*
 api/start_end_IN/*
 bath_test.py
-test.profile
+*.profile
+*.png
+*.pdf
+*.pkl
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
