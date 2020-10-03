@@ -12,6 +12,7 @@ from skopt import plots
 from skopt.callbacks import CheckpointSaver
 from support import locations
 
+DIR = Path('D:/')
 
 for _ in range(5):
 
@@ -66,7 +67,6 @@ for _ in range(5):
                   (locations['Keelung'], locations['Perth'])]
 
     iterations = len(START_ENDS)
-    DIR = Path('D:/')
 
     for SPACE in spaces:
         # Directories and filepaths
