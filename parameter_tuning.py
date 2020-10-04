@@ -15,8 +15,8 @@ from support import locations
 DIR = Path('D:/')
 
 for _ in range(5):
-    N_CALLs = 1
-    N_POINTS = 1
+    N_CALLs = 200
+    N_POINTS = 10
     DEPART = datetime(2016, 1, 1)
     CURRENT = False
     BATHYMETRY = False

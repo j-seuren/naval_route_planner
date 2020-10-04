@@ -94,7 +94,7 @@ for speedIdx in range(12):
 
                     for figName, fig in {'front': frontFig, 'stats': statsFig, 'routes': routeFig}.items():
                         fp = generalFP / 'figures/{}_{}'.format(fileString, itr)
-                        fig.savefig(fp + '_{}.png'.format(figName), dpi=300)
+                        fig.savefig(fp.as_posix() + '_{}.png'.format(figName), dpi=300)
                         print('saved', fp)
 
                     plt.close('all')
