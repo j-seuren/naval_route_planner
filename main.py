@@ -88,11 +88,10 @@ class RoutePlanner:
 
                              # Mutation parameters
                              'mutationOperators': ['speed', 'insert', 'move', 'delete'],  # Operators to be included
-                             'widthRatio': 1.5,  # 7.5e-4 obtained from hyp param tuning
-                             'radius': 0.4,         # 0.39 obtained from hyp param tuning
-                             'shape': 3,           # Shape parameter for Gamma distribution
-                             'scaleFactor': 0.1,   # Scale factor for Gamma and Exponential distribution
-                             'delFactor': 1.1,       # Factor of deletions
+                             'widthRatio': 1.5,    # 7.5e-4 obtained from hyp param tuning
+                             'radius': 0.4,        # 0.39 obtained from hyp param tuning
+                             'scaleFactor': 0.1,   # Scale factor for Exponential distribution
+                             'delFactor': 1.1,     # Factor of deletions
                              'gauss': False,       # Use Gaussian mutation for insert and move operators
 
                              # Evaluation parameters

@@ -45,7 +45,7 @@ for speedIdx in range(12):
         timestamp = datetime.now().strftime('%m%d-%H%M')
         DIR = Path('D:/')
         speedOps = ['insert', 'move', 'delete'] if SPEED == 'constant' else ['speed', 'insert', 'move', 'delete']
-        par = {'mutationOperators': speedOps, 'widthRatio': 2, 'radius': 1}
+        par = {'mutationOperators': speedOps}
         PLANNER = main.RoutePlanner(inputParameters=par, bathymetry=DEPTH, ecaFactor=ECA_F, criteria=criteria)
         R = 'R_' if not CURRENT else ''
 

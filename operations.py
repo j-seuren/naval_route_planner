@@ -26,7 +26,6 @@ class Operators:
         self.geod = geod                        # GreatCircle class instance
         self.radius = par['radius']             # Move radius
         self.widthRatio = par['widthRatio']     # Insert width ratio
-        self.shape = par['shape']
         self.scaleFactor = par['scaleFactor']
         self.delFactor = par['delFactor']
         self.ops = par['mutationOperators']     # Mutation operators list
@@ -186,14 +185,10 @@ class Operators:
             wp[1] = newSpeed
             self.moves[0] += 1
 
-    def sample_sequence(self, stop, start=0, reverse=True, exponential=True, weights=None):
+    def sample_sequence(self, stop, start=0, reverse=True, weights=None):
         scale = stop * self.scaleFactor
         while True:
-            if exponential:
-                k = np.ceil((np.random.exponential(scale=scale, size=1))).item()
-            else:
-                k = np.ceil((np.random.gamma(shape=self.shape, scale=scale, size=1))).item()
-
+            k = np.ceil((np.random.exponential(scale=scale, size=1))).item()
             if 0 < k <= stop - start:
                 break
         k, xrange = int(k), range(start, stop)
