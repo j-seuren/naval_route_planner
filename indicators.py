@@ -10,9 +10,10 @@ def hypervolume(front):
     return hv.hypervolume(obj, ref)
 
 
-def binary_hypervolume(A, B):
-    objA = np.array([ind.fitness.values for ind in A])
-    objB = np.array([ind.fitness.values for ind in B])
+def binary_hypervolume(A, B, pop=True):
+    objA = np.array([ind.fitness.values for ind in A]) if pop else A
+    objB = np.array([ind.fitness.values for ind in B]) if pop else B
+
     objAB = np.append(objA, objB, axis=0)
     ref = np.max(objAB, axis=0) + 1
 
@@ -22,9 +23,9 @@ def binary_hypervolume(A, B):
     return hvAB - hvB
 
 
-def two_sets_coverage(A, B):
-    objA = np.array([ind.fitness.values for ind in A])
-    objB = np.array([ind.fitness.values for ind in B])
+def two_sets_coverage(A, B, pop=True):
+    objA = np.array([ind.fitness.values for ind in A]) if pop else A
+    objB = np.array([ind.fitness.values for ind in B]) if pop else B
 
     dominatedB = 0
     for fitIndB in objB:

@@ -1,5 +1,5 @@
 import main
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
@@ -8,17 +8,15 @@ import time
 
 from datetime import datetime
 from pathlib import Path
-from skopt import plots
+# from skopt import plots
 from skopt.callbacks import CheckpointSaver
 from support import locations
 
 DIR = Path('D:/')
 
 for _ in range(5):
-
-
-    N_CALLs = 200
-    N_POINTS = 10
+    N_CALLs = 1
+    N_POINTS = 1
     DEPART = datetime(2016, 1, 1)
     CURRENT = False
     BATHYMETRY = False
@@ -128,7 +126,7 @@ for _ in range(5):
                 newDF = pd.DataFrame(best_params, index=[iteration])
                 df = oldDF.append(newDF) if iteration > 0 else newDF
 
-                df.to_excel(writer)
+
 
                 # Save tuning results
                 resFP = tuningDir / '{}.gz'.format(iteration)
@@ -150,9 +148,9 @@ for _ in range(5):
 
             _res = tune()
             DF = process_results(_res, DF)
-
-        writer.close()
+        DF.to_excel(writer)
         print('written df to', writer.path)
+        writer.close()
 
 # timestamp = datetime.now().strftime('%m%d%H%M')
 # fp = 'D:/JobS/Downloads/checkpoint_3.pkl'

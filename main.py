@@ -44,7 +44,7 @@ class RoutePlanner:
     def __init__(self,
                  vesselName='Fairmaster_2',
                  shipLoading='normal',
-                 ecaFactor=1.2,
+                 ecaFactor=1.5593,
                  fuelPrice=300,  # Fuel price per metric tonne
                  bathymetry=True,
                  inputParameters=None,

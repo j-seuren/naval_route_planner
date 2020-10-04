@@ -30,13 +30,13 @@ def get_df(procList):
 
 
 for SPEED in ['var', 'constant']:
-    for CURRENT in [True, False]:
+    for ECA_F in [1.5593, 1]:
         # INPUT PARAMETERS
-        ECA_F = 1
+        # ECA_F = 1.5593
         DEPTH = False
         # SPEED = 'var'  # 'constant' or 'var'
         ITERS = 5
-        # CURRENT = True
+        CURRENT = False
         criteria = {'minimalTime': True, 'minimalCost': True}
         # -------------------------------------------------
 
@@ -44,7 +44,7 @@ for SPEED in ['var', 'constant']:
         timestamp = datetime.now().strftime('%m%d-%H%M')
         DIR = Path('D:/')
         speedOps = ['insert', 'move', 'delete'] if SPEED == 'constant' else ['speed', 'insert', 'move', 'delete']
-        par = {'mutationOperators': speedOps}
+        par = {'mutationOperators': speedOps, 'widthRatio': 2, 'radius': 1}
         PLANNER = main.RoutePlanner(inputParameters=par, bathymetry=DEPTH, ecaFactor=ECA_F, criteria=criteria)
         BL = 'BLANK_' if not CURRENT else ''
 
@@ -56,7 +56,7 @@ for SPEED in ['var', 'constant']:
 
             current = True if exp == 'current' and CURRENT else False
             weather = True if exp == 'weather' else False
-            ecas = True if ECA_F != 1 else False
+            ecas = True if ECA_F != 1 or exp == 'eca' else False
 
             rawList, procList = [], []
             for itr in range(ITERS):
@@ -65,7 +65,8 @@ for SPEED in ['var', 'constant']:
                 raw = PLANNER.compute(startEnd, startDate=depDate, recompute=True, weather=weather, current=current,
                                       algorithm=algorithm)
                 t1 = time.time() - t0
-                proc, raw = PLANNER.post_process(raw, inclEnvironment={exp: depDate})
+                proc, raw = PLANNER.post_process(raw  # , inclEnvironment={exp: depDate}
+                                                 )
                 proc['computationTime'] = t1
                 rawList.append(raw)
                 procList.append(proc)
@@ -149,13 +150,13 @@ for SPEED in ['var', 'constant']:
 
                 summary.to_excel(writer, sheet_name='summary')
                 writer.save()
-                print('saved', writer)
+                print('saved', writer.path)
             print('DONE TESTING')
 
 
         # for alg in ['NSGA2', 'SPEA2', 'MPAES']:
         #     inputKC['departureDates'] = inputKC['departureDates'][0]
-        multiple_experiments(inputGulf, exp='current')
+        multiple_experiments(inputECA, exp='eca')
 
 # if __name__ == '__main__':
 #     # for alg in ['NSGA2', 'SPEA2', 'MPAES']:

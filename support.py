@@ -156,7 +156,9 @@ westLocations = [(-72.4, 33.4), (-72.8, 34.8), (-73.2, 36.2), (-73.6, 37.6)]
 
 locations = {'Agios Nikolaos': (25.726617, 35.152255),
              'Banjul': (-16.852247, 13.532402),
+             'Bergen': (5.015621, 60.145956),
              'Brazil': (-23.4166, -7.2574),
+             'Brunswick': (-81.322738, 31.106695),
              'Canada': (-53.306878, 46.423969),
              'Caribbean Sea': (-72.3352, 12.8774),
              'Curacao': (-68.918803, 12.295014),
@@ -164,16 +166,20 @@ locations = {'Agios Nikolaos': (25.726617, 35.152255),
              'Current2': (5, 0),
              'ECA1: Jacksonville': (-78.044447, 27.616446),
              'ECA2: New York': (-67.871890, 40.049950),
+             'Flekkefjord': (6.609681, 58.186598),
+             'Floro': (4.981360, 61.606503),
              'Freetown': (-13.819225, 8.366437),
              'Gulf of Aden': (48.1425, 12.5489),
              'Gulf of Bothnia': (20.89, 58.46),
              'Gulf of Guinea': (3.14516, 4.68508),
              'Gulf of Mexico': (-94.5968, 26.7012),
+             'Halifax': (-63.497639, 44.572532),
              'Houston': (-94.657976, 29.348557),
              'Keelung': (121.75, 25.15),
              'KeelungC': (123, 26),
              'Lima': (-77.165124, -12.052136),
              'Luanda': (12.175094, -8.692481),
+             'Kristiansand': (8.092751, 58.063953),
              'Malta': (14.061035, 34.996707),
              'Miami': (-75.724478, 26.152992),
              'Mediterranean Sea': (29.188952, 32.842985),
@@ -185,11 +191,13 @@ locations = {'Agios Nikolaos': (25.726617, 35.152255),
              'Perth': (115.027243, -32.071678),
              'Rotterdam': (4.02, 52.01),
              'Salvador': (-38.585086, -13.057614),
+             'Santander': (-3.746229, 43.482803),
              'San Francisco': (-123, 37.75),
              'Sao Paulo': (-46.288550, -24.267331),
              'Singapore': (103.746969, 1.141331),
              'South UK': (-7.5, 47),
              'Sri Lanka': (78, 5),
+             'Stavanger': (5.555933, 58.968088),
              'Thessaloniki': (22.933677, 40.616297),
              'Tokyo': (139, 34),
              'Yemen': (49, 12),
@@ -232,6 +240,16 @@ for i, west in enumerate(locations['westLocations']):
 for date in gulfDepartures:
     inputGulf['input']['departureDates'].append(date)
 
+
+ecaStart = [('K', locations['Kristiansand']),
+            ('Fle', locations['Flekkefjord']),
+            ('St', locations['Stavanger']),
+            ('B', locations['Bergen']),
+            ('Flo', locations['Floro'])]
+
+ecaEnd = [('St', locations['Santander'])] * len(ecaStart)
+
+
 inputKC = {'instance': 'KC', 'input': {'from': [('K', locations['KeelungC']), ('T', locations['Tokyo'])],
                                        'to': [('T', locations['Tokyo']), ('K', locations['KeelungC'])],
                                        'departureDates': [datetime(2014, 9, 15), datetime(2015, 3, 15)]}}
@@ -242,8 +260,8 @@ inputKC_2 = {'instance': 'KC', 'input': {'from': [('K', locations['KeelungC']), 
 inputSalLim = {'instance': 'SalLim', 'input': {'from': [('S', locations['Salvador'])], 'to': [('L', locations['Lima'])],
                                                'departureDates': [datetime(2014, 11, 11)]}}
 
-inputECA = {'instance': 'ECA', 'input': {'from': [('ECA1', locations['ECA1: Jacksonville'])],
-                                         'to': [('ECA2', locations['ECA2: New York'])], 'departureDates': [None]}}
+inputECA = {'instance': 'ECA', 'input': {'from': ecaStart,
+                                         'to': ecaEnd, 'departureDates': [None]}}
 
 
 def clear_caches():
