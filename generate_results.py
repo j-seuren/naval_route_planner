@@ -66,8 +66,9 @@ for speedIdx in range(12):
                 raw = PLANNER.compute(startEnd, startDate=depDate, recompute=True, weather=weather, current=current,
                                       algorithm=algorithm)
                 t1 = time.time() - t0
-                proc, raw = PLANNER.post_process(raw  # , inclEnvironment={exp: depDate}
-                                                 )
+
+                updateDict = {exp: 1.5593} if exp == 'eca' else {exp: depDate}
+                proc, raw = PLANNER.post_process(raw, updateEvaluator=updateDict)
                 proc['computationTime'] = t1
                 rawList.append(raw)
                 procList.append(proc)
