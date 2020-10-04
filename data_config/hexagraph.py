@@ -394,7 +394,7 @@ class Hexagraph:
                 self.graph[n1][n2]['dist'] = miles
 
                 if geo_x_geos(self.ecaTreeDict, p1, p2):
-                    self.graph[n1][n2]['eca'] = miles * 2
+                    self.graph[n1][n2]['eca'] = miles * 10
                 else:
                     self.graph[n1][n2]['eca'] = miles
             print('done')

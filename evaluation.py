@@ -15,9 +15,7 @@ from shapely.geometry import LineString, Point
 def delta_penalty(func):
     @wraps(func)
     def wrapper(self, individual, *args, **kwargs):
-        if self.feasible(individual):
-            return func(self, individual, *args, **kwargs)
-        return self.delta
+        return func(self, individual, *args, **kwargs) if self.feasible(individual) else self.delta
     return wrapper
 
 
@@ -46,7 +44,7 @@ class Evaluator:
         self.weatherOperator = None
         self.inclWeather = None
         self.inclCurrent = None
-        self.bathymetry = True if bathRtree else False
+        self.bathymetry = False if bathRtree is None else True
         self.criteria = criteria
         self.revertOutput = not criteria['minimalTime']
         self.penaltyValue = parameters['penaltyValue']
@@ -85,14 +83,16 @@ class Evaluator:
             if geo_x_geos(self.ecaRtree, p1, p2):
                 legCost *= self.ecaFactor
 
+            if includePenalty:
+                timePenalty, costPenalty = self.e_feasible(p1, p2)
+                legHours += timePenalty
+                legCost += costPenalty
+
             # Increment objective values
             hours += legHours
             cost += legCost
 
-            if includePenalty:
-                timePenalty, costPenalty = self.e_feasible(p1, p2)
-                hours += timePenalty
-                cost += costPenalty
+
 
         days = hours / 24.
         if revert:
@@ -202,6 +202,7 @@ class Vessel:
                 self.speeds = speeds
             else:
                 raise ValueError('Provide speed profile as list, float or integer')
+
         else:  # Use empirical formula for fuel consumption
             print('Approximate fuel consumption with nonlinear function')
 

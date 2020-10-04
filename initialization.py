@@ -17,6 +17,7 @@ class Initializer:
                  geod,
                  p,
                  container,
+                 speedIdx,
                  DIR):
         self.evaluator = evaluator
         self.vessel = vessel          # Vessel class
@@ -24,6 +25,7 @@ class Initializer:
         self.ecaTree = ecaTree        # R-tree spatial index for ECAs
         self.geod = geod              # Geod class instance
         self.container = container    # Container for individual
+        self.speedIdx = speedIdx
         self.canals = {'Panama': ['panama_south', 'panama_north'],
                        'Suez': ['suez_south', 'suez_north']}
         self.hexagraph = hexagraph.Hexagraph(self.tree, self.ecaTree, p, DIR=DIR)
@@ -157,7 +159,7 @@ class Initializer:
                 for obj, objPath in subPath.items():
                     # Set initial boat speed to max boat speed
                     wps = [graph.nodes[n]['deg'] for n in objPath]
-                    speeds = [self.vessel.speeds[0]] * (len(objPath) - 1) + [None]
+                    speeds = [self.vessel.speeds[self.speedIdx]] * (len(objPath) - 1) + [None]
 
                     ind = [list(tup) for tup in zip(wps, speeds)]
                     subRoute[obj] = self.container(ind)

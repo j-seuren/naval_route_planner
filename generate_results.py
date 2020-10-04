@@ -10,7 +10,7 @@ import time
 # from case_studies.demos import create_currents
 from datetime import datetime
 from pathlib import Path
-from support import inputKC_2, inputKC, inputWeather, inputECA, inputGulf, inputSalLim
+from support import inputKC_2, inputKC, inputWeather, inputECA, inputGulf, inputSalLim, locations
 
 
 def get_df(procList):
@@ -29,14 +29,15 @@ def get_df(procList):
     return df
 
 
-for SPEED in ['var', 'constant']:
-    for ECA_F in [1.5593, 1]:
+for speedIdx in range(12):
+    for CURRENT in [True, False]:
         # INPUT PARAMETERS
         # ECA_F = 1.5593
+        ECA_F = 1.0
         DEPTH = False
-        # SPEED = 'var'  # 'constant' or 'var'
+        SPEED = 'constant'  # 'constant' or 'var'
         ITERS = 5
-        CURRENT = False
+        # CURRENT = False
         criteria = {'minimalTime': True, 'minimalCost': True}
         # -------------------------------------------------
 
@@ -46,7 +47,7 @@ for SPEED in ['var', 'constant']:
         speedOps = ['insert', 'move', 'delete'] if SPEED == 'constant' else ['speed', 'insert', 'move', 'delete']
         par = {'mutationOperators': speedOps, 'widthRatio': 2, 'radius': 1}
         PLANNER = main.RoutePlanner(inputParameters=par, bathymetry=DEPTH, ecaFactor=ECA_F, criteria=criteria)
-        BL = 'BLANK_' if not CURRENT else ''
+        R = 'R_' if not CURRENT else ''
 
 
         def single_experiment(exp, startEnd, depDate, fileString, algorithm, generalFP, saveFig=True):
@@ -91,9 +92,9 @@ for SPEED in ['var', 'constant']:
                     routePlotter.results(routeAx, initial=False, ecas=ecas, bathymetry=DEPTH, nRoutes=4,
                                          weatherDate=weatherDate, current=currentDict, colorbar=True)
 
-                    for fig in [frontFig, statsFig, routeFig]:
-                        fp = generalFP / 'figures/{}_{}.png'.format(fileString, itr)
-                        fig.savefig(fp, dpi=300)
+                    for figName, fig in {'front': frontFig, 'stats': statsFig, 'routes': routeFig}.items():
+                        fp = generalFP / 'figures/{}_{}'.format(fileString, itr)
+                        fig.savefig(fp + '_{}.png'.format(figName), dpi=300)
                         print('saved', fp)
 
                     plt.close('all')
@@ -125,7 +126,7 @@ for SPEED in ['var', 'constant']:
 
             # Create directories
             genDir = DIR / 'output' / exp / _input['instance'] / '{}_{}SP_B{}_ECA{}/{}'.format(algorithm,
-                                                                                               SPEED,
+                                                                                               speedIdx,
                                                                                                DEPTH,
                                                                                                ECA_F,
                                                                                                ITERS)
@@ -135,8 +136,8 @@ for SPEED in ['var', 'constant']:
 
             for d, depDate in enumerate(depDates):
                 print('date {} of {}'.format(d+1, len(depDates)))
-                depS = '' if depDate is None else 'depart' + depDate.strftime('%Y_%m_%d')
-                fileString = '{}{}'.format(BL, depS)
+                depS = '' if depDate is None else depDate.strftime('%Y_%m_%d')
+                fileString = '{}{}'.format(R, depS)
                 writer = pd.ExcelWriter(genDir / 'tables' / '{}_{}.xlsx'.format(timestamp, fileString))
                 summary = pd.DataFrame(index=['compTime', 'T_fuel', 'T_time', 'C_fuel', 'C_time', 'L_fuel', 'L_time'])
 
@@ -144,7 +145,7 @@ for SPEED in ['var', 'constant']:
                     startKey, start = startTup
                     endKey, end = endTup
                     print('location combination {} of {}'.format(routeIdx + 1, len(_input['input']['from'])))
-                    fileString2 = fileString + '_location{}{}'.format(startKey, endKey)
+                    fileString2 = fileString + '_{}{}'.format(startKey, endKey)
                     summary = init_experiment(writer, exp, summary, depDate, fileString2, start, end, algorithm,
                                               genDir)
 
@@ -156,7 +157,16 @@ for SPEED in ['var', 'constant']:
 
         # for alg in ['NSGA2', 'SPEA2', 'MPAES']:
         #     inputKC['departureDates'] = inputKC['departureDates'][0]
-        multiple_experiments(inputECA, exp='eca')
+        gulfDepartures = [datetime(2014, 10, 28), datetime(2014, 11, 11), datetime(2014, 11, 25), datetime(2014, 4, 20),
+                          datetime(2015, 5, 4), datetime(2015, 5, 18)]
+
+        inputGulf = {'instance': 'Gulf', 'input': {'from': [], 'to': [], 'departureDates': []}}
+        west = locations['westLocations'][2]
+        east = locations['eastLocations'][0]
+        inputGulf['input']['from'].append(('{}'.format(2), west))
+        inputGulf['input']['to'].append(('{}'.format(0), east))
+        inputGulf['input']['departureDates'].append(datetime(2014, 11, 25))
+        multiple_experiments(inputGulf, exp='current')
 
 # if __name__ == '__main__':
 #     # for alg in ['NSGA2', 'SPEA2', 'MPAES']:

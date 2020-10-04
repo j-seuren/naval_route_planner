@@ -247,7 +247,7 @@ ecaStart = [('K', locations['Kristiansand']),
             ('B', locations['Bergen']),
             ('Flo', locations['Floro'])]
 
-ecaEnd = [('St', locations['Santander'])] * len(ecaStart)
+ecaEnd = [('Sa', locations['Santander'])] * len(ecaStart)
 
 
 inputKC = {'instance': 'KC', 'input': {'from': [('K', locations['KeelungC']), ('T', locations['Tokyo'])],

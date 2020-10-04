@@ -2,6 +2,7 @@
 import itertools
 import main
 import matplotlib.pyplot as plt
+import matplotlib.colors as cl
 import numpy as np
 import os
 import pickle
@@ -12,7 +13,10 @@ import tikzplotlib
 from datetime import datetime
 from pathlib import Path
 from mpl_toolkits.basemap import Basemap
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib import font_manager as fm
+from matplotlib import cm, patches
+from matplotlib.collections import PatchCollection
 
 fontPropFP = "C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/tex-gyre-pagella.regular.otf"
 fontProp = fm.FontProperties(fname=fontPropFP)
@@ -32,14 +36,19 @@ class MergedPlots:
         self.experiment = experiment
         self.fn = '{}'.format(datetime.now().strftime('%m%d%H%M'))
 
+        self.vMin, vMax = min(self.planner.vessel.speeds), max(self.planner.vessel.speeds)
+        self.dV = vMax - self.vMin
+
+
         # Fronts and routes
         self.outFiles = []
         for i, rawFN in enumerate(self.files):
             with open(rawFN, 'rb') as f:
                 rawList = pickle.load(f)
             date = datetime(2015, 3, 15) if '2015' in rawFN else datetime(2014, 2, 15)
-            proc, raw = self.planner.post_process(rawList[0], inclEnvironment={experiment: date})
-            fronts = [get_front(_front, self.planner, self.experiment, date) for _front in raw['fronts']]
+            updateDict = {experiment: 1.5593} if experiment == 'eca' else {experiment: date}
+            proc, raw = self.planner.post_process(rawList[0], updateEvaluator=updateDict)
+            fronts = [get_front(_front, self.planner, experiment, date) for _front in raw['fronts']]
 
             self.outFiles.append({'fronts': fronts, 'proc': proc, 'raw': raw, 'filename': rawFN})
 
@@ -49,32 +58,26 @@ class MergedPlots:
         frontAx.set_ylabel('Fuel costs [x1000 USD/t]', fontproperties=fontProp)
         cycleFront = frontAx._get_lines.prop_cycler
 
-        frontLabels = ['Constant speed - ref. (CR)', 'Constant speed (C)', 'Variable speed - ref. (VR)',
-                       'Variable speed (V)']
-        label = frontLabels[0]
+        labels = ['Constant speed - ref. (CR)', 'Constant speed (C)',
+                  'Variable speed - ref. (VR)', 'Variable speed (V)']
         labelString, next_color = '', 'black'
         for file in self.outFiles:
             S = 'C' if 'C' in file['filename'] else 'V'
             R = 'R' if 'R' in file['filename'] else ''
             noLabel = True if labelString == '{}{}'.format(S, R) else False
-            labelString = '{}{}'.format(S, R)
-            for frontLabel in frontLabels:
-                if labelString in frontLabel:
-                    label = frontLabel
+            labelString = '({}{})'.format(S, R)
+            label = None if noLabel else [label for label in labels if labelString in label][0]
 
             next_color = next_color if noLabel else next(cycleFront)['color']
             # Plot front
             (marker, s, zorder) = ('s', 5, 2) if 'C' in labelString else ('o', 1, 1)
             for front in file['fronts']:
-                if noLabel:
-                    frontAx.scatter(front[:, 0], front[:, 1], color=next_color, marker=marker, s=s, zorder=zorder)
-                else:
-                    frontAx.scatter(front[:, 0], front[:, 1], color=next_color, marker=marker, s=s, zorder=zorder,
-                                    label=label)
+                frontAx.scatter(front[:, 0], front[:, 1],
+                                color=next_color, marker=marker, s=s, zorder=zorder, label=label)
 
         frontAx.legend(prop=fontProp)
 
-        plt.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
+        # plt.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
         # plt.margins(0, 0)
 
         if save:
@@ -82,9 +85,26 @@ class MergedPlots:
             frontFig.savefig('{}_front_merged.pdf'.format(self.fn), bbox_inches='tight', pad_inches=0)
             tikzplotlib.save("{}_front_merged.tex".format(self.fn))
 
-    def merged_routes(self, save=False):
+    def colorbar(self, ax):
+        cmap = cm.get_cmap('jet', 12)
+        cmapList = [cmap(i) for i in range(cmap.N)][1:-1]
+        cmap = cl.LinearSegmentedColormap.from_list('Custom cmap', cmapList, cmap.N - 2)
+        # Create color bar
+        sm = plt.cm.ScalarMappable(cmap=cmap)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size=0.2, pad=0.05)  # Colorbar axis
+        cb = plt.colorbar(sm, norm=plt.Normalize(vmin=self.vMin, vmax=self.vMin + self.dV), cax=cax)
+        nTicks = 6
+        cb.ax.set_yticklabels(['%.1f' % round(self.vMin + i * self.dV / (nTicks - 1), 1) for i in range(nTicks)],
+                              fontsize=8)
+        cb.set_label('Nominal speed [knots]', rotation=270, labelpad=15)
+
+        return cmap
+
+    def merged_routes(self, allRoutes=False, colorbar=False, save=False):
         routeFig, routeAx = plt.subplots()
         cycleRoute = routeAx._get_lines.prop_cycler
+        cmap = self.colorbar(routeAx) if colorbar else None
 
         # Plot navigation area
         if self.experiment == 'current':
@@ -94,33 +114,37 @@ class MergedPlots:
             currentDict = {'u': cData[0, 0], 'v': cData[1, 0], 'lons': lons0, 'lats': lats0}
         else:
             currentDict = None
-        m = navigation_area(routeAx, self.outFiles[0]['proc'], current=currentDict)
-        label = ''
+        m = navigation_area(routeAx, self.outFiles[0]['proc'], eca=self.experiment == 'eca', current=currentDict)
+        labelString, labels = '', [' - time', ' - cost']
         for file in self.outFiles:
             S = 'C' if 'C' in file['filename'] else 'V'
             R = 'R' if 'R' in file['filename'] else ''
-            if label == '{}{}'.format(S, R):
+            if labelString == '{}{}'.format(S, R):  # Plot constant speed profile only once
                 continue
-            label = '{}{}'.format(S, R)
+            labelString = '{}{}'.format(S, R)
 
-            # Plot route responses
-            color = next(cycleRoute)['color']
-            routeLabels = [' - time', ' - cost']
-            for r, route in enumerate(file['proc']['routeResponse']):
-                if r > 1:
-                    continue
-                rLabel = '{}{}'.format(label, routeLabels[r])
-                route = [((leg['lon'], leg['lat']), leg['speed']) for leg in route['waypoints']]
-                waypoints = [leg[0] for leg in route]
-                arcs = zip(waypoints[:-1], waypoints[1:])
-                line = 'dashed' if r > 0 else 'solid'
-                for aIdx, a in enumerate(arcs):
-                    if aIdx > 0:
-                        m.drawgreatcircle(a[0][0], a[0][1], a[1][0], a[1][1], linestyle=line, linewidth=1, color=color,
-                                          zorder=3)
-                    else:
-                        m.drawgreatcircle(a[0][0], a[0][1], a[1][0], a[1][1], label=rLabel, linestyle=line, linewidth=1,
-                                          color=color, zorder=3)
+            if not allRoutes:  # Plot route responses
+                color = next(cycleRoute)['color']
+                for r, route in enumerate(file['proc']['routeResponse']):
+                    if r > 1:
+                        break
+                    label = '{}{}'.format(labelString, labels[r])
+                    waypoints = [(leg['lon'], leg['lat']) for leg in route['waypoints']]
+                    legs = zip(waypoints[:-1], waypoints[1:])
+                    line = 'dashed' if r > 0 else 'solid'
+                    for i, leg in enumerate(legs):
+                        label = None if i > 0 else label
+                        m.drawgreatcircle(leg[0][0], leg[0][1], leg[1][0], leg[1][1],
+                                          label=label, linestyle=line, linewidth=1, alpha=0.5, color=color, zorder=3)
+            else:
+                for fronts in file['raw']['fronts']:
+                    for front in fronts:
+                        for ind in front:
+                            waypoints, speeds = zip(*ind)
+                            for i, leg in enumerate(zip(waypoints[:-1], waypoints[1:])):
+                                color = cmap((speeds[i] - self.vMin) / self.dV) if cmap else 'k'
+                                m.drawgreatcircle(leg[0][0], leg[0][1], leg[1][0], leg[1][1],
+                                                  linewidth=0.5, color=color, zorder=3)
 
         routeAx.legend(loc='lower right', prop=fontProp)
 
@@ -199,7 +223,7 @@ def currents(ax, m, uin, vin, lons, lats, extent):
     ax.quiverkey(Q, 0.4, 1.1, 2, r'$2$ knots', labelpos='E')
 
 
-def navigation_area(ax, proc, current=None):
+def navigation_area(ax, proc, eca=False, current=None):
     extent = set_extent(proc)
     left, bottom, right, top = extent
     m = Basemap(projection='merc', resolution='i', llcrnrlat=bottom, urcrnrlat=top, llcrnrlon=left,
@@ -212,6 +236,13 @@ def navigation_area(ax, proc, current=None):
         uin, vin = current['u'], current['v']
         lons, lats = current['lons'], current['lats']
         currents(ax, m, uin, vin, lons, lats, extent)
+
+    if eca:
+        m.readshapefile(Path(DIR / "data/eca_reg14_sox_pm/eca_reg14_sox_pm").as_posix(), 'eca_reg14_sox_pm',
+                        drawbounds=False)
+        ps = [patches.Polygon(np.array(shape), True) for shape in m.eca_reg14_sox_pm]
+        ax.add_collection(PatchCollection(ps, facecolor='green', alpha=0.5, zorder=3))
+
     return m
 
 
@@ -313,12 +344,12 @@ def navigation_area(ax, proc, current=None):
 #     routeFig.savefig('{}_route_merged.pdf'.format(fn), bbox_inches='tight', pad_inches=.5)
 
 
-_directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/Current results/raws'
-_experiment = 'current'
-mergedPlots = MergedPlots(_directory, _experiment, contains='KT')
+_directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/eca results/Flo'
+_experiment = 'eca'
+mergedPlots = MergedPlots(_directory, _experiment, contains='_1')
 
 mergedPlots.merged_pareto(save=True)
-mergedPlots.merged_routes(save=True)
+mergedPlots.merged_routes(allRoutes=True, colorbar=True, save=True)
 
 plt.show()
 

@@ -42,6 +42,7 @@ def crowding_distance(pop):
 
 class RoutePlanner:
     def __init__(self,
+                 speedIdx=0,
                  vesselName='Fairmaster_2',
                  shipLoading='normal',
                  ecaFactor=1.5593,
@@ -123,7 +124,7 @@ class RoutePlanner:
                                               criteria,
                                               self.p,
                                               DIR=DIR)
-
+        self.speedIdx = speedIdx
         # Initialize "Initializer"
         self.initializer = initialization.Initializer(self.evaluator,
                                                       self.vessel,
@@ -132,6 +133,7 @@ class RoutePlanner:
                                                       self.geod,
                                                       self.p,
                                                       creator.Individual,
+                                                      self.speedIdx,
                                                       DIR)
 
         # Load previously calculated initial paths
@@ -558,7 +560,7 @@ class RoutePlanner:
             self.evaluator.ecaRtree = navAreaGenerator.get_eca_rtree()
             self.initializer = initialization.Initializer(self.evaluator, self.vessel, self.evaluator.landRtree,
                                                           self.evaluator.ecaRtree, self.geod, self.p,
-                                                          creator.Individual, DIR)
+                                                          creator.Individual, self.speedIdx, DIR)
 
     def get_days(self, pop):
         """
@@ -591,7 +593,7 @@ class RoutePlanner:
                                'speed': wp[1]} for wp in wps],
                 'crossedCanals': xCanals}
 
-    def post_process(self, result, inclEnvironment=None, ID=None):
+    def post_process(self, result, updateEvaluator=None, ID=None):
         if result is None:
             with open(self.procResultsFP, 'rb') as file:
                 processedResults = pickle.load(file)
@@ -613,11 +615,14 @@ class RoutePlanner:
                                                           'crossedCanals': []})
             return processedResults
 
-        if inclEnvironment is not None:
-            current = True if 'current' in inclEnvironment else False
-            weather = True if 'weather' in inclEnvironment else False
-            startDate = inclEnvironment['current'] if current else inclEnvironment['weather']
+        if updateEvaluator is not None:
+            current = True if 'current' in updateEvaluator else False
+            weather = True if 'weather' in updateEvaluator else False
+            startDate = updateEvaluator['current'] if current else None
+            startDate = updateEvaluator['weather'] if startDate is None and weather else None
+
             self.evaluator.set_classes(current, weather, startDate, 10)
+            self.evaluator.ecaFactor = updateEvaluator.get('eca', self.evaluator.ecaFactor)
 
         nFits = len([included for included in self.criteria.values() if included])
         objKeys = [obj for obj, included in self.criteria.items() if included]

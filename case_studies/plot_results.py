@@ -267,7 +267,7 @@ class RoutePlotter:
             if colors is None:
                 color = 'k'
             else:
-                color = colors(1-normalized_speeds[i])
+                color = colors(normalized_speeds[i])
             m.drawgreatcircle(a[0][0], a[0][1], a[1][0], a[1][1], linewidth=1, linestyle=line,
                               color=color, zorder=3)
         if wps:
@@ -289,13 +289,27 @@ def plot_weather(m, dateTime):
 
 if __name__ == '__main__':
     import os
+    import pickle
+
+    from deap import base, creator
+
+    creator.create("FitnessMin", base.Fitness, weights=(-1, -1))
+    creator.create("Individual", list, fitness=creator.FitnessMin)
 
     os.chdir('..')
-    routePlotter = RoutePlotter(DIR=Path('D:/'))
+    # routePlotter = RoutePlotter(DIR=Path('D:/'))
+    #
+    # _fig, _ax = plt.subplots()
+    # routePlotter.navigation_area(_ax, resolution='l', eca=True, bathymetry=True)
+    #
+    # _fig.suptitle('This is a somewhat long figure title', fontsize=16)
+    # plt.show()
 
-    _fig, _ax = plt.subplots()
-    routePlotter.navigation_area(_ax, resolution='l', eca=True, bathymetry=True)
+    with open('C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/eca results/Flo/V_FloSt_2', 'rb') as f:
+        rawList = pickle.load(f)
 
-    _fig.suptitle('This is a somewhat long figure title', fontsize=16)
+    statisticsPlotter = StatisticsPlotter(rawList[0], DIR=Path('D:/'))
+    frontFig, _ = statisticsPlotter.plot_fronts()
+
     plt.show()
 
