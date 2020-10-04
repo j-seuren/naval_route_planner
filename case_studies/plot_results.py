@@ -165,7 +165,7 @@ class RoutePlotter:
             for initRoute in self.processedResults['initialRoutes']:
                 for subInitRoute in initRoute['route']:
                     for objRoute in subInitRoute.values():
-                        self.route(objRoute, m)
+                        self.route(objRoute, m, wps=False)
         if colorbar:
             self.colorbar(ax, self.cmap)
         # Plot route responses

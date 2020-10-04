@@ -150,10 +150,6 @@ def update(front, population, prevLocalFront):
 antarctic_circle = Polygon([(-180, -66), (180, -66), (180, -89), (-180, -89)])
 arctic_circle = Polygon([(-180, 66), (180, 66), (180, 89), (-180, 89)])
 
-
-eastLocations = [(-51., 39.6), (-52., 41.2), (-53., 42.8), (-54., 44.4)]
-westLocations = [(-72.4, 33.4), (-72.8, 34.8), (-73.2, 36.2), (-73.6, 37.6)]
-
 locations = {'Agios Nikolaos': (25.726617, 35.152255),
              'Banjul': (-16.852247, 13.532402),
              'Bergen': (5.015621, 60.145956),
@@ -203,8 +199,6 @@ locations = {'Agios Nikolaos': (25.726617, 35.152255),
              'Yemen': (49, 12),
              'Valencia': (-0.188091, 39.464972),
              'Wellington': (174.814171, -41.486011),
-             'eastLocations': eastLocations,
-             'westLocations': westLocations,
              }
 
 # Test weather
@@ -228,41 +222,8 @@ inputWeather = {'instance': 'WTH', 'input': {'from': [('Ny', locations['New York
 # locations['Agios Nikolaos']
 
 # Test currents
-gulfDepartures = [datetime(2014, 10, 28), datetime(2014, 11, 11), datetime(2014, 11, 25), datetime(2014, 4, 20),
-                  datetime(2015, 5, 4), datetime(2015, 5, 18)]
-
-inputGulf = {'instance': 'Gulf', 'input': {'from': [], 'to': [], 'departureDates': []}}
-for i, west in enumerate(locations['westLocations']):
-    for j, east in enumerate(locations['eastLocations']):
-        inputGulf['input']['from'].append(('{}'.format(i + 1), west))
-        inputGulf['input']['to'].append(('{}'.format(j + 1), east))
-
-for date in gulfDepartures:
-    inputGulf['input']['departureDates'].append(date)
-
-
-ecaStart = [('K', locations['Kristiansand']),
-            ('Fle', locations['Flekkefjord']),
-            ('St', locations['Stavanger']),
-            ('B', locations['Bergen']),
-            ('Flo', locations['Floro'])]
-
-ecaEnd = [('Sa', locations['Santander'])] * len(ecaStart)
-
-
-inputKC = {'instance': 'KC', 'input': {'from': [('K', locations['KeelungC']), ('T', locations['Tokyo'])],
-                                       'to': [('T', locations['Tokyo']), ('K', locations['KeelungC'])],
-                                       'departureDates': [datetime(2014, 9, 15), datetime(2015, 3, 15)]}}
-inputKC_2 = {'instance': 'KC', 'input': {'from': [('K', locations['KeelungC']), ('T', locations['Tokyo'])],
-                                       'to': [('T', locations['Tokyo']), ('K', locations['KeelungC'])],
-                                       'departureDates': [datetime(2014, 9, 15)]}}
-
 inputSalLim = {'instance': 'SalLim', 'input': {'from': [('S', locations['Salvador'])], 'to': [('L', locations['Lima'])],
                                                'departureDates': [datetime(2014, 11, 11)]}}
-
-inputECA = {'instance': 'ECA', 'input': {'from': ecaStart,
-                                         'to': ecaEnd, 'departureDates': [None]}}
-
 
 def clear_caches():
     gc.collect()

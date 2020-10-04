@@ -73,15 +73,16 @@ class RoutePlanner:
 
                              # MOEA parameters
                              'n': 322,             # Population size
-                             'nBar': 50,           # Local archive size (M-PAES)
+                             'nBar': 100,          # Local archive size (M-PAES)
                              'cxpb': 0.9,          # Crossover probability (NSGAII, SPEA2)
                              'mutpb': 0.33,        # Mutation probability (NSGAII, SPEA2)
                              'nMutations': 4,      # Max. number of mutations per selected individual
-                             'cr_trials': 25,      # Max recombination trials (M-PAES)
-                             'l_fails': 20,        # Max fails (M-PAES)
-                             'l_opt': 100,         # Max moves (M-PAES)
+                             'cr_trials': 5,       # Max recombination trials (M-PAES)
+                             'l_fails': 3,         # Max fails (M-PAES)
+                             'l_opt': 5,           # Max moves (M-PAES)
 
                              # Stopping parameters
+                             'maxEvaluations': None,
                              'gen': 100,           # Minimal number of generations
                              'maxGDs': 30,         # Max length of generational distance list
                              'minVar': 1e-5,       # Minimal variance of generational distance list
@@ -142,9 +143,10 @@ class RoutePlanner:
         if not os.path.exists(self.initPathsDir):
             os.mkdir(self.initPathsDir)
         self.initRoutesList = []
-        for fp in os.listdir(self.initPathsDir):
-            with open(self.initPathsDir / fp, 'rb') as file:
-                self.initRoutesList.append(pickle.load(file))
+        if speedIdx == 0:  # Initial paths are computed for speedIdx = 0
+            for fp in os.listdir(self.initPathsDir):
+                with open(self.initPathsDir / fp, 'rb') as file:
+                    self.initRoutesList.append(pickle.load(file))
 
         # Initialize "Operator" and register it's functions
         self.operators = Operators(self.evaluator.e_feasible, self.vessel, self.geod, self.p)
@@ -152,11 +154,34 @@ class RoutePlanner:
         self.tb.register("mate", self.operators.cx_one_point)
         self.tb.register("population", initialization.init_repeat_list)
 
+    class Terminator:
+        def __init__(self, p):
+            self.maxEvaluations = p['maxEvaluations']
+            self.minGen = p['gen']
+            self.minVar = p['minVar']
+            self.maxStops = p['maxGDs']
+
+        def termination(self, prevFront, front, gen, gds, evals):
+            if self.maxEvaluations:
+                if evals > self.maxEvaluations:
+                    return True
+            else:
+                gd = indicators.generational_distance(prevFront, front)
+                gds.append(gd)
+                if len(gds) > self.maxStops:
+                    gds.pop(0)
+                if gen >= self.minGen:
+                    if np.var(gds) < self.minVar:
+                        print('STOPPING: Generational distance')
+                        return True
+                return False
+
     class MPAES:
-        def __init__(self, tb, evaluator, p):
+        def __init__(self, tb, evaluator, p, terminator):
             # Set functions / classes
             self.tb = tb
             self.evaluator = evaluator
+            self.termination = terminator.termination
 
             # MOEA parameters
             # M-PAES characteristic parameters
@@ -164,12 +189,7 @@ class RoutePlanner:
             self.l_opt = p['l_opt']
             self.l_fails = p['l_fails']
             self.cr_trials = p['cr_trials']
-            self.n = p['n']
-
-            # Termination parameters
-            self.minGen = p['gen']
-            self.minVar = p['minVar']
-            self.maxStops = p['maxGDs']
+            self.sizePop = p['n']
             self.evals = 0  # Initialize counter variables
 
         def test(self, c, m, archive):
@@ -216,23 +236,12 @@ class RoutePlanner:
                 moves += 1
             return c
 
-        def termination(self, prevFront, front, gen, gds):
-            gd = indicators.generational_distance(prevFront, front)
-            gds.append(gd)
-            if len(gds) > self.maxStops:
-                gds.pop(0)
-            if gen >= self.minGen:
-                if np.var(gds) < self.minVar:
-                    print('STOPPING: Generational distance')
-                    return True
-            return False
-
         def optimize(self, pop, result, routeIdx):
             mstats, log = support.statistics(), support.logbook()  # DEAP statistics and logbook
             front = tools.ParetoFront()  # Initialize ParetoFront class
             self.evals = len(pop)
             gds = []  # Initialize generational distance list
-            gen = 0
+            gen = totalEvals = 0
             while True:
                 # Step 3: Update global Pareto front
                 prevFront = front.items[:]
@@ -243,6 +252,7 @@ class RoutePlanner:
                 log.record(gen=gen, evals=self.evals, **record)
                 print('\r', log.stream)
 
+                totalEvals += self.evals
                 self.evals = 0
 
                 # Step 4: Local search
@@ -254,8 +264,7 @@ class RoutePlanner:
 
                 # Step 5: Recombination
                 popInter = []  # Initialize intermediate population
-                while len(popInter) < self.n:
-                    cMoreCrowded = childDominated = False
+                while len(popInter) < self.sizePop:
                     r = 0
                     while True:
                         # Randomly choose two parents from P + G
@@ -263,38 +272,36 @@ class RoutePlanner:
                         mom2, dad2 = self.tb.clone(mom), self.tb.clone(dad)
 
                         # Recombine to form offspring, evaluate
-                        child1, child2 = self.tb.mate(mom2, dad2)
-                        fitChild1, fitChild2 = self.evaluator.evaluate(child1), self.evaluator.evaluate(child2)
-                        child = child1 if child1.fitness.dominates(child2.fitness) else child2
-                        child.fitness.values = fitChild1
-                        self.evals += 2
-
-                        childDominated = False
+                        child, _ = self.tb.mate(mom2, dad2)
+                        child.fitness.values = self.evaluator.evaluate(child)
+                        self.evals += 1
+                        childInMoreCrowdedArea = childDominated = False
                         for ind in front:
                             if ind.fitness.dominates(child.fitness):
                                 childDominated = True
                                 break
 
                         if not childDominated:
-                            cMoreCrowded = False
                             crowding_distance(pop + front.items + [child])
                             # Check if c is in more crowded grid location than both parents
                             if child.fitness.crowding_dist < mom.fitness.crowding_dist and\
                                     child.fitness.crowding_dist < dad.fitness.crowding_dist:
-                                cMoreCrowded = True
+                                childInMoreCrowdedArea = True
 
                             # Update pareto front with c as necessary
                             front.update([child])
                         r += 1
-                        if not (cMoreCrowded and childDominated) or r >= self.cr_trials:
+                        if not (
+                            (childDominated or childInMoreCrowdedArea) and r < self.cr_trials
+                        ):
                             break
 
-                    childList = tools.selTournament(front.items, k=1, tournsize=2) if childDominated else [child]
+                    childAsList = tools.selTournament(front.items, k=1, tournsize=2) if childDominated else [child]
 
-                    popInter.extend(childList)
+                    popInter.extend(childAsList)
 
                 # Step 4: Termination
-                if self.termination(prevFront, front, gen, gds):
+                if self.termination(prevFront, front, gen, gds, totalEvals):
                     hypervolume = indicators.hypervolume(front)
                     print('hypervolume', hypervolume)
                     result['indicators'][routeIdx]['hypervolume'] = hypervolume
@@ -309,38 +316,24 @@ class RoutePlanner:
             return result
 
     class NSGAII:
-        def __init__(self, tb, evaluator, p):
+        def __init__(self, tb, evaluator, p, terminator):
             # Set functions / classes
             self.tb = tb
             self.evaluator = evaluator
             self.tb.register("select", tools.selNSGA2)  # Set NSGA2 selection
+            self.termination = terminator.termination
 
             # MOEA parameters
             self.sizePop = p['n']
             self.cxpb = p['cxpb']
             self.mutpb = p['mutpb']
-            # Termination parameters
-            self.minGen = p['gen']
-            self.minVar = p['minVar']
-            self.maxStops = p['maxGDs']
-
-        def termination(self, prevFront, front, gen, gds):
-            gd = indicators.generational_distance(prevFront, front)
-            gds.append(gd)
-            if len(gds) > self.maxStops:
-                gds.pop(0)
-            if gen >= self.minGen:
-                if np.var(gds) < self.minVar:
-                    print('STOPPING: Generational distance')
-                    return True
-            return False
 
         def optimize(self, pop, result, routeIdx):
             mstats, log = support.statistics(), support.logbook()  # DEAP statistics and logbook
             front = tools.ParetoFront()  # Initialize ParetoFront class
             evals = len(pop)
             offspring, gds = [], []  # Initialize offspring and generational distance list
-            gen = 0
+            gen = totalEvals = 0
             while True:
                 # Step 3: Environmental selection (and update HoF)
                 pop = self.tb.select(pop + offspring, self.sizePop)
@@ -352,8 +345,9 @@ class RoutePlanner:
                 log.record(gen=gen, evals=evals, **record)
                 print('\r', log.stream)
 
+                totalEvals += evals
                 # Step 4: Termination
-                if self.termination(prevFront, front, gen, gds):
+                if self.termination(prevFront, front, gen, gds, totalEvals):
                     hypervolume = indicators.hypervolume(front)
                     print('hypervolume', hypervolume)
                     result['indicators'][routeIdx]['hypervolume'] = hypervolume
@@ -378,11 +372,12 @@ class RoutePlanner:
             return result
 
     class SPEA2:
-        def __init__(self, tb, evaluator, p):
+        def __init__(self, tb, evaluator, p, terminator):
             # Set functions / classes
             self.tb = tb
             self.evaluator = evaluator
             self.tb.register("select", tools.selSPEA2)  # Set SPEA2 selection
+            self.termination = terminator.termination
 
             # MOEA Parameters
             self.sizePop = p['n']
@@ -390,28 +385,12 @@ class RoutePlanner:
             self.mutpb = p['mutpb']
             self.sizeArchive = self.sizePop  # SPEA2 characteristic parameter
 
-            # Termination parameters
-            self.minGen = p['gen']
-            self.minVar = p['minVar']
-            self.maxStops = p['maxGDs']
-
-        def termination(self, prevFront, front, gen, gds):
-            gd = indicators.generational_distance(prevFront, front)
-            gds.append(gd)
-            if len(gds) > self.maxStops:
-                gds.pop(0)
-            if gen >= self.minGen:
-                if np.var(gds) < self.minVar:
-                    print('STOPPING: Generational distance')
-                    return True
-            return False
-
         def optimize(self, pop, result, routeIdx):
             mstats, log = support.statistics(), support.logbook()  # DEAP statistics and logbook
             front = tools.ParetoFront()  # Initialize ParetoFront class
             evals = len(pop)
             archive, gds = [], []  # Initialize offspring and generational distance list
-            gen = 0
+            gen = totalEvals = 0
             while True:
                 # Step 3: Environmental selection
                 archive = self.tb.select(pop + archive, k=self.sizeArchive)
@@ -423,8 +402,9 @@ class RoutePlanner:
                 log.record(gen=gen, evals=evals, **record)
                 print('\r', log.stream)
 
+                totalEvals += evals
                 # Step 4: Termination
-                if self.termination(prevFront, front, gen, gds):
+                if self.termination(prevFront, front, gen, gds, totalEvals):
                     hypervolume = indicators.hypervolume(front)
                     print('hypervolume', hypervolume)
                     result['indicators'][routeIdx]['hypervolume'] = hypervolume
@@ -455,6 +435,9 @@ class RoutePlanner:
     def compute(self, startEnd, recompute=False, startDate=None, current=False,
                 weather=False, algorithm='NSGA2', seed=None, avoidArctic=True, avoidAntarctic=True):
         random.seed(seed)
+        print('Parameters:')
+        pp.pprint(self.p)
+        print('\nCompute input:')
         pp.pprint({'startEnd': startEnd, 'recompute': recompute, 'startDate': startDate, 'current': current,
                    'weather': weather, 'algorithm': algorithm, 'seed': seed, 'avoidArctic': avoidArctic,
                    'avoidAntarctic': avoidAntarctic})
@@ -511,12 +494,14 @@ class RoutePlanner:
             with open(self.initPathsDir / fn, 'wb') as file:
                 pickle.dump(pathOutput, file)
 
+        terminator = self.Terminator(self.p)
+
         if algorithm == 'MPAES':
-            MOEA = self.MPAES(self.tb, self.evaluator, self.p)
+            MOEA = self.MPAES(self.tb, self.evaluator, self.p, terminator)
         elif algorithm == 'SPEA2':
-            MOEA = self.SPEA2(self.tb, self.evaluator, self.p)
+            MOEA = self.SPEA2(self.tb, self.evaluator, self.p, terminator)
         else:
-            MOEA = self.NSGAII(self.tb, self.evaluator, self.p)
+            MOEA = self.NSGAII(self.tb, self.evaluator, self.p, terminator)
 
         result = {'startEnd': startEnd, 'initialRoutes': initRoutes, 'indicators': [None] * len(initRoutes),
                   'logs': [None] * len(initRoutes), 'fronts': [None] * len(initRoutes)}
@@ -615,10 +600,10 @@ class RoutePlanner:
             return processedResults
 
         if updateEvaluator is not None:
-            current = True if 'current' in updateEvaluator else False
-            weather = True if 'weather' in updateEvaluator else False
-            startDate = updateEvaluator['current'] if current else None
-            startDate = updateEvaluator['weather'] if startDate is None and weather else None
+            current = True if 'current' in updateEvaluator else None
+            weather = True if 'weather' in updateEvaluator else None
+            startDate = updateEvaluator.get('current')
+            startDate = updateEvaluator.get('weather') if startDate is None else startDate
 
             self.evaluator.set_classes(current, weather, startDate, 10)
             self.evaluator.ecaFactor = updateEvaluator.get('eca', self.evaluator.ecaFactor)
@@ -719,14 +704,14 @@ if __name__ == "__main__":
     from support import locations
 
     startTime = time.time()
-    _startEnd = (locations['Salvador'], locations['Lima'])
+    _startEnd = (locations['KeelungC'], locations['Tokyo'])
 
     # parameters = {'gen': 200,  # Min number of generations
     #               'n': 100}    # Population size
 
-    kwargsPlanner = {'inputParameters': {}, 'tb': _tb, 'criteria': _criteria}
-    kwargsCompute = {'startEnd': _startEnd, 'startDate': datetime(2016, 1, 1), 'recompute': True, 'current': False,
-                     'weather': False, 'seed': 1, 'algorithm': 'NSGA2'}
+    kwargsPlanner = {'inputParameters': {'n': 100}, 'tb': _tb, 'criteria': _criteria}
+    kwargsCompute = {'startEnd': _startEnd, 'startDate': datetime(2014, 9, 15), 'recompute': True, 'current': True,
+                     'weather': False, 'seed': 1, 'algorithm': 'SPEA2'}
     multiprocess = False
 
     if multiprocess:

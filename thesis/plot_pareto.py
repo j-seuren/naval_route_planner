@@ -27,7 +27,7 @@ pp = pprint.PrettyPrinter()
 
 
 class MergedPlots:
-    def __init__(self, directory, experiment, contains):
+    def __init__(self, directory, date, experiment, contains):
         os.chdir(directory)
         self.files = [file for file in os.listdir() if contains in file]
         pp.pprint(self.files)
@@ -45,7 +45,6 @@ class MergedPlots:
         for i, rawFN in enumerate(self.files):
             with open(rawFN, 'rb') as f:
                 rawList = pickle.load(f)
-            date = datetime(2015, 3, 15) if '2015' in rawFN else datetime(2014, 2, 15)
             updateDict = {experiment: 1.5593} if experiment == 'eca' else {experiment: date}
             proc, raw = self.planner.post_process(rawList[0], updateEvaluator=updateDict)
             fronts = [get_front(_front, self.planner, experiment, date) for _front in raw['fronts']]
@@ -64,9 +63,11 @@ class MergedPlots:
         for file in self.outFiles:
             S = 'C' if 'C' in file['filename'] else 'V'
             R = 'R' if 'R' in file['filename'] else ''
-            noLabel = True if labelString == '{}{}'.format(S, R) else False
-            labelString = '({}{})'.format(S, R)
+            newLabelString = '({}{})'.format(S, R)
+            noLabel = True if labelString == newLabelString else False
+            labelString = newLabelString
             label = None if noLabel else [label for label in labels if labelString in label][0]
+            print(label)
 
             next_color = next_color if noLabel else next(cycleFront)['color']
             # Plot front
@@ -344,12 +345,12 @@ def navigation_area(ax, proc, eca=False, current=None):
 #     routeFig.savefig('{}_route_merged.pdf'.format(fn), bbox_inches='tight', pad_inches=.5)
 
 
-_directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/eca results/Flo'
-_experiment = 'eca'
-mergedPlots = MergedPlots(_directory, _experiment, contains='_1')
+_directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/Current results/Gulf/Gulf0'
+_experiment = 'current'
+mergedPlots = MergedPlots(_directory, datetime(2014, 11, 25), _experiment, contains='31')
 
 mergedPlots.merged_pareto(save=True)
-mergedPlots.merged_routes(allRoutes=True, colorbar=True, save=True)
+mergedPlots.merged_routes(colorbar=True, save=True)
 
 plt.show()
 

@@ -145,9 +145,10 @@ class Evaluator:
         if self.inclCurrent or self.inclWeather:
             # Split leg in segments (seg) of segLengthC in nautical miles
             lons, lats = self.geod.points(p1, p2, nauticalMiles, self.segLengthC)
-            legHours = 0.0
-            for i in range(len(lons) - 1):
-                q1, q2 = (lons[i], lats[i]), (lons[i+1], lats[i+1])
+            segPoints = list(zip(lons, lats))
+            legHours = 0.
+            for segment in zip(segPoints[:-1], segPoints[1:]):
+                q1, q2 = segment
                 segmentTT = self.calc_seg_hours(q1, q2, speedKnots, startHours + legHours)
                 legHours += segmentTT
         else:
@@ -162,10 +163,8 @@ class Evaluator:
         nauticalMiles, bearingDeg = self.geod.distance(p1, p2, bearing=True)
 
         # Coordinates of middle point of leg
-        if abs(p1[0] - p2[0]) > 300:  # If segment crosses datum line (-180 degrees), choose p1 as middle point
-            lon, lat = p1
-        else:
-            lon, lat = (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2
+        # If segment crosses datum line (-180 degrees), choose p1 as middle point
+        lon, lat = p1 if abs(p1[0] - p2[0]) > 300 else (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2
 
         if self.inclWeather:
             # Beaufort number (BN) and true wind direction (TWD) at (lon, lat)
@@ -224,15 +223,11 @@ class Vessel:
             self.fuelCostPerDay = {speed: fc(speed) for speed in self.speeds}
 
         # Set parameters for ship speed reduction calculations
-        Lpp = 320  # Ship length between perpendiculars [m]
-        B = 58  # Ship breadth [m]
-        D = 20.8  # Ship draft [m]
-        vol = 312622  # Displaced volume [m^3]
-        blockCoefficient = vol / (Lpp * B * D)  # Block coefficient
+        Lpp = 152.9  # Ship length between perpendiculars [m]
+        vol = 27150  # Displaced volume [m^3]
+        blockCoefficient = 0.8
         self.speed_reduction = SemiEmpiricalSpeedReduction(blockCoefficient, shipLoading, Lpp, vol, DIR)
-
-    def reduced_speed(self, windDeg, headingDeg, BN, speedKnots):
-        return self.speed_reduction.reduced_speed(windDeg, headingDeg, BN, speedKnots)
+        self.reduced_speed = self.speed_reduction.reduced_speed
 
 
 class SemiEmpiricalSpeedReduction:
