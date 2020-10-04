@@ -57,8 +57,9 @@ class Operators:
         return ind,
 
     def insert_wps(self, ind, initializing=False, shape='rhombus'):
+        weights = [self.geod.distance(ind[i][0], ind[i+1][0]) for i, leg in enumerate(ind[:-1])]
         # Draw gamma int for number of inserted waypoints
-        edges = self.sample_sequence(stop=len(ind)-1)
+        edges = self.sample_sequence(stop=len(ind)-1, weights=weights)
 
         for i in edges:
             p1, p2 = np.asarray(ind[i][0]), np.asarray(ind[i+1][0])
@@ -195,12 +196,8 @@ class Operators:
 
             if 0 < k <= stop - start:
                 break
-
-        if weights is None:
-            seq = random.sample(range(start, stop), k=int(k))
-        else:
-            seq = random.choices(range(start, stop), weights=weights, k=int(k))
-
+        k, xrange = int(k), range(start, stop)
+        seq = random.sample(xrange, k=k) if weights is None else random.choices(xrange, k=k)
         seq = sorted(seq, reverse=True) if reverse else seq
         return seq
 
