@@ -25,7 +25,7 @@ for _ in range(5):
                        'mutationOperators': ['speed', 'insert', 'move', 'delete'],
                        'mutpb': 0.7}
     space1 = [
-        skopt.space.Integer(50, 100, name='gen'),  # Minimal nr. generations
+        # skopt.space.Integer(50, 100, name='gen'),  # Minimal nr. generations
         skopt.space.Integer(5, 45, name='maxGDs'),
         skopt.space.Real(1e-6, 1e-4, name='minVar'),  # Minimal variance generational distance
         skopt.space.Integer(2, 15, name='nMutations'),
