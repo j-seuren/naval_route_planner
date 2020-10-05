@@ -16,41 +16,49 @@ parameters = {'DIR': DIR,
               'MOEA': 'NSGA2',
               }
 
+TEST_SPEED = False
 
-eastLocations = [(-51., 39.6), (-52., 41.2), (-53., 42.8), (-54., 44.4)]
-westLocations = [(-72.4, 33.4), (-72.8, 34.8), (-73.2, 36.2), (-73.6, 37.6)]
+eastLocations = [('E1', (-50.0, 38.0)), ('E2', (-52.5, 42.0)), ('E3', (-55.0, 46.0))]
+westLocations = [('W1', (-72.0, 32.0)), ('W2', (-73.0, 35.5)), ('W3', (-74.0, 39.0))]
 inputGulf = {'instance': 'Gulf', 'input': {'from': [], 'to': []}}
-for i, west in enumerate(westLocations):
-    for j, east in enumerate(eastLocations):
-        inputGulf['input']['from'].append(('{}'.format(i + 1), west))
-        inputGulf['input']['to'].append(('{}'.format(j + 1), east))
+for west in enumerate(westLocations):
+    for east in enumerate(eastLocations):
+        inputGulf['input']['from'].append(west)
+        inputGulf['input']['to'].append(east)
+        inputGulf['input']['from'].append(east)
+        inputGulf['input']['to'].append(west)
 
-inputGulf['input']['departureDates'] = [datetime(2014, 10, 28), datetime(2014, 11, 11), datetime(2014, 11, 25),
-                                        datetime(2014, 4, 20), datetime(2015, 5, 4), datetime(2015, 5, 18)]
+inputGulf['input']['departureDates'] = [datetime(2014, 11, 15), datetime(2015, 5, 15)]
 
-inputKC = {'instance': 'KC', 'input': {'from': [('K', locations['KeelungC']), ('T', locations['Tokyo'])],
-                                       'to': [('T', locations['Tokyo']), ('K', locations['KeelungC'])],
-                                       'departureDates': [datetime(2014, 9, 15), datetime(2015, 3, 15)]}}
+inputKC = {'instance': 'KC', 'input': {'from': [('K', locations['KeelungC']),
+                                                ('T', locations['Tokyo'])],
+                                       'to': [('T', locations['Tokyo']),
+                                              ('K', locations['KeelungC'])],
+                                       'departureDates': [datetime(2014, 9, 15),
+                                                          datetime(2015, 3, 15)]}}
 
-inputKC_2 = {'instance': 'KC0', 'input': {'from': [('K', locations['KeelungC']), ('T', locations['Tokyo'])],
-                                       'to': [('T', locations['Tokyo']), ('K', locations['KeelungC'])],
-                                       'departureDates': [datetime(2014, 9, 15)]}}
+inputKC_2 = {'instance': 'KC0', 'input': {'from': [('K', locations['KeelungC']),
+                                                   ('T', locations['Tokyo'])],
+                                          'to': [('T', locations['Tokyo']),
+                                                 ('K', locations['KeelungC'])],
+                                          'departureDates': [datetime(2014, 9, 15)]}}
 
-inputGulf0 = {'instance': 'Gulf0', 'input': {'from': [('3', (-73.2, 36.2))], 'to': [('1', (-51., 39.6))],
-                                            'departureDates': [datetime(2014, 11, 25)]}}
+inputGulf0 = {'instance': 'Gulf0', 'input': {'from': [('3', (-73.2, 36.2))],
+                                             'to': [('1', (-51., 39.6))],
+                                             'departureDates': [datetime(2014, 11, 25)]}}
 
 inputDict = inputGulf
 criteria = {'minimalTime': True, 'minimalCost': True}
 
 for current in [True, False]:
-    for speed in ['constant'  #, 'var'
-                  ]:
+    for speed in ['constant', 'var']:
+        if TEST_SPEED and speed == 'constant':
+            continue
         speedOps = ['insert', 'move', 'delete'] if speed == 'constant' else ['speed', 'insert', 'move', 'delete']
         par = {'mutationOperators': speedOps}
 
         nSpeeds = 12 if speed == 'constant' else 1
-        for _ in range(1):
-            speedIdx = 11
+        for speedIdx in range(nSpeeds):
             planner = main.RoutePlanner(speedIdx=speedIdx,
                                         inputParameters=par,
                                         bathymetry=parameters['bathymetry'],

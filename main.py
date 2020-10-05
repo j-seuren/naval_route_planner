@@ -74,9 +74,9 @@ class RoutePlanner:
                              # MOEA parameters
                              'n': 322,             # Population size
                              'nBar': 100,          # Local archive size (M-PAES)
-                             'cxpb': 0.9,          # Crossover probability (NSGAII, SPEA2)
-                             'mutpb': 0.33,        # Mutation probability (NSGAII, SPEA2)
-                             'nMutations': 4,      # Max. number of mutations per selected individual
+                             'cxpb': 0.81,          # Crossover probability (NSGAII, SPEA2)
+                             'mutpb': 0.28,        # Mutation probability (NSGAII, SPEA2)
+                             'nMutations': 9,      # Max. number of mutations per selected individual
                              'cr_trials': 5,       # Max recombination trials (M-PAES)
                              'l_fails': 3,         # Max fails (M-PAES)
                              'l_opt': 5,           # Max moves (M-PAES)
@@ -84,7 +84,7 @@ class RoutePlanner:
                              # Stopping parameters
                              'maxEvaluations': None,
                              'gen': 100,           # Minimal number of generations
-                             'maxGDs': 30,         # Max length of generational distance list
+                             'maxGDs': 33,         # Max length of generational distance list
                              'minVar': 1e-5,       # Minimal variance of generational distance list
 
                              # Mutation parameters
@@ -434,8 +434,8 @@ class RoutePlanner:
         fn = "{}_C{}_W{}_d{}_inclS{}_inclN{}_V{}_T{}_C{}_FP{}_ECA{}".format(startEnd, current, weather,
                                                                             dateString, avoidAntarctic,
                                                                             avoidArctic, self.vessel.name,
-                                                                            self.criteria['minimalTime'],
-                                                                            self.criteria['minimalCost'],
+                                                                            True,
+                                                                            True,
                                                                             self.fuelPrice, self.ecaFactor)
         self.procResultsFP = DIR / "output/processedResults/" / fn
 
@@ -690,14 +690,14 @@ if __name__ == "__main__":
     from support import locations
 
     startTime = time.time()
-    _startEnd = (locations['Veracruz'], locations['Concepcion'])
+    _startEnd = (locations['Normandy'], locations['New York'])
 
     # parameters = {'gen': 200,  # Min number of generations
     #               'n': 100}    # Population size
-
-    kwargsPlanner = {'inputParameters': {'n': 500, 'gen': 400}, 'tb': _tb, 'ecaFactor': 1.0, 'criteria': _criteria}
-    kwargsCompute = {'startEnd': _startEnd, 'startDate': datetime(2014, 9, 15), 'recompute': True, 'current': False,
-                     'weather': False, 'seed': 1, 'algorithm': 'NSGA2'}
+    startDate = datetime(2011, 1, 25)
+    kwargsPlanner = {'inputParameters': {'gen': 300}, 'tb': _tb, 'ecaFactor': 1.0, 'criteria': _criteria}
+    kwargsCompute = {'startEnd': _startEnd, 'startDate': startDate, 'recompute': False, 'current': False,
+                     'weather': True, 'seed': 1, 'algorithm': 'NSGA2'}
     multiprocess = False
 
     if multiprocess:
@@ -710,13 +710,16 @@ if __name__ == "__main__":
         planner = RoutePlanner(**kwargsPlanner)
         rawResults = planner.compute(**kwargsCompute)
 
+    print("--- %s seconds ---" % (time.time() - startTime))
     procResults, rawResults = planner.post_process(rawResults)
     routePlotter = RoutePlotter(DIR, procResults, rawResults=rawResults, vessel=planner.vessel)
-    fig, ax = plt.subplots()
-    ax = routePlotter.results(ax, bathymetry=True, initial=False, ecas=False, nRoutes=1, colorbar=True)
-
-    pp = pprint.PrettyPrinter(depth=6)
-    pp.pprint(procResults)
-    print("--- %s seconds ---" % (time.time() - startTime))
-    plt.savefig('D:/output/figures/Veracruz_Concepcion.pdf')
-    plt.show()
+    for date in [datetime(2011, 1, 25), datetime(2011, 1, 26), datetime(2011, 1, 27), datetime(2011, 1, 28), datetime(2011, 1, 29),
+                 datetime(2011, 1, 30), datetime(2011, 1, 31), datetime(2011, 2, 1), datetime(2011, 2, 2)]:
+        fig, ax = plt.subplots()
+        ax = routePlotter.results(ax, bathymetry=True, weatherDate=date, initial=False, ecas=False,
+                                  nRoutes=5, colorbar=True)
+        plt.savefig('D:/output/figures/{}.png'.format(date.day), dpi=600)
+        plt.clf()
+        pp = pprint.PrettyPrinter(depth=6)
+        pp.pprint(procResults)
+    # plt.savefig('D:/output/figures/Veracruz_Concepcion.pdf')

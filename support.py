@@ -205,20 +205,6 @@ locations = {'Agios Nikolaos': (25.726617, 35.152255),
 
 # Test weather
 # Weather locations
-inputWeather = {'instance': 'WTH', 'input': {'from': [('Ny', locations['New York']),  # Kuhlemann
-                         ('K', locations['Keelung']),  # Lin2013
-                         ('No', locations['Normandy']),  # Shao2012
-                         ('No', locations['Normandy']),  # Vettor2016
-                         ('V', locations['Valencia'])  # Vettor2016
-                         ],
-                'to': [('P', locations['Paramaribo']), ('S', locations['San Francisco']), ('Ny', locations['New York']),
-                       ('Mi', locations['Miami']), ('Ma', locations['Malta'])],
-                'departureDates': [datetime(2017, 9, 4), datetime(2011, 5, 28),
-                                   # DEP 0000Z 28 May 2011, ETA 0000Z 11 June 2011
-                                   datetime(2011, 1, 25),  # DEP 03:00 p.m. ETA: 00:30 p.m. 30/01/2011
-                                   datetime(2015, 6, 21),  # June 21, 2015 at 00:00
-                                   datetime(2015, 6, 21)  # June 21, 2015 at 00:00
-                                   ]} }
 
 # locations['Thessaloniki']
 # locations['Agios Nikolaos']
@@ -237,38 +223,28 @@ def clear_caches():
 
 
 if __name__ == '__main__':
-    import json
+    # Current locations
+    westBot, westTop, eastBot, eastTop = np.array([-72, 32]), np.array([-74, 39]), np.array([-50, 38]), np.array(
+        [-55, 46])
 
-    exDic1 = {'x': 1235}
-    exDic2 = {'y': 13245}
+    west = np.array([westBot, westTop])
+    east = np.array([eastBot, eastTop])
 
-    for exDict in [exDic1, exDic2]:
+    lenWest = np.linalg.norm(west)
+    lenEast = np.linalg.norm(east)
 
-        with open('file.txt', 'wb') as file:
-            file.write(json.dumps(exDict))
+    westVec = westTop - westBot
+    eastVec = eastTop - eastBot
 
-    # # Current locations
-    # westBot, westTop, eastBot, eastTop = np.array([-72, 32]), np.array([-74, 39]), np.array([-50, 38]), np.array(
-    #     [-55, 46])
-    #
-    # west = np.array([westBot, westTop])
-    # east = np.array([eastBot, eastTop])
-    #
-    # lenWest = np.linalg.norm(west)
-    # lenEast = np.linalg.norm(east)
-    #
-    # westVec = westTop - westBot
-    # eastVec = eastTop - eastBot
-    #
-    # westNorm = westVec / lenWest
-    # eastNorm = eastVec / lenEast
-    #
-    # locRange = np.linspace(0.2, 0.8, 4)
-    # westLocations, eastLocations = [], []
-    # for f in locRange:
-    #     eastLocations.append(f * eastVec + eastBot)
-    #     westLocations.append(f * westVec + westBot)
-    #
-    # print(eastLocations, '\n', westLocations)
+    westNorm = westVec / lenWest
+    eastNorm = eastVec / lenEast
+
+    locRange = np.linspace(0, 1, 3)
+    westLocations, eastLocations = [], []
+    for f in locRange:
+        eastLocations.append(tuple(f * eastVec + eastBot))
+        westLocations.append(tuple(f * westVec + westBot))
+
+    print(eastLocations, '\n', westLocations)
 
 

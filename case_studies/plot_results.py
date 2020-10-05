@@ -143,6 +143,7 @@ class RoutePlotter:
 
         else:
             self.extent = (-180, -80, 180, 80)
+        print('extent', self.extent)
 
     def results(self, ax,
                 resolution='i',
@@ -155,9 +156,6 @@ class RoutePlotter:
                 colorbar=True,
                 wps=True
                 ):
-        if weatherDate:
-            bathymetry = False
-
         m = self.navigation_area(ax, resolution, current=current, weather=weatherDate, bathymetry=bathymetry,
                                  eca=ecas)
 
@@ -171,7 +169,7 @@ class RoutePlotter:
         # Plot route responses
         nRoutes = 2 if nRoutes is None else nRoutes
         if nRoutes <= 2:
-            for n, route in enumerate(self.processedResults['routeResponse']):
+            for n, route in enumerate(self.processedResults['routeResponse'][:nRoutes]):
                 route = [((leg['lon'], leg['lat']), leg['speed']) for leg in route['waypoints']]
                 self.route(route, m, colors=self.cmap, wps=wps)
         else:
@@ -203,7 +201,7 @@ class RoutePlotter:
 
         # Bathymetry
         if weather:
-            plot_weather(m, weather)
+            plot_weather(m, ax, weather)
             bathymetry = False
 
         if bathymetry:
@@ -250,7 +248,7 @@ class RoutePlotter:
         vDif = self.vMax - self.vMin
         nTicks = 6
         cb.ax.set_yticklabels(['%.1f' % round(self.vMin + i * vDif / (nTicks - 1), 1) for i in range(nTicks)], fontsize=8)
-        cb.set_label('Calm water speed [knots]', rotation=270, labelpad=15)
+        cb.set_label('Nominal speed [knots]', rotation=270, labelpad=15)
 
     def route(self, route, m, wps, line='solid', colors=None):
         waypoints = [leg[0] for leg in route]
@@ -276,7 +274,7 @@ class RoutePlotter:
                 m.scatter(x, y, latlon=True, color='black', marker='o', s=1, zorder=4)
 
 
-def plot_weather(m, dateTime):
+def plot_weather(m, ax, dateTime):
     retriever = WindDataRetriever(nDays=1, startDate=dateTime)
     ds = retriever.get_data(forecast=False)
 
@@ -284,8 +282,14 @@ def plot_weather(m, dateTime):
     x, y = m(*np.meshgrid(lons, lats))
 
     BNarr = ds[0, 0, :-1]
-    contourf = m.contourf(x, y, BNarr, cmap=cm.jet)
-    m.colorbar(mappable=contourf, location='bottom')
+    contourf = m.contourf(x, y, BNarr, vmin=0, vmax=12, cmap=cm.get_cmap('jet', 12))
+
+    # cb = plt.colorbar(sm, norm=plt.Normalize(vmin=self.vMin, vmax=self.vMax), cax=cax)
+    cb = m.colorbar(contourf, norm=plt.Normalize(vmin=0, vmax=12), size=0.2, pad=0.2, location='bottom')
+    vDif = 12
+    nTicks = 13
+    cb.ax.set_xticklabels(['%.f' % round(i * vDif / (nTicks - 1), 1) for i in range(nTicks)], fontsize=8)
+    cb.set_label('Wind [BFT]')
 
 
 if __name__ == '__main__':

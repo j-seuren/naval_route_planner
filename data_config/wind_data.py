@@ -152,8 +152,11 @@ if __name__ == '__main__':
         lon = np.linspace(-180, 179.5, 720)
         lat = np.linspace(-90, 90, 361)
         BNarr = da[0, 0]  # variables, time steps, latitude, longitude
+        # (-100.28166649827891, -64.16336989786363, -29.240124257502057, 27.819763064272173)
 
-        m = Basemap(projection='merc', urcrnrlat=80, urcrnrlon=180, llcrnrlat=-80, llcrnrlon=-180, resolution='c')
+        minx, miny, maxx, maxy = (-100.28166649827891, -64.16336989786363, -29.240124257502057, 27.819763064272173)
+        # minx, miny, maxx, maxy = (-180, -80, 180, 80)
+        m = Basemap(projection='merc', urcrnrlat=maxy, urcrnrlon=maxx, llcrnrlat=miny, llcrnrlon=minx, resolution='c')
 
         # convert the lat/lon values to x/y projections.
         x, y = m(*np.meshgrid(lon, lat))
@@ -162,14 +165,14 @@ if __name__ == '__main__':
 
         # # Add a coastline and axis values.
         m.drawcoastlines()
-        # m.fillcontinents()
+        m.fillcontinents()
         m.drawmapboundary()
         # m.drawparallels(np.arange(-90., 90., 30.), labels=[1, 0, 0, 0])
         # m.drawmeridians(np.arange(-180., 180., 60.), labels=[0, 0, 0, 1])
         plt.title('GFS wind speed BN')
 
     os.chdir('..')
-    retriever = WindDataRetriever(nDays=1, startDate=datetime(2018, 10, 10))  #27 20
+    retriever = WindDataRetriever(nDays=1, startDate=datetime(2011, 1, 25))  #27 20
     _ds = retriever.get_data(forecast=False)
     plot_wind(_ds)
     plt.show()
