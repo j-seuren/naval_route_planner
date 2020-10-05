@@ -21,8 +21,8 @@ TEST_SPEED = False
 eastLocations = [('E1', (-50.0, 38.0)), ('E2', (-52.5, 42.0)), ('E3', (-55.0, 46.0))]
 westLocations = [('W1', (-72.0, 32.0)), ('W2', (-73.0, 35.5)), ('W3', (-74.0, 39.0))]
 inputGulf = {'instance': 'Gulf', 'input': {'from': [], 'to': []}}
-for west in enumerate(westLocations):
-    for east in enumerate(eastLocations):
+for west in westLocations:
+    for east in eastLocations:
         inputGulf['input']['from'].append(west)
         inputGulf['input']['to'].append(east)
         inputGulf['input']['from'].append(east)
