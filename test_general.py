@@ -89,6 +89,8 @@ def multiple_experiments(inputDict, planner, parameters, genDir):
     timestamp = datetime.now().strftime('%m%d-%H%M')
 
     for d, depDate in enumerate(depDates):
+        if d > 0 and parameters['ref'] == 'R_':
+            continue
         print('date {} of {}'.format(d+1, len(depDates)))
         depS = '' if depDate is None else depDate.strftime('%Y_%m_%d')
         fileString = '{}{}'.format(parameters['ref'], depS)
