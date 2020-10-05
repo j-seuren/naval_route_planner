@@ -12,8 +12,9 @@ class Initializer:
     def __init__(self,
                  evaluator,
                  vessel,
-                 tree,
+                 landTree,
                  ecaTree,
+                 bathTree,
                  geod,
                  p,
                  container,
@@ -21,14 +22,15 @@ class Initializer:
                  DIR):
         self.evaluator = evaluator
         self.vessel = vessel          # Vessel class
-        self.tree = tree              # R-tree spatial index for shorelines
+        self.landTree = landTree              # R-tree spatial index for shorelines
         self.ecaTree = ecaTree        # R-tree spatial index for ECAs
+        self.bathTree = bathTree
         self.geod = geod              # Geod class instance
         self.container = container    # Container for individual
         self.speedIdx = speedIdx
         self.canals = {'Panama': ['panama_south', 'panama_north'],
                        'Suez': ['suez_south', 'suez_north']}
-        self.hexagraph = hexagraph.Hexagraph(self.tree, self.ecaTree, p, DIR=DIR)
+        self.hexagraph = hexagraph.Hexagraph(self.landTree, self.ecaTree, self.bathTree, p, DIR=DIR)
 
     def get_path(self, graph):
         """
@@ -65,9 +67,11 @@ class Initializer:
             for subPath in path:
                 start, end = subPath['time'][0], subPath['time'][-1]
                 subPath['eca'] = nx.astar_path(graph, start, end, heuristic=dist_heuristic, weight='eca')
+                subPath['bath'] = nx.astar_path(graph, start, end, heuristic=dist_heuristic, weight='bath')
         else:
             path = [{'time': timePath,
-                     'eca': nx.astar_path(graph, 'start', 'end', heuristic=dist_heuristic, weight='eca')}]
+                     'eca': nx.astar_path(graph, 'start', 'end', heuristic=dist_heuristic, weight='eca'),
+                     'bath': nx.astar_path(graph, 'start', 'end', heuristic=dist_heuristic, weight='bath')}]
 
         return path, xCanals
 

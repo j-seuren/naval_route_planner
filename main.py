@@ -24,7 +24,7 @@ _criteria = {'minimalTime': True, 'minimalCost': True}
 timeWeight, costWeight = -5, -1
 
 if _criteria['minimalTime'] and _criteria['minimalCost']:
-    _criteria = {'minimalTime': timeWeight, 'minimalCost': timeWeight}
+    _criteria = {'minimalTime': timeWeight, 'minimalCost': costWeight}
 elif _criteria['minimalCost']:
     _criteria = {'minimalCost': -1}
 else:
@@ -65,8 +65,8 @@ class RoutePlanner:
                              'avoidAntarctic': True,
                              'avoidArctic': True,
                              'res': 'i',           # Resolution of shorelines
-                             'penaltyValue': {'time': criteria['minimalTime'],
-                                              'cost': criteria['minimalCost']},
+                             'penaltyValue': {'time': -criteria.get('minimalTime', 1),
+                                              'cost': -criteria.get('minimalCost', 1)},
                              'graphDens': 4,       # Recursion level graph
                              'graphVarDens': 6,    # Variable recursion level graph
                              'splits': 3,          # Threshold for split_polygon (val 3 yields best performance)
@@ -112,13 +112,13 @@ class RoutePlanner:
         navAreaGenerator = NavigableAreaGenerator(self.p, DIR=DIR)
         landTree = navAreaGenerator.get_shoreline_rtree()
         ecaTree = navAreaGenerator.get_eca_rtree()
-        bathTree = navAreaGenerator.get_bathymetry_rtree() if bathymetry else None
+        bathTree = navAreaGenerator.get_bathymetry_rtree()
 
         # Initialize "Evaluator" and register it's functions
         self.evaluator = evaluation.Evaluator(self.vessel,
                                               landTree,
                                               ecaTree,
-                                              bathTree,
+                                              bathTree if bathymetry else None,
                                               ecaFactor,
                                               self.geod,
                                               criteria,
@@ -130,6 +130,7 @@ class RoutePlanner:
                                                       self.vessel,
                                                       landTree,
                                                       ecaTree,
+                                                      bathTree,
                                                       self.geod,
                                                       self.p,
                                                       creator.Individual,
@@ -236,7 +237,7 @@ class RoutePlanner:
                 moves += 1
             return c
 
-        def optimize(self, pop, result, routeIdx):
+        def optimize(self, pop, result, routeIdx, subIdx):
             mstats, log = support.statistics(), support.logbook()  # DEAP statistics and logbook
             front = tools.ParetoFront()  # Initialize ParetoFront class
             self.evals = len(pop)
@@ -302,18 +303,10 @@ class RoutePlanner:
 
                 # Step 4: Termination
                 if self.termination(prevFront, front, gen, gds, totalEvals):
-                    hypervolume = indicators.hypervolume(front)
-                    print('hypervolume', hypervolume)
-                    result['indicators'][routeIdx]['hypervolume'] = hypervolume
-                    result['logs'][routeIdx].append(deepcopy(log))
-                    result['fronts'][routeIdx].append(deepcopy(front))
-                    self.tb.unregister("individual")
-                    break
+                    return front, log
 
                 pop = popInter
                 gen += 1
-
-            return result
 
     class NSGAII:
         def __init__(self, tb, evaluator, p, terminator):
@@ -328,7 +321,7 @@ class RoutePlanner:
             self.cxpb = p['cxpb']
             self.mutpb = p['mutpb']
 
-        def optimize(self, pop, result, routeIdx):
+        def optimize(self, pop, result, routeIdx, subIdx):
             mstats, log = support.statistics(), support.logbook()  # DEAP statistics and logbook
             front = tools.ParetoFront()  # Initialize ParetoFront class
             evals = len(pop)
@@ -348,13 +341,7 @@ class RoutePlanner:
                 totalEvals += evals
                 # Step 4: Termination
                 if self.termination(prevFront, front, gen, gds, totalEvals):
-                    hypervolume = indicators.hypervolume(front)
-                    print('hypervolume', hypervolume)
-                    result['indicators'][routeIdx]['hypervolume'] = hypervolume
-                    result['logs'][routeIdx].append(deepcopy(log))
-                    result['fronts'][routeIdx].append(deepcopy(front))
-                    self.tb.unregister("individual")
-                    break
+                    return front, log
 
                 # Step 5: Variation
                 offspring = algorithms.varAnd(pop, self.tb, self.cxpb, self.mutpb)
@@ -368,8 +355,6 @@ class RoutePlanner:
                 evals = len(invInds)
 
                 gen += 1
-
-            return result
 
     class SPEA2:
         def __init__(self, tb, evaluator, p, terminator):
@@ -385,7 +370,7 @@ class RoutePlanner:
             self.mutpb = p['mutpb']
             self.sizeArchive = self.sizePop  # SPEA2 characteristic parameter
 
-        def optimize(self, pop, result, routeIdx):
+        def optimize(self, pop, result, routeIdx, subIdx):
             mstats, log = support.statistics(), support.logbook()  # DEAP statistics and logbook
             front = tools.ParetoFront()  # Initialize ParetoFront class
             evals = len(pop)
@@ -405,13 +390,7 @@ class RoutePlanner:
                 totalEvals += evals
                 # Step 4: Termination
                 if self.termination(prevFront, front, gen, gds, totalEvals):
-                    hypervolume = indicators.hypervolume(front)
-                    print('hypervolume', hypervolume)
-                    result['indicators'][routeIdx]['hypervolume'] = hypervolume
-                    result['logs'][routeIdx].append(deepcopy(log))
-                    result['fronts'][routeIdx].append(deepcopy(front))
-                    self.tb.unregister("individual")
-                    break
+                    return front, log
 
                 # Step 5: Mating Selection
                 matingPool = tools.selTournament(archive, k=self.sizePop, tournsize=2)
@@ -429,8 +408,6 @@ class RoutePlanner:
                 evals = len(invInds)
 
                 gen += 1
-
-            return result
 
     def compute(self, startEnd, recompute=False, startDate=None, current=False,
                 weather=False, algorithm='NSGA2', seed=None, avoidArctic=True, avoidAntarctic=True):
@@ -506,9 +483,11 @@ class RoutePlanner:
         result = {'startEnd': startEnd, 'initialRoutes': initRoutes, 'indicators': [None] * len(initRoutes),
                   'logs': [None] * len(initRoutes), 'fronts': [None] * len(initRoutes)}
         for routeIdx, route in enumerate(initRoutes):
+            result['indicators'][routeIdx] = [None] * len(route['route'])
+            result['logs'][routeIdx] = [None] * len(route['route'])
+            result['fronts'][routeIdx] = [None] * len(route['route'])
             print('Computing route {0}/{1}'.format(routeIdx + 1, len(initRoutes)))
             for subIdx, subRoute in enumerate(route['route']):
-                result['logs'][routeIdx], result['fronts'][routeIdx], result['indicators'][routeIdx] = [], [], {}
                 print('Computing sub route {0}/{1}'.format(subIdx + 1, len(route['route'])))
 
                 # Reset functions and caches
@@ -529,7 +508,14 @@ class RoutePlanner:
                 self.tb.register("individual", initialization.init_individual, self.tb, subRoute)
 
                 # Begin the generational process
-                result = MOEA.optimize(initialPop, result, routeIdx)
+                front, log = MOEA.optimize(initialPop, result, routeIdx, subIdx)
+                self.tb.unregister("individual")
+
+                hypervolume = indicators.hypervolume(front)
+                print('hypervolume', hypervolume)
+                result['indicators'][routeIdx][subIdx] = {'hypervolume': deepcopy(hypervolume)}
+                result['logs'][routeIdx][subIdx] = deepcopy(log)
+                result['fronts'][routeIdx][subIdx] = deepcopy(front)
 
         return result
 
@@ -543,8 +529,8 @@ class RoutePlanner:
             self.evaluator.landRtree = navAreaGenerator.get_shoreline_rtree()
             self.evaluator.ecaRtree = navAreaGenerator.get_eca_rtree()
             self.initializer = initialization.Initializer(self.evaluator, self.vessel, self.evaluator.landRtree,
-                                                          self.evaluator.ecaRtree, self.geod, self.p,
-                                                          creator.Individual, self.speedIdx, DIR)
+                                                          self.evaluator.ecaRtree, self.initializer.bathTree,
+                                                          self.geod, self.p, creator.Individual, self.speedIdx, DIR)
 
     def get_days(self, pop):
         """
@@ -695,7 +681,7 @@ class RoutePlanner:
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     # import multiprocessing as mp
-    # import pprint
+    import pprint
     import time
 
     from case_studies.plot_results import RoutePlotter
@@ -704,14 +690,14 @@ if __name__ == "__main__":
     from support import locations
 
     startTime = time.time()
-    _startEnd = (locations['KeelungC'], locations['Tokyo'])
+    _startEnd = (locations['Veracruz'], locations['Concepcion'])
 
     # parameters = {'gen': 200,  # Min number of generations
     #               'n': 100}    # Population size
 
-    kwargsPlanner = {'inputParameters': {'n': 100}, 'tb': _tb, 'criteria': _criteria}
-    kwargsCompute = {'startEnd': _startEnd, 'startDate': datetime(2014, 9, 15), 'recompute': True, 'current': True,
-                     'weather': False, 'seed': 1, 'algorithm': 'SPEA2'}
+    kwargsPlanner = {'inputParameters': {'n': 500, 'gen': 400}, 'tb': _tb, 'ecaFactor': 1.0, 'criteria': _criteria}
+    kwargsCompute = {'startEnd': _startEnd, 'startDate': datetime(2014, 9, 15), 'recompute': True, 'current': False,
+                     'weather': False, 'seed': 1, 'algorithm': 'NSGA2'}
     multiprocess = False
 
     if multiprocess:
@@ -727,10 +713,10 @@ if __name__ == "__main__":
     procResults, rawResults = planner.post_process(rawResults)
     routePlotter = RoutePlotter(DIR, procResults, rawResults=rawResults, vessel=planner.vessel)
     fig, ax = plt.subplots()
-    ax = routePlotter.results(ax, initial=True, ecas=False, nRoutes=5, colorbar=True)
+    ax = routePlotter.results(ax, bathymetry=True, initial=False, ecas=False, nRoutes=1, colorbar=True)
 
-    # pp = pprint.PrettyPrinter(depth=6)
-    # pp.pprint(post_processed_results)
+    pp = pprint.PrettyPrinter(depth=6)
+    pp.pprint(procResults)
     print("--- %s seconds ---" % (time.time() - startTime))
-    plt.savefig('D:/output/figures/Salvador_Lima.pdf')
+    plt.savefig('D:/output/figures/Veracruz_Concepcion.pdf')
     plt.show()

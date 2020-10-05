@@ -14,7 +14,7 @@ from support import locations
 
 DIR = Path('D:/')
 
-for _ in range(5):
+for _ in range(1):
     N_CALLs = 200
     N_POINTS = 10
     DEPART = datetime(2016, 1, 1)
@@ -58,7 +58,7 @@ for _ in range(5):
         # skopt.space.Real(0.1, 5.0, name='delFactor')
         ]
 
-    spaces = [space1, space2]
+    spaces = [space2]
 
     START_ENDS = [(locations['Caribbean Sea'], locations['North UK']), (locations['Singapore'], locations['Wellington']),
                   (locations['Houston'], locations['Paramaribo']), (locations['Sao Paulo'], locations['Sri Lanka']),
@@ -89,7 +89,7 @@ for _ in range(5):
 
                 def train_evaluate(search_params):
                     global CALLS
-                    start_func_time = time.time()
+                    # start_func_time = time.time()
 
                     parameters = {**default_parameters, **search_params}
                     print(parameters)
@@ -99,14 +99,14 @@ for _ in range(5):
                     PLANNER.update_parameters(parameters)
                     result = PLANNER.compute(START_END, startDate=DEPART, current=CURRENT, recompute=True, seed=None)
 
-                    end_func_time = time.time() - start_func_time
+                    # end_func_time = time.time() - start_func_time
                     avgFitList = [subLog.chapters["fitness"].select("avg") for log in result['logs'] for subLog in log]
                     avgFit = np.sum(np.sum(avgFitList, axis=0), axis=0)
-                    score = np.append(end_func_time, avgFit)
-                    weights = np.array([1/0.1, 1, 1/100])
-                    weightedSum = np.dot(score, weights)
+                    # score = np.append(end_func_time, avgFit)
+                    # weights = np.array([1/0.1, 1, 1/100])
+                    # weightedSum = np.dot(score, weights)
 
-                    return weightedSum
+                    return avgFit
 
                 @skopt.utils.use_named_args(SPACE)
                 def objective(**params):
@@ -126,23 +126,10 @@ for _ in range(5):
                 newDF = pd.DataFrame(best_params, index=[iteration])
                 df = oldDF.append(newDF) if iteration > 0 else newDF
 
-
-
                 # Save tuning results
                 resFP = tuningDir / '{}.gz'.format(iteration)
-                skopt.dump(_res, resFP, compress=9, store_objective=False)
+                skopt.dump(res, resFP, compress=9, store_objective=False)
                 print('Saved tuning results to', resFP)
-
-                # # Plot results
-                # figFP = figDir / '{}_'.format(timestamp)
-                # plots.plot_evaluations(res)
-                # plt.savefig(figFP.as_posix() + 'eval.pdf')
-                # plots.plot_objective(res)
-                # plt.savefig(figFP.as_posix() + 'obj.pdf')
-                # plots.plot_convergence(res)
-                # plt.savefig(figFP.as_posix() + 'conv.pdf')
-                # print('Saved figures to', figDir)
-
                 return df
 
 
@@ -151,8 +138,3 @@ for _ in range(5):
         DF.to_excel(writer)
         print('written df to', writer.path)
         writer.close()
-
-# timestamp = datetime.now().strftime('%m%d%H%M')
-# fp = 'D:/JobS/Downloads/checkpoint_3.pkl'
-
-# plt.show()

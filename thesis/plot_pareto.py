@@ -39,6 +39,7 @@ class MergedPlots:
         self.vMin, vMax = min(self.planner.vessel.speeds), max(self.planner.vessel.speeds)
         self.dV = vMax - self.vMin
 
+        self.initialLabel = 'not set'
 
         # Fronts and routes
         self.outFiles = []
@@ -47,22 +48,27 @@ class MergedPlots:
                 rawList = pickle.load(f)
             updateDict = {experiment: 1.5593} if experiment == 'eca' else {experiment: date}
             proc, raw = self.planner.post_process(rawList[0], updateEvaluator=updateDict)
-            fronts = [get_front(_front, self.planner, experiment, date) for _front in raw['fronts']]
+            fronts, deapFronts = zip(*[get_front(_front, self.planner, experiment, date) for _front in raw['fronts']])
 
-            self.outFiles.append({'fronts': fronts, 'proc': proc, 'raw': raw, 'filename': rawFN})
+            self.outFiles.append({'fronts': fronts, 'deapFronts': deapFronts[0], 'proc': proc, 'raw': raw, 'filename': rawFN})
 
     def merged_pareto(self, save=False):
         frontFig, frontAx = plt.subplots()
         frontAx.set_xlabel('Travel time [d]', fontproperties=fontProp)
-        frontAx.set_ylabel('Fuel costs [x1000 USD/t]', fontproperties=fontProp)
+        frontAx.set_ylabel('Fuel costs [x1000 USD]', fontproperties=fontProp)
         cycleFront = frontAx._get_lines.prop_cycler
 
-        labels = ['Constant speed - ref. (CR)', 'Constant speed (C)',
-                  'Variable speed - ref. (VR)', 'Variable speed (V)']
+        if self.experiment == 'eca':
+            labels = ['Incl. ECA (E)', 'Excl. ECA (R)']
+            C, V = '', ''
+        else:
+            labels = ['Constant speed - ref. (CR)', 'Constant speed (C)',
+                      'Variable speed - ref. (VR)', 'Variable speed (V)']
+            C, V = 'C', 'V'
         labelString, next_color = '', 'black'
         for file in self.outFiles:
-            S = 'C' if 'C' in file['filename'] else 'V'
-            R = 'R' if 'R' in file['filename'] else ''
+            S = C if C in file['filename'] else V
+            R = 'R' if 'R' in file['filename'] else 'E'
             newLabelString = '({}{})'.format(S, R)
             noLabel = True if labelString == newLabelString else False
             labelString = newLabelString
@@ -102,7 +108,15 @@ class MergedPlots:
 
         return cmap
 
-    def merged_routes(self, allRoutes=False, colorbar=False, save=False):
+    def plot_ind(self, ind, m, label=None, line='solid', color='k', cmap=None):
+        waypoints, speeds = zip(*ind)
+        for i, leg in enumerate(zip(waypoints[:-1], waypoints[1:])):
+            color = cmap((speeds[i] - self.vMin) / self.dV) if cmap else color
+            label = None if i > 0 else label
+            m.drawgreatcircle(leg[0][0], leg[0][1], leg[1][0], leg[1][1], label=label, linestyle=line, linewidth=1,
+                              alpha=0.5, color=color, zorder=3)
+
+    def merged_routes(self, initial=False, intervalRoutes=None, colorbar=False, save=False):
         routeFig, routeAx = plt.subplots()
         cycleRoute = routeAx._get_lines.prop_cycler
         cmap = self.colorbar(routeAx) if colorbar else None
@@ -116,38 +130,40 @@ class MergedPlots:
         else:
             currentDict = None
         m = navigation_area(routeAx, self.outFiles[0]['proc'], eca=self.experiment == 'eca', current=currentDict)
+
         labelString, labels = '', [' - time', ' - cost']
         for file in self.outFiles:
+            # Plot initial routes
+            if initial:
+                for initRoute in file['raw']['initialRoutes']:
+                    for subInitRoute in initRoute['route']:
+                        for objRoute in subInitRoute.values():
+                            self.initialLabel = 'Initial routes' if self.initialLabel == 'not set' else None
+                            self.plot_ind(objRoute,  m, label=self.initialLabel)
+
             S = 'C' if 'C' in file['filename'] else 'V'
             R = 'R' if 'R' in file['filename'] else ''
             if labelString == '{}{}'.format(S, R):  # Plot constant speed profile only once
                 continue
             labelString = '{}{}'.format(S, R)
 
-            if not allRoutes:  # Plot route responses
+            if not intervalRoutes or R == 'R':  # Plot route responses
                 color = next(cycleRoute)['color']
                 for r, route in enumerate(file['proc']['routeResponse']):
                     if r > 1:
                         break
-                    label = '{}{}'.format(labelString, labels[r])
-                    waypoints = [(leg['lon'], leg['lat']) for leg in route['waypoints']]
-                    legs = zip(waypoints[:-1], waypoints[1:])
+                    label = '{}{}'.format(labelString, labels[r]) if self.initialLabel == 'not set' else None
+                    ind = [((leg['lon'], leg['lat']), leg['speed']) for leg in route['waypoints']]
                     line = 'dashed' if r > 0 else 'solid'
-                    for i, leg in enumerate(legs):
-                        label = None if i > 0 else label
-                        m.drawgreatcircle(leg[0][0], leg[0][1], leg[1][0], leg[1][1],
-                                          label=label, linestyle=line, linewidth=1, alpha=0.5, color=color, zorder=3)
-            else:
-                for fronts in file['raw']['fronts']:
-                    for front in fronts:
-                        for ind in front:
-                            waypoints, speeds = zip(*ind)
-                            for i, leg in enumerate(zip(waypoints[:-1], waypoints[1:])):
-                                color = cmap((speeds[i] - self.vMin) / self.dV) if cmap else 'k'
-                                m.drawgreatcircle(leg[0][0], leg[0][1], leg[1][0], leg[1][1],
-                                                  linewidth=0.5, color=color, zorder=3)
+                    self.plot_ind(ind, m, label=label, color=color, line=line)
 
-        routeAx.legend(loc='lower right', prop=fontProp)
+            else:
+                for front in file['deapFronts']:
+                    for ind in front:
+                        if intervalRoutes[0] < ind.fitness.values[0] < intervalRoutes[1]:
+                            self.plot_ind(ind, m, cmap=cmap)
+        if not intervalRoutes or initial:
+            routeAx.legend(loc='lower right', prop=fontProp)
 
         # plt.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
         # plt.margins(0, 0)
@@ -181,14 +197,16 @@ def get_front(frontIn, planner, experiment, date):
     weather = True if experiment == 'weather' else False
     planner.evaluator.set_classes(current, weather, date, 10)
 
-    subObjVals = []
+    subObjVals, deapFronts = [], []
     for front in frontIn:
-        objValues = [planner.evaluator.evaluate(ind, revert=False, includePenalty=False) for ind in front]
-        subObjVals.append(np.array(objValues))
+        newFits = [planner.evaluator.evaluate(ind, revert=False, includePenalty=False) for ind in front]
+        for ind, fit in zip(front.items, newFits):
+            ind.fitness.values = fit
+        subObjVals.append(np.array(newFits))
 
     # First concatenate sub path objective values
     objVals = [sum(x) for x in itertools.product(*subObjVals)]
-    return update(objVals)
+    return update(objVals), frontIn
 
 
 def set_extent(proc):
@@ -345,12 +363,11 @@ def navigation_area(ax, proc, eca=False, current=None):
 #     routeFig.savefig('{}_route_merged.pdf'.format(fn), bbox_inches='tight', pad_inches=.5)
 
 
-_directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/Current results/Gulf/Gulf0'
-_experiment = 'current'
-mergedPlots = MergedPlots(_directory, datetime(2014, 11, 25), _experiment, contains='31')
+_directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/eca results/v2'
+mergedPlots = MergedPlots(_directory, datetime(2014, 11, 25), experiment='eca', contains='FloSa')
 
 mergedPlots.merged_pareto(save=True)
-mergedPlots.merged_routes(colorbar=True, save=True)
+mergedPlots.merged_routes(initial=True, intervalRoutes=[0, 8], colorbar=True, save=True)
 
 plt.show()
 

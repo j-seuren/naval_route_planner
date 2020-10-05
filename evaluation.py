@@ -66,7 +66,7 @@ class Evaluator:
 
     @delta_penalty
     def evaluate(self, ind, revert=None, includePenalty=None):
-        includePenalty = self.bathymetry if includePenalty is None else includePenalty
+        self.includePenalty = self.bathymetry if includePenalty is None else includePenalty
         revert = self.revertOutput if revert is None else revert
         hours = cost = 0.
 
@@ -83,7 +83,7 @@ class Evaluator:
             if geo_x_geos(self.ecaRtree, p1, p2):
                 legCost *= self.ecaFactor
 
-            if includePenalty:
+            if self.includePenalty:
                 timePenalty, costPenalty = self.e_feasible(p1, p2)
                 legHours += timePenalty
                 legCost += costPenalty
@@ -335,23 +335,23 @@ if __name__ == '__main__':
 
     _heading = 0
     _vessel = Vessel(300)
-    _speed = 16.8  # knots
-    windDirs = np.linspace(0, 180, 181)
+    _speed = 15.2  # knots
+    windDegs = np.linspace(0, 180, 181)
     BNs = np.linspace(0, 12, 13)
-    newSpeeds = np.zeros([len(windDirs), len(BNs)])
-    for ii, _windDir in enumerate(windDirs):
+    newSpeeds = np.zeros([len(windDegs), len(BNs)])
+    for ii, _windDeg in enumerate(windDegs):
         for jj, _BN in enumerate(BNs):
-            newSpeeds[ii, jj] = _vessel.reduced_speed(_speed, _BN, _windDir, _heading)
+            newSpeeds[ii, jj] = _vessel.reduced_speed(_windDeg, _heading, _BN, _speed)
 
     # Print
     pp = pprint.PrettyPrinter()
-    pp.pprint(windDirs)
+    pp.pprint(windDegs)
     pp.pprint(BNs)
     pp.pprint(newSpeeds)
 
     # Plot
     fig = plt.figure()
     ax = fig.gca(projection='3d')
-    X, Y = np.meshgrid(BNs, windDirs)
+    X, Y = np.meshgrid(BNs, windDegs)
     ax.plot_surface(X, Y, newSpeeds)
     plt.show()

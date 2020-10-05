@@ -30,12 +30,14 @@ class Point3D:
 
 class Hexagraph:
     def __init__(self,
-                 treeDict,
-                 ecaTreeDict,
+                 landTree,
+                 ecaTree,
+                 bathTree,
                  p,
                  DIR):
-        self.treeDict = treeDict
-        self.ecaTreeDict = ecaTreeDict
+        self.landTree = landTree
+        self.ecaTree = ecaTree
+        self.bathTree = bathTree
         self.p = p
         self.DIR = DIR
 
@@ -60,7 +62,7 @@ class Hexagraph:
             return graph
         except FileNotFoundError:
             # Initialize "Hexagraph"
-            constructor = self.GraphConstructor(self.treeDict, self.ecaTreeDict, self.p, DIR=self.DIR)
+            constructor = self.GraphConstructor(self.landTree, self.ecaTree, self.bathTree, self.p, DIR=self.DIR)
             graph = constructor.construct()
 
             # Save graph to file
@@ -75,7 +77,7 @@ class Hexagraph:
             for n1, n2 in edgeDataDict:
                 # Get positions of nodes from current edge
                 p1, p2 = graph.nodes[n1]['deg'], graph.nodes[n2]['deg']
-                if geo_x_geos(self.treeDict, p1, p2):
+                if geo_x_geos(self.landTree, p1, p2):
                     graph.remove_edge(n1, n2)
         pos = nx.get_node_attributes(graph, 'deg')
         fig, ax = plt.subplots()
@@ -126,9 +128,10 @@ class Hexagraph:
         return fig, ax
 
     class GraphConstructor:
-        def __init__(self, treeDict, ecaTreeDict, p, DIR):
-            self.treeDict = treeDict
-            self.ecaTreeDict = ecaTreeDict
+        def __init__(self, landTree, ecaTree, bathTree, p, DIR):
+            self.landTree = landTree
+            self.ecaTree = ecaTree
+            self.bathTree = bathTree
             self.exteriorTreeDict = NavigableAreaGenerator(p, DIR=DIR).get_shoreline_rtree(getExterior=True)
             self.distance = Geodesic(dist_calc='great_circle').distance
             self.recursionLevel = p['graphDens']
@@ -205,7 +208,7 @@ class Hexagraph:
                 p = self.graph.nodes[n]['deg']
 
                 # Remove nodes on land
-                if geo_x_geos(self.treeDict, p):
+                if geo_x_geos(self.landTree, p):
                     self.graph.remove_node(n)
                     removed += 1
             sys.stdout.write("\rRemoved {} nodes\n".format(removed))
@@ -229,7 +232,7 @@ class Hexagraph:
 
                 # Remove edges intersecting land, but skip border edges
                 # since they always intersect polygons if projected on 2D
-                if abs(p1[0] - p2[0]) < 340 and geo_x_geos(self.treeDict, p1, p2):
+                if abs(p1[0] - p2[0]) < 340 and geo_x_geos(self.landTree, p1, p2):
                     self.graph.remove_edge(n1, n2)
                     removed += 1
             sys.stdout.write("\rRemoved {} edges\n".format(removed))
@@ -393,10 +396,15 @@ class Hexagraph:
                 miles = self.distance(p1, p2)
                 self.graph[n1][n2]['dist'] = miles
 
-                if geo_x_geos(self.ecaTreeDict, p1, p2):
+                if geo_x_geos(self.ecaTree, p1, p2):
                     self.graph[n1][n2]['eca'] = miles * 10
                 else:
                     self.graph[n1][n2]['eca'] = miles
+
+                if not geo_x_geos(self.bathTree, p1, p2):
+                    self.graph[n1][n2]['bath'] = miles * 10
+                else:
+                    self.graph[n1][n2]['bath'] = miles
             print('done')
 
             # Set canal edge weights to predefined weights

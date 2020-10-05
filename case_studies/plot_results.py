@@ -169,8 +169,9 @@ class RoutePlotter:
         if colorbar:
             self.colorbar(ax, self.cmap)
         # Plot route responses
-        if nRoutes is None:
-            for route in self.processedResults['routeResponse']:
+        nRoutes = 2 if nRoutes is None else nRoutes
+        if nRoutes <= 2:
+            for n, route in enumerate(self.processedResults['routeResponse']):
                 route = [((leg['lon'], leg['lat']), leg['speed']) for leg in route['waypoints']]
                 self.route(route, m, colors=self.cmap, wps=wps)
         else:
