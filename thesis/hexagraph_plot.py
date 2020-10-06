@@ -10,10 +10,10 @@ from pathlib import Path
 DIR = Path('D:/')
 
 os.chdir('..')
-graph_d = 3
-graph_vd = 4
+graph_d = 4
+graph_vd = 6
 _resolution = 'i'
-splits = 10
+splits = 3
 _par = {'res': _resolution,
         'splits': splits,
         'graphVarDens': graph_vd,
@@ -22,12 +22,17 @@ _par = {'res': _resolution,
         'avoidArctic': True}
 
 # Load and pre-process shoreline and ECA polygons
-navAreaGenerator = NavigableAreaGenerator(_par)
+navAreaGenerator = NavigableAreaGenerator(_par, DIR=DIR)
 _treeDict = navAreaGenerator.get_shoreline_rtree()
-_ecaTreeDict = navAreaGenerator.get_eca_tree
+_ecaTreeDict = navAreaGenerator.get_eca_rtree()
+_bathTree = navAreaGenerator.get_bathymetry_rtree()
 
 # Initialize "Hexagraph"
-hexagraph = Hexagraph(_treeDict, _ecaTreeDict, _par)
+hexagraph = Hexagraph(_treeDict,
+                 _ecaTreeDict,
+                 _bathTree,
+                 _par,
+                 DIR)
 
 # # Get distribution of graph edge lengths
 # fig1, ax1 = plt.subplots()
@@ -62,6 +67,6 @@ ax.xaxis.set_major_locator(plt.NullLocator())
 ax.yaxis.set_major_locator(plt.NullLocator())
 ax.zaxis.set_major_locator(plt.NullLocator())
 
-fig.savefig(DIR / 'output/figures/INIT_3D_sphere.pdf', bbox_inches='tight', pad_inches=0)
+# fig.savefig(DIR / 'output/figures/INIT_3D_sphere_3.pdf', bbox_inches='tight', pad_inches=0)
 print('saved graph')
 plt.show()

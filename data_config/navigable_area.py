@@ -41,7 +41,7 @@ class NavigableAreaGenerator:
 
         return get_rtree(shorelines, fp)
 
-    def get_bathymetry_rtree(self):
+    def get_bathymetry_rtree(self, getExterior=False):
         fp = self.DIR / 'data/navigation_area/bath_split{}'.format(self.splitThreshold)
         if os.path.exists(fp):
             with open(fp, 'rb') as f:
@@ -55,6 +55,17 @@ class NavigableAreaGenerator:
             with open(fp, 'wb') as f:
                 pickle.dump(bathPolys, f)
             print('Saved to: ', fp)
+
+        if getExterior:
+            exteriors = []
+            for polygon in bathPolys:
+                cutLines = cut(polygon.exterior, self.splitThreshold)
+                exterior = [cutLines[0]]
+                while len(cutLines) > 1:
+                    cutLines = cut(cutLines[-1], 10)
+                    exterior.append(cutLines[0])
+                exteriors.extend(exterior)
+            bathPolys = exteriors
 
         return get_rtree(bathPolys, fp)
 
@@ -168,10 +179,21 @@ class NavigableAreaGenerator:
                 finalResult.append(g)
         return finalResult
 
-    def get_eca_rtree(self):
+    def get_eca_rtree(self, getExterior=False):
         fp = self.DIR / 'data/navigation_area/secas'
         with open(fp, 'rb') as f:
             ecas = pickle.load(f)
+
+        if getExterior:
+            exteriors = []
+            for polygon in ecas:
+                cutLines = cut(polygon.exterior, self.splitThreshold)
+                exterior = [cutLines[0]]
+                while len(cutLines) > 1:
+                    cutLines = cut(cutLines[-1], 10)
+                    exterior.append(cutLines[0])
+                exteriors.extend(exterior)
+            ecas = exteriors
 
         return get_rtree(ecas, fp)
 
@@ -210,13 +232,13 @@ if __name__ == '__main__':
 
     DIR = Path('D:/')
     os.chdir('..')
-    pars = {'res': 'l', 'splits': 10, 'avoidAntarctic': False, 'avoidArctic': False}
+    pars = {'res': 'i', 'splits': 10, 'avoidAntarctic': False, 'avoidArctic': False}
     generator = NavigableAreaGenerator(parameters=pars, DIR=DIR)
     bathymetry = generator.get_bathymetry_rtree()
 
     # Plot on Basemap
     _fig, _ax = plt.subplots()
-    m = Basemap(projection='robin', lon_0=0, resolution='l', ax=_ax)
+    m = Basemap(projection='robin', lon_0=0, resolution='i', ax=_ax)
     m.drawmapboundary(fill_color='red', zorder=1)
     m.drawcoastlines(color='black')
     m.fillcontinents(color='lightgray', lake_color='lightgray', zorder=2)

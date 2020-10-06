@@ -12,7 +12,7 @@ parameters = {'DIR': DIR,
               'current': False,
               'ecaFactor': 1.0,
               'exp': 'weather',
-              'iterations': 1,
+              'iterations': 5,
               'MOEA': 'NSGA2',
               }
 
@@ -20,22 +20,22 @@ inputWeather = {'instance': 'WTH', 'input': {'from': [
                                                       # ('Ny', locations['New York']),  # Kuhlemann
                                                       # ('K', locations['Keelung']),  # Lin2013
                                                       ('No', locations['Normandy']),  # Shao2012
-                                                      # ('No', locations['Normandy']),  # Vettor2016
-                                                      # ('V', locations['Valencia'])  # Vettor2016
+                                                      ('P', locations['Plymouth']),  # Marie
+                                                      ('V', locations['Valencia'])  # Vettor2016
                                                       ],
                                              'to': [
                                                     # ('P', locations['Paramaribo']),
                                                     # ('S', locations['San Francisco']),
                                                     ('Ny', locations['New York']),
-                                                    # ('Mi', locations['Miami']),
-                                                    # ('Ma', locations['Malta'])
+                                                    ('H', locations['Havana']),
+                                                    ('Ma', locations['Malta'])
                                                     ],
                                              'departureDates': [
                                                                 # datetime(2017, 9, 4),
                                                                 # datetime(2011, 5, 28),  # DEP 0000Z 28 May 2011, ETA 0000Z 11 June 2011
                                                                 datetime(2011, 1, 25),  # DEP 03:00 p.m. ETA: 00:30 p.m. 30/01/2011
-                                                                # datetime(2015, 6, 21),  # June 21, 2015 at 00:00
-                                                                # datetime(2015, 6, 21)  # June 21, 2015 at 00:00
+                                                                datetime(2013, 9, 24),  # 2013 09 24 12:00am
+                                                                datetime(2015, 6, 21)  # June 21, 2015 at 00:00
                                                                 ]}
                 }
 
@@ -45,9 +45,8 @@ criteria = {'minimalTime': True, 'minimalCost': True}
 
 for weather in [True, False]:
     for speed in [
-                  # 'constant',
-                  'var'
-                 ]:
+        # 'constant',
+                  'var']:
         speedOps = ['insert', 'move', 'delete'] if speed == 'constant' else ['speed', 'insert', 'move', 'delete']
         par = {'mutationOperators': speedOps}
         planner = main.RoutePlanner(inputParameters=par,

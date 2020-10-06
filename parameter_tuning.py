@@ -60,8 +60,10 @@ for _ in range(1):
 
     spaces = [space2]
 
-    START_ENDS = [(locations['Caribbean Sea'], locations['North UK']), (locations['Singapore'], locations['Wellington']),
-                  (locations['Houston'], locations['Paramaribo']), (locations['Sao Paulo'], locations['Sri Lanka']),
+    START_ENDS = [(locations['Caribbean Sea'], locations['North UK']),
+                  (locations['Singapore'], locations['Wellington']),
+                  (locations['Houston'], locations['Paramaribo']),
+                  (locations['Sao Paulo'], locations['Sri Lanka']),
                   (locations['Keelung'], locations['Perth'])]
 
     iterations = len(START_ENDS)
@@ -103,10 +105,10 @@ for _ in range(1):
                     avgFitList = [subLog.chapters["fitness"].select("avg") for log in result['logs'] for subLog in log]
                     avgFit = np.sum(np.sum(avgFitList, axis=0), axis=0)
                     # score = np.append(end_func_time, avgFit)
-                    # weights = np.array([1/0.1, 1, 1/100])
-                    # weightedSum = np.dot(score, weights)
+                    weights = np.array([1, 1/100])
+                    weightedSum = np.dot(avgFit, weights)
 
-                    return avgFit
+                    return weightedSum
 
                 @skopt.utils.use_named_args(SPACE)
                 def objective(**params):

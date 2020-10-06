@@ -11,7 +11,7 @@ parameters = {'DIR': DIR,
               'bathymetry': False,
               'weather': False,
               'exp': 'eca',
-              'iterations': 5,
+              'iterations': 1,
               'MOEA': 'NSGA2',
               'speed': 'var'  # 'constant' or 'var'
               }
@@ -30,9 +30,11 @@ inputDict = {'instance': 'ECA', 'input': {'from': ecaStart,
 criteria = {'minimalTime': True, 'minimalCost': True}
 
 speedOps = ['insert', 'move', 'delete'] if parameters['speed'] == 'constant' else ['speed', 'insert', 'move', 'delete']
-par = {'mutationOperators': speedOps, 'gen': 300}
+par = {'mutationOperators': speedOps, 'gen': 400, 'delFactor': 1.2}
 
-for ecaFactor in [1.5593, 1.0]:
+for ecaFactor in [1.5593
+    # , 1.0
+                  ]:
     parameters['ecaFactor'] = ecaFactor
     planner = main.RoutePlanner(inputParameters=par,
                                 bathymetry=parameters['bathymetry'],

@@ -85,10 +85,10 @@ if __name__ == '__main__':
     from datetime import datetime
     from pathlib import Path
 
-    DIR = Path('D:/')
+    _dir = Path('D:/')
     startDate = datetime(2015, 6, 21)
     nr_days = 28
-    windOp = WindOperator(startDate, nr_days, DIR)
+    windOp = WindOperator(startDate, nr_days, _dir)
     print(windOp.get_grid_pt_wind(startDate, -86.707108, 27.572103))
 
 

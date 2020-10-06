@@ -11,7 +11,7 @@ parameters = {'DIR': DIR,
               'weather': False,
               'ecaFactor': 1.0,
               'exp': 'bathymetry',
-              'iterations': 5,
+              'iterations': 1,
               'MOEA': 'NSGA2',
               'speed': 'constant'  # 'constant' or 'var'
               }
@@ -22,7 +22,7 @@ inputDict = inputBath
 criteria = {'minimalTime': -3, 'minimalCost': -15}
 
 speedOps = ['insert', 'move', 'delete'] if parameters['speed'] == 'constant' else ['speed', 'insert', 'move', 'delete']
-par = {'mutationOperators': speedOps}
+par = {'mutationOperators': speedOps, 'gen': 800, 'graphDens': 4, 'graphVarDens': 6, 'delFactor': 1.2}
 
 for bathymetry in [True, False]:
     parameters['bathymetry'] = bathymetry

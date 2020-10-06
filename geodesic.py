@@ -101,7 +101,7 @@ class Geodesic:
             """
 
         if bearing:
-            haversine.haversine(reversed(p1), reversed(p2), unit='nmi'), calc_bearing(p1, p2)
+            return haversine.haversine(reversed(p1), reversed(p2), unit='nmi'), calc_bearing(p1, p2)
         else:
             return haversine.haversine(reversed(p1), reversed(p2), unit='nmi')  # nautical miles
 

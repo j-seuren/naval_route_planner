@@ -132,8 +132,10 @@ class Hexagraph:
             self.landTree = landTree
             self.ecaTree = ecaTree
             self.bathTree = bathTree
-            self.exteriorTreeDict = NavigableAreaGenerator(p, DIR=DIR).get_shoreline_rtree(getExterior=True)
-            self.distance = Geodesic(dist_calc='great_circle').distance
+            self.extLand = NavigableAreaGenerator(p, DIR=DIR).get_shoreline_rtree(getExterior=True)
+            self.extEca = NavigableAreaGenerator(p, DIR=DIR).get_eca_rtree(getExterior=True)
+            self.extBath = NavigableAreaGenerator(p, DIR=DIR).get_bathymetry_rtree(getExterior=True)
+            self.distance = Geodesic().distance
             self.recursionLevel = p['graphDens']
             self.varRecursionLevel = p['graphVarDens']
             self.graph = nx.Graph()
@@ -317,7 +319,7 @@ class Hexagraph:
                         continue
 
                     # If edge crosses a polygon exterior, refine two adjacent triangles
-                    if geo_x_geos(self.exteriorTreeDict, p1, p2):
+                    if geo_x_geos(self.extLand, p1, p2) or geo_x_geos(self.extEca, p1, p2) or geo_x_geos(self.extBath, p1, p2):
                         # Get adjacent triangles of intersected edge
                         n3s = [e1[1] for e1 in edgesCopy(n1) for e2 in edgesCopy(n2) if e1[1] == e2[1]]
                         adjacentTris = [(n1, n2, n3) for n3 in n3s if tuple(sorted((n1, n2, n3))) not in triCache]
@@ -395,16 +397,8 @@ class Hexagraph:
                 p1, p2 = self.graph.nodes[n1]['deg'], self.graph.nodes[n2]['deg']
                 miles = self.distance(p1, p2)
                 self.graph[n1][n2]['dist'] = miles
-
-                if geo_x_geos(self.ecaTree, p1, p2):
-                    self.graph[n1][n2]['eca'] = miles * 10
-                else:
-                    self.graph[n1][n2]['eca'] = miles
-
-                if not geo_x_geos(self.bathTree, p1, p2):
-                    self.graph[n1][n2]['bath'] = miles * 10
-                else:
-                    self.graph[n1][n2]['bath'] = miles
+                self.graph[n1][n2]['eca'] = miles * 10 if geo_x_geos(self.ecaTree, p1, p2) else miles
+                self.graph[n1][n2]['bath'] = miles * 1e+4 if not geo_x_geos(self.bathTree, p1, p2) else miles
             print('done')
 
             # Set canal edge weights to predefined weights

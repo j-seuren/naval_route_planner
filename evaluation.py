@@ -164,8 +164,7 @@ class Evaluator:
 
         # Coordinates of middle point of leg
         # If segment crosses datum line (-180 degrees), choose p1 as middle point
-        lon, lat = p1 if abs(p1[0] - p2[0]) > 300 else (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2
-
+        lon, lat = p1 if abs(p1[0] - p2[0]) > 300 else ((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2)
         if self.inclWeather:
             # Beaufort number (BN) and true wind direction (TWD) at (lon, lat)
             BN, windDeg = self.weatherOperator.get_grid_pt_wind(now, lon, lat)
@@ -331,27 +330,85 @@ if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import pprint
 
+    from geodesic import Geodesic
+    from data_config.navigable_area import NavigableAreaGenerator
+
     os.chdir('...')
 
-    _heading = 0
-    _vessel = Vessel(300)
-    _speed = 15.2  # knots
-    windDegs = np.linspace(0, 180, 181)
-    BNs = np.linspace(0, 12, 13)
-    newSpeeds = np.zeros([len(windDegs), len(BNs)])
-    for ii, _windDeg in enumerate(windDegs):
-        for jj, _BN in enumerate(BNs):
-            newSpeeds[ii, jj] = _vessel.reduced_speed(_windDeg, _heading, _BN, _speed)
+    def test_kwon():
+        _heading = 0
+        _vessel = Vessel(300)
+        _speed = 15.2  # knots
+        windDegs = np.linspace(0, 180, 181)
+        BNs = np.linspace(0, 12, 13)
+        newSpeeds = np.zeros([len(windDegs), len(BNs)])
+        for ii, _windDeg in enumerate(windDegs):
+            for jj, _BN in enumerate(BNs):
+                newSpeeds[ii, jj] = _vessel.reduced_speed(_windDeg, _heading, _BN, _speed)
 
-    # Print
-    pp = pprint.PrettyPrinter()
-    pp.pprint(windDegs)
-    pp.pprint(BNs)
-    pp.pprint(newSpeeds)
+        # Print
+        pp = pprint.PrettyPrinter()
+        pp.pprint(windDegs)
+        pp.pprint(BNs)
+        pp.pprint(newSpeeds)
 
-    # Plot
-    fig = plt.figure()
-    ax = fig.gca(projection='3d')
-    X, Y = np.meshgrid(BNs, windDegs)
-    ax.plot_surface(X, Y, newSpeeds)
-    plt.show()
+        # Plot
+        fig = plt.figure()
+        ax = fig.gca(projection='3d')
+        X, Y = np.meshgrid(BNs, windDegs)
+        ax.plot_surface(X, Y, newSpeeds)
+        plt.show()
+
+    parameters = {
+        # Navigation area parameters
+        'avoidAntarctic': True, 'avoidArctic': True, 'res': 'i',  # Resolution of shorelines
+        'penaltyValue': {'time': -5, 'cost': -1},
+        'graphDens': 4,  # Recursion level graph
+        'graphVarDens': 6,  # Variable recursion level graph
+        'splits': 3,  # Threshold for split_polygon (val 3 yields best performance)
+
+        # MOEA parameters
+        'n': 322,  # Population size
+        'nBar': 100,  # Local archive size (M-PAES)
+        'cxpb': 0.81,  # Crossover probability (NSGAII, SPEA2)
+        'mutpb': 0.28,  # Mutation probability (NSGAII, SPEA2)
+        'nMutations': 9,  # Max. number of mutations per selected individual
+        'cr_trials': 5,  # Max recombination trials (M-PAES)
+        'l_fails': 3,  # Max fails (M-PAES)
+        'l_opt': 5,  # Max moves (M-PAES)
+
+        # Stopping parameters
+        'maxEvaluations': None, 'gen': 100,  # Minimal number of generations
+        'maxGDs': 33,  # Max length of generational distance list
+        'minVar': 1e-5,  # Minimal variance of generational distance list
+
+        # Mutation parameters
+        'mutationOperators': ['speed', 'insert', 'move', 'delete'],  # Operators to be included
+        'widthRatio': 1.5,  # 7.5e-4 obtained from hyp param tuning
+        'radius': 0.4,  # 0.39 obtained from hyp param tuning
+        'scaleFactor': 0.1,  # Scale factor for Exponential distribution
+        'delFactor': 1.1,  # Factor of deletions
+        'gauss': False,  # Use Gaussian mutation for insert and move operators
+
+        # Evaluation parameters
+        'segLengthF': 15,  # Length of linear approx. of great circle track for feasibility
+        'segLengthC': 15  # same for ocean currents and wind along route
+    }
+
+    def test_evaluator(startDate):
+        _dir = Path('D:/')
+        vessel = Vessel(300)
+        areaGenerator = NavigableAreaGenerator(parameters=parameters, DIR=_dir)
+        landRtree = areaGenerator.get_shoreline_rtree()
+        ecaRtree = areaGenerator.get_eca_rtree()
+        bathRtree = areaGenerator.get_bathymetry_rtree()
+        ecaFactor = 1.0
+        geod = Geodesic()
+        criteria = {'minimalTime': -5, 'minimalCost': -1}
+        evaluator = Evaluator(vessel, landRtree, ecaRtree, bathRtree, ecaFactor, geod, criteria, parameters, _dir,
+                              startDate=startDate)
+
+        return evaluator
+
+    evl = test_evaluator(datetime.datetime(2015, 6, 21))
+    evl.calc_seg_hours((179, 0), (-179, 0), 9.9, 100)

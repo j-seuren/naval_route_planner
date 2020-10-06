@@ -47,7 +47,7 @@ class RoutePlanner:
                  shipLoading='normal',
                  ecaFactor=1.5593,
                  fuelPrice=300,  # Fuel price per metric tonne
-                 bathymetry=True,
+                 bathymetry=False,
                  inputParameters=None,
                  tb=None,
                  criteria=None):
@@ -83,16 +83,16 @@ class RoutePlanner:
 
                              # Stopping parameters
                              'maxEvaluations': None,
-                             'gen': 100,           # Minimal number of generations
+                             'gen': 400,           # Minimal number of generations
                              'maxGDs': 33,         # Max length of generational distance list
-                             'minVar': 1e-5,       # Minimal variance of generational distance list
+                             'minVar': 1e-6,       # Minimal variance of generational distance list
 
                              # Mutation parameters
                              'mutationOperators': ['speed', 'insert', 'move', 'delete'],  # Operators to be included
                              'widthRatio': 1.5,    # 7.5e-4 obtained from hyp param tuning
                              'radius': 0.4,        # 0.39 obtained from hyp param tuning
                              'scaleFactor': 0.1,   # Scale factor for Exponential distribution
-                             'delFactor': 1.1,     # Factor of deletions
+                             'delFactor': 1.2,     # Factor of deletions
                              'gauss': False,       # Use Gaussian mutation for insert and move operators
 
                              # Evaluation parameters
@@ -690,14 +690,17 @@ if __name__ == "__main__":
     from support import locations
 
     startTime = time.time()
-    _startEnd = (locations['Normandy'], locations['New York'])
+    # _startEnd = (locations['Veracruz'], locations['Concepcion'])
+    _startEnd = (locations['Floro'], locations['Santander'])
+    # _startEnd = ((121.75, 25.15), (-123, 37.75))
 
     # parameters = {'gen': 200,  # Min number of generations
     #               'n': 100}    # Population size
-    startDate = datetime(2011, 1, 25)
-    kwargsPlanner = {'inputParameters': {'gen': 300}, 'tb': _tb, 'ecaFactor': 1.0, 'criteria': _criteria}
-    kwargsCompute = {'startEnd': _startEnd, 'startDate': startDate, 'recompute': False, 'current': False,
-                     'weather': True, 'seed': 1, 'algorithm': 'NSGA2'}
+    startDate = datetime(2017, 9, 4)
+    kwargsPlanner = {'inputParameters': {}, 'tb': _tb, 'ecaFactor': 1.0,
+                     'criteria': _criteria}
+    kwargsCompute = {'startEnd': _startEnd, 'startDate': startDate, 'recompute': True, 'current': False,
+                     'weather': False, 'seed': 1, 'algorithm': 'NSGA2'}
     multiprocess = False
 
     if multiprocess:
@@ -713,13 +716,9 @@ if __name__ == "__main__":
     print("--- %s seconds ---" % (time.time() - startTime))
     procResults, rawResults = planner.post_process(rawResults)
     routePlotter = RoutePlotter(DIR, procResults, rawResults=rawResults, vessel=planner.vessel)
-    for date in [datetime(2011, 1, 25), datetime(2011, 1, 26), datetime(2011, 1, 27), datetime(2011, 1, 28), datetime(2011, 1, 29),
-                 datetime(2011, 1, 30), datetime(2011, 1, 31), datetime(2011, 2, 1), datetime(2011, 2, 2)]:
-        fig, ax = plt.subplots()
-        ax = routePlotter.results(ax, bathymetry=True, weatherDate=date, initial=False, ecas=False,
-                                  nRoutes=5, colorbar=True)
-        plt.savefig('D:/output/figures/{}.png'.format(date.day), dpi=600)
-        plt.clf()
-        pp = pprint.PrettyPrinter(depth=6)
-        pp.pprint(procResults)
-    # plt.savefig('D:/output/figures/Veracruz_Concepcion.pdf')
+    fig, ax = plt.subplots()
+    ax = routePlotter.results(ax, bathymetry=True, weatherDate=None, initial=True, ecas=True,
+                              nRoutes=5, colorbar=True)
+    pp = pprint.PrettyPrinter(depth=6)
+    pp.pprint(procResults)
+    plt.show()
