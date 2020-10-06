@@ -178,7 +178,7 @@ def init_individual(toolbox, indsIn, i):  # swaps: ['speed', 'insert', 'move', '
     if i == 0:
         return list(indsIn.values())
     for indIn in indsIn.values():
-        k = random.randint(1, 8)
+        k = random.randint(1, 10)
         mutant, = toolbox.mutate(toolbox.clone(indIn), initializing=True, k=k)
         mutants.append(mutant)
 

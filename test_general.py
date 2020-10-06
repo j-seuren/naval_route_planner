@@ -88,6 +88,15 @@ def multiple_experiments(inputDict, planner, parameters, genDir):
     depDates = inputDict['input']['departureDates']
     timestamp = datetime.now().strftime('%m%d-%H%M')
 
+    origins, destinations = [], []
+    for d in range(len(depDates)):
+        if parameters['exp'] == 'weather':
+            origins.append([inputDict['input']['from'][d]])
+            destinations.append([inputDict['input']['to'][d]])
+        else:
+            origins.append(inputDict['input']['from'])
+            destinations.append(inputDict['input']['to'])
+
     for d, depDate in enumerate(depDates):
         if d > 0 and parameters['ref'] == 'R_':
             continue
@@ -97,10 +106,10 @@ def multiple_experiments(inputDict, planner, parameters, genDir):
         writer = pd.ExcelWriter(genDir / 'tables' / '{}_{}.xlsx'.format(timestamp, fileString))
         summary = pd.DataFrame(index=['compTime', 'T_fuel', 'T_time', 'C_fuel', 'C_time', 'L_fuel', 'L_time'])
 
-        for routeIdx, (startTup, endTup) in enumerate(zip(inputDict['input']['from'], inputDict['input']['to'])):
+        for routeIdx, (startTup, endTup) in enumerate(zip(origins[d], destinations[d])):
             startKey, start = startTup
             endKey, end = endTup
-            print('location combination {} of {}'.format(routeIdx + 1, len(inputDict['input']['from'])))
+            print('location combination {} of {}'.format(routeIdx + 1, len(origins[d])))
             fileString2 = fileString + '_{}{}'.format(startKey, endKey)
             fp = genDir / 'tables/csv/{}.csv'.format(fileString)
             df = single_experiment(planner, parameters, (start, end), depDate, fileString2, genDir,

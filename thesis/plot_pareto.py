@@ -1,5 +1,5 @@
 # import case_studies.plot_results as plot_results
-# import itertools
+import itertools
 import main
 import matplotlib.pyplot as plt
 import matplotlib.colors as cl
@@ -125,7 +125,7 @@ class MergedPlots:
     def plot_ind(self, ind, m, label=None, line='solid', color='k', cmap=None):
         waypoints, speeds = zip(*ind)
         for i, leg in enumerate(zip(waypoints[:-1], waypoints[1:])):
-            color = cmap((speeds[i] - self.vMin) / self.dV) if cmap else color
+            color = cmap((speeds[i] - self.vMin) / self.dV) if cmap and speeds[i] is not None else color
             label = None if i > 0 else label
             m.drawgreatcircle(leg[0][0], leg[0][1], leg[1][0], leg[1][1], label=label, linestyle=line, linewidth=1,
                               alpha=0.5, color=color, zorder=3)
@@ -153,9 +153,10 @@ class MergedPlots:
             C, V = '', ''
             R0 = 'E'
         elif self.experiment == 'bathymetry':
-            labels = ['Incl. bathymetry (B)', 'Excl. bathymetry (R)']
+            labels = ['Incl. depth, long (DL)', 'Incl. depth, short (DS)',
+                      'Excl. depth, long (RL)', 'Excl. depth, short (RS)']
             C, V = '', ''
-            R0 = 'B'
+            R0 = 'D'
         else:
             labels = ['Constant speed - ref. (CR)', 'Constant speed (C)',
                       'Variable speed - ref. (VR)', 'Variable speed (V)']
@@ -170,7 +171,7 @@ class MergedPlots:
                     for objRoute in subInitRoute.values():
                         self.initialLabel = 'Initial routes' if self.initialLabel == 'not set' else None
                         self.plot_ind(objRoute, m, label=self.initialLabel)
-
+        label = None
         for file in self.outFiles:
             S = C if 'C' in file['filename'] else V
             R = 'R' if 'R' in file['filename'] else R0
@@ -180,28 +181,34 @@ class MergedPlots:
 
             print(labelString, labels)
 
-            rLabel = [la for la in labels if labelString in la][0] if self.experiment == 'bathymetry' else labelString
-            label = None
-            if not intervalRoutes:  # or R == 'R':  # Plot route responses
-                color = next(cycleRoute)['color']
-                for r, route in enumerate(file['proc']['routeResponse']):
-                    if self.experiment != 'bathymetry' and r > 1:
-                        break
-                    elif r % 2 != 0:
-                        continue
-                    label0 = '{}{}'.format(rLabel, appLabels[r]) if self.experiment != 'bathymetry' and R != 'R' else rLabel
-                    label = label0 if label != label0 else None
-                    ind = [((leg['lon'], leg['lat']), leg['speed']) for leg in route['waypoints']]
-                    line = 'dashed' if r > 0 and self.experiment != 'bathymetry' else 'solid'
-                    self.plot_ind(ind, m, label=label, color=color, line=line)
+            # if not intervalRoutes:  # or R == 'R':  # Plot route responses
+            #     color = next(cycleRoute)['color']
+            #     for r, route in enumerate(file['proc']['routeResponse']):
+            #         if self.experiment != 'bathymetry' and r > 1:
+            #             break
+            #         elif r % 2 != 0:
+            #             continue
+            #         label0 = '{}{}'.format(rLabel, appLabels[r]) if self.experiment != 'bathymetry' and R != 'R' else rLabel
+            #         label = label0 if label != label0 else None
+            #         ind = [((leg['lon'], leg['lat']), leg['speed']) for leg in route['waypoints']]
+            #         line = 'dashed' if r > 0 and self.experiment != 'bathymetry' else 'solid'
+            #         self.plot_ind(ind, m, label=label, color=color, line=line)
 
-            else:
-                fronts = file['hulls'] if hull else file['fronts']
-                for front in fronts:
-                    for fit, ind in front.items():
-                        if intervalRoutes[0] < fit[0] < intervalRoutes[1]:
-                            self.plot_ind(ind, m, cmap=cmap)
-        if not intervalRoutes or initial:
+            fronts = file['hulls'] if hull else file['fronts']
+            shortLong = iter(['S', 'L'])
+            for front in fronts:
+                color = next(cycleRoute)['color'] if cmap is None else 'k'
+                for fit, ind in front.items():
+                    if self.experiment == 'bathymetry':
+                        bLabel = '{}{}'.format(labelString, next(shortLong))
+                        rLabel = [la for la in labels if bLabel in la][0]
+                    else:
+                        rLabel = labelString
+                    if intervalRoutes and not intervalRoutes[0] < fit[0] < intervalRoutes[1]:
+                        continue
+                    label = rLabel if label != rLabel and cmap is None else None
+                    self.plot_ind(ind, m, label=label, color=color, cmap=cmap)
+        if cmap is None or self.initialLabel is None:
             routeAx.legend(loc='lower right', prop=fontProp)
 
         # plt.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
@@ -216,9 +223,9 @@ class MergedPlots:
 def update(population):
     front = {}
 
-    for ID, ind in population.items():
+    for ID, ind in population:
         nonDominated = True
-        for otherInd in population:
+        for _, otherInd in population:
             dominates = True
             for otherVal, indVal in zip(otherInd, ind):
                 if otherVal >= indVal:
@@ -227,10 +234,11 @@ def update(population):
                 nonDominated = False
                 break
         if nonDominated:
+            ID = (tuple(ID[0]), tuple(ID[1]))
             front[ID] = np.array([ind])
     return front
 
-
+#
 # def get_front_multiple_routes(frontIn, planner, experiment, date, getConvexHull):
 #     current = True if experiment == 'current' else False
 #     weather = True if experiment == 'weather' else False
@@ -258,22 +266,43 @@ def get_front(frontIn, planner, experiment, date):
     weather = True if experiment == 'weather' else False
     planner.evaluator.set_classes(current, weather, date, 10)
 
-    front = frontIn[0]
-    newFits = [planner.evaluator.evaluate(ind, revert=False, includePenalty=False) for ind in front]
-    for ind, fit in zip(front.items, newFits):
+    objVals, fronts = [], []
+    for front in frontIn:
+        newFits = [planner.evaluator.evaluate(ind, revert=False, includePenalty=False) for ind in front]
+        fronts.append({newFits[f]: ind for f, ind in enumerate(front.items)})
+        objVals.append(np.array(newFits))
+
+    concatObjVals = [(x, sum(x)) for x in itertools.product(*objVals)]
+    # concatFront0 = update(concatObjVals)
+    inds = []
+    for ID, fit in concatObjVals:
+        ind = []
+        for i, subFit in enumerate(ID):
+            ind.extend(fronts[i][tuple(subFit)])
+        ind = main.creator.Individual(ind)
         ind.fitness.values = fit
+        inds.append(ind)
+
+
+    # front = frontIn[0]
+    # newFits = [planner.evaluator.evaluate(ind, revert=False, includePenalty=False) for ind in front]
+    # for ind, fit in zip(front.items, newFits):
+    #     ind.fitness.values = fit
 
     newFront = tools.ParetoFront()
-    newFront.update(front.items)
+    newFront.update(inds)
 
     frontOut = {ind.fitness.values: ind for ind in newFront}
     print('frontsize', len(frontOut))
 
-    hull = spatial.ConvexHull(list(frontOut.keys()))
-    vertices = hull.vertices
-    hullPoints = hull.points[vertices]
-    convexHull = {tuple(point): frontOut[tuple(point)] for point in hullPoints}
-    print('hullsize', len(convexHull))
+    if len(frontOut) > 1:
+        hull = spatial.ConvexHull(list(frontOut.keys()))
+        vertices = hull.vertices
+        hullPoints = hull.points[vertices]
+        convexHull = {tuple(point): frontOut[tuple(point)] for point in hullPoints}
+        print('hullsize', len(convexHull))
+    else:
+        convexHull = frontOut
 
     return frontOut, convexHull
 
@@ -345,14 +374,14 @@ def navigation_area(ax, proc, initial, eca=False, current=None, bathymetry=False
     return m
 
 
-_directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/eca results/Flo'
+# _directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/eca results/Flo'
 # contains='FloSa'
 
-# _directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/bathymetry results'
+_directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/bathymetry results'
 
-mergedPlots = MergedPlots(_directory, datetime(2014, 11, 25), experiment='eca', contains='FloSa')
+mergedPlots = MergedPlots(_directory, datetime(2014, 11, 25), experiment='bathymetry', contains='VC')
 
 mergedPlots.merged_pareto(save=False)
-mergedPlots.merged_routes(zoom=1.2, initial=False, intervalRoutes=[0, 10], colorbar=True, save=False, hull=True)
+mergedPlots.merged_routes(zoom=1.2, initial=False, colorbar=False, save=False, hull=False)
 
 plt.show()

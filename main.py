@@ -72,7 +72,7 @@ class RoutePlanner:
                              'splits': 3,          # Threshold for split_polygon (val 3 yields best performance)
 
                              # MOEA parameters
-                             'n': 322,             # Population size
+                             'n': 336,             # Population size
                              'nBar': 100,          # Local archive size (M-PAES)
                              'cxpb': 0.81,          # Crossover probability (NSGAII, SPEA2)
                              'mutpb': 0.28,        # Mutation probability (NSGAII, SPEA2)
@@ -85,7 +85,7 @@ class RoutePlanner:
                              'maxEvaluations': None,
                              'gen': 400,           # Minimal number of generations
                              'maxGDs': 33,         # Max length of generational distance list
-                             'minVar': 1e-6,       # Minimal variance of generational distance list
+                             'minVar': 5e-6,       # Minimal variance of generational distance list
 
                              # Mutation parameters
                              'mutationOperators': ['speed', 'insert', 'move', 'delete'],  # Operators to be included

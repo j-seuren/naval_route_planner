@@ -39,7 +39,6 @@ class Operators:
         weights[-1] = weights[-1] * self.delFactor
         if initializing:
             weights[-1] = min(self.nMutations, 5)
-            k = self.nMutations
         if k is None:
             k = random.randint(1, self.nMutations)
         sample_ops = random.choices(self.ops, weights=weights, k=k)

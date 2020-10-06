@@ -53,7 +53,8 @@ class Geodesic:
         az12, az21, dist = self.ref_sys.inv(lon1, lat1, lon2, lat2)
 
         if bearing:
-            return dist / 1852.0, az12
+            return dist / 1852.0, calc_bearing(p1, p2)
+            # return dist / 1852.0, az12
         else:
             return dist / 1852.0  # To nautical miles
 
