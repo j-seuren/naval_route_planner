@@ -1,9 +1,10 @@
 import main
 import os
 
+from datetime import datetime
 from pathlib import Path
-from test_current import inputKC
 from test_general import multiple_experiments
+from support import locations
 
 DIR = Path('D:/')
 parameters = {'DIR': DIR,
@@ -12,16 +13,27 @@ parameters = {'DIR': DIR,
               'current': True,
               'ecaFactor': 1.5593,
               'exp': 'MOEA',
-              'iterations': 5,
+              'iterations': 50,
               'speed': 'var',
               'ref': False
               }
 
 criteria = {'minimalTime': True, 'minimalCost': True}
-inputDict = inputKC
+
+
+inputMOEA = {'instance': 'MOEA', 'input': {'from': [('C', locations['Cape Town']),
+                                                ('D', locations['Dubai'])
+                                                ],
+                                           'to': [('D', locations['Dubai']),
+                                                  ('C', locations['Cape Town'])
+                                                  ],
+                                           'departureDates': [datetime(2014, 11, 25)]}}
+
+
+inputDict = inputMOEA
 
 speedOps = ['insert', 'move', 'delete'] if parameters['speed'] == 'constant' else ['speed', 'insert', 'move', 'delete']
-par = {'mutationOperators': speedOps, 'n': 100, 'maxEvaluations': 30000}
+par = {'mutationOperators': speedOps, 'n': 100, 'maxEvaluations': 25000}
 planner = main.RoutePlanner(inputParameters=par, bathymetry=parameters['bathymetry'],
                             ecaFactor=parameters['ecaFactor'], criteria=criteria)
 

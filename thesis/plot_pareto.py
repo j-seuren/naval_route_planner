@@ -122,13 +122,13 @@ class MergedPlots:
 
         return cmap
 
-    def plot_ind(self, ind, m, label=None, line='solid', color='k', alpha=0.5, cmap=None):
+    def plot_ind(self, ind, m, label=None, width=1, line='solid', color='gray', alpha=0.5, cmap=None):
         waypoints, speeds = zip(*ind)
         for i, leg in enumerate(zip(waypoints[:-1], waypoints[1:])):
             color = cmap((speeds[i] - self.vMin) / self.dV) if cmap and speeds[i] is not None else color
             label = None if i > 0 else label
-            m.drawgreatcircle(leg[0][0], leg[0][1], leg[1][0], leg[1][1], label=label, linestyle=line, linewidth=1,
-                              alpha=0.5, color=color, zorder=3)
+            m.drawgreatcircle(leg[0][0], leg[0][1], leg[1][0], leg[1][1], label=label, linestyle=line, linewidth=width,
+                              alpha=alpha, color=color, zorder=3)
 
     def merged_routes(self, zoom=1, initial=False, intervalRoutes=None, colorbar=False, alpha=0.5, save=False, hull=True):
         routeFig, routeAx = plt.subplots()
@@ -169,7 +169,7 @@ class MergedPlots:
             for initRoute in self.outFiles[-1]['raw']['initialRoutes']:
                 for subInitRoute in initRoute['route']:
                     for objRoute in subInitRoute.values():
-                        self.initialLabel = 'Initial routes' if self.initialLabel == 'not set' else None
+                        self.initialLabel = 'Initial' if self.initialLabel == 'not set' else None
                         self.plot_ind(objRoute, m,  alpha=1, label=self.initialLabel)
         label = None
         for file in self.outFiles:
@@ -178,8 +178,6 @@ class MergedPlots:
             if labelString == '{}{}'.format(S, R):  # Plot constant speed profile only once
                 continue
             labelString = '{}{}'.format(S, R)
-
-            print(labelString, labels)
 
             # if not intervalRoutes:  # or R == 'R':  # Plot route responses
             #     color = next(cycleRoute)['color']
@@ -198,19 +196,22 @@ class MergedPlots:
             shortLong = iter(['S', 'L'])
             for front in fronts:
                 color = next(cycleRoute)['color'] if cmap is None else 'k'
-                for fit, ind in front.items():
-                    if self.experiment == 'bathymetry':
-                        bLabel = '{}{}'.format(labelString, next(shortLong))
-                        try:
-                            rLabel = [la for la in labels if bLabel in la][0]
-                        except IndexError:
-                            rLabel = bLabel
-                    else:
-                        rLabel = labelString
-                    if intervalRoutes and not intervalRoutes[0] < fit[0] < intervalRoutes[1]:
-                        continue
+                if self.experiment == 'bathymetry':
+                    bLabel = '{}{}'.format(labelString, next(shortLong))
+                    try:
+                        rLabel = [la for la in labels if bLabel in la][0]
+                    except IndexError:
+                        rLabel = bLabel
+                    ind = list(front.values())[0] if 'R' in rLabel else list(front.values())[-1]
                     label = rLabel if label != rLabel and cmap is None else None
-                    self.plot_ind(ind, m, label=label, color=color, alpha=alpha, cmap=cmap)
+                    self.plot_ind(ind, m, label=label, color=color, width=1, alpha=alpha, cmap=cmap)
+                else:
+                    for fit, ind in front.items():
+                        rLabel = labelString
+                        if intervalRoutes and not intervalRoutes[0] < fit[0] < intervalRoutes[1]:
+                            continue
+                        label = rLabel if label != rLabel and cmap is None else None
+                        self.plot_ind(ind, m, label=label, color=color, alpha=alpha, cmap=cmap)
         if cmap is None or self.initialLabel is None:
             routeAx.legend(loc='upper right', prop=fontProp)
 
@@ -328,7 +329,7 @@ def set_extent(proc, initial):
                         for x, y in zip(lons, lats):
                             minx, miny = min(minx, x), min(miny, y)
                             maxx, maxy = max(maxx, x), max(maxy, y)
-        margin = 0.15 * max((maxx - minx), (maxy - miny)) / 2
+        margin = 0.1 * max((maxx - minx), (maxy - miny)) / 2
         return max(minx - margin, -180), max(miny - margin, -90), min(maxx + margin, 180), min(maxy + margin, 90)
     else:
         return -180, -80, 180, 80
@@ -378,15 +379,20 @@ def navigation_area(ax, proc, initial, eca=False, current=None, bathymetry=False
 
     return m
 
+#  BATHYMETRY
+# _directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/bathymetry results'
+# mergedPlots = MergedPlots(_directory, datetime(2014, 11, 25), experiment='bathymetry', contains='VC')
+# mergedPlots.merged_routes(zoom=1.5, initial=True, colorbar=False, alpha=1, save=True, hull=False)
 
+#  ECA
 # _directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/eca results/Flo'
 # contains='FloSa'
 
-_directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/bathymetry results'
 
+_directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/bathymetry results'
 mergedPlots = MergedPlots(_directory, datetime(2014, 11, 25), experiment='bathymetry', contains='VC')
 
-mergedPlots.merged_pareto(save=False)
-mergedPlots.merged_routes(zoom=1.2, initial=False, colorbar=False, alpha=1, save=False, hull=False)
+# mergedPlots.merged_pareto(save=False)
+mergedPlots.merged_routes(zoom=1.5, initial=True, colorbar=False, alpha=1, save=True, hull=False)
 
 plt.show()

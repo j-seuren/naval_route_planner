@@ -228,19 +228,21 @@ if __name__ == '__main__':
 
 
     def currents(uin, vin, lons, lats, extent):
+
         m = Basemap(projection='merc', resolution='l', llcrnrlon=extent[0], llcrnrlat=extent[1], urcrnrlon=extent[2],
                     urcrnrlat=extent[3])
         m.drawmapboundary()
         m.drawcoastlines()
         m.fillcontinents()
-        m.drawparallels(np.arange(24., 36, 2.), labels=[1, 0, 0, 0], fontsize=8)
-        m.drawmeridians(np.arange(120., 142, 2.), labels=[0, 0, 0, 1], fontsize=8)
-
+        m.drawparallels(np.arange(24., 38, 2.), labels=[1, 0, 0, 0], fontsize=8)
+        m.drawmeridians(np.arange(120., 144, 2.), labels=[0, 0, 0, 1], fontsize=8)
         vLat = int((max(lats) - min(lats)) * 4)
         vLon = int((max(lons) - min(lons)) * 4)
         uRot, vRot, x, y = m.transform_vector(uin, vin, lons, lats, vLon, vLat, returnxy=True)
-        m.quiver(x, y, uRot, vRot, np.hypot(uRot, vRot), pivot='mid', width=0.002, headlength=4, cmap='PuBu', scale=90)
+        Q = m.quiver(x, y, uRot, vRot, np.hypot(uRot, vRot), pivot='mid', width=0.002, headlength=4, cmap='PuBu', scale=90)
+        plt.quiverkey(Q, 0.45, -0.1, 2, r'$2$ knots', labelpos='E')
 
+        plt.savefig(DIR / 'output/figures' / 'KC_data.pdf', bbox_inches='tight', pad_inches=0.3)
         plt.show()
 
     data, lons0, lats0 = CurrentDataRetriever(datetime(2014, 10, 28), nDays=6, DIR=DIR).get_kc_data()
