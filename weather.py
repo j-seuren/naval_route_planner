@@ -14,6 +14,7 @@ class CurrentOperator:
         if KC:
             self.data, self.lo, self.la = current_data.CurrentDataRetriever(self.t0, self.nDays, DIR=DIR).get_kc_data()
             self.get_grid_pt_current = self.get_grid_pt_current_kc
+            self.lala, self.lolo = np.meshgrid(self.la, self.lo)
         else:
             self.data = np.array(current_data.CurrentDataRetriever(self.t0, self.nDays, DIR=DIR).get_data())
 
@@ -39,8 +40,7 @@ class CurrentOperator:
     def get_grid_pt_current_kc(self, _, lon, lat):
         lonIdx = find_nearest_idx(self.lo, lon)
         latIdx = find_nearest_idx(self.la, lat)
-
-        return self.data[0, latIdx, lonIdx], self.data[0, latIdx, lonIdx]
+        return self.data[0, latIdx, lonIdx], self.data[1, latIdx, lonIdx]
 
 
 def find_nearest_idx(array, value):
