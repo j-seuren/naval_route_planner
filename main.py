@@ -236,7 +236,7 @@ class RoutePlanner:
                 moves += 1
             return c
 
-        def optimize(self, pop, result, routeIdx, subIdx):
+        def optimize(self, pop):
             mstats, log = support.statistics(), support.logbook()  # DEAP statistics and logbook
             front = tools.ParetoFront()  # Initialize ParetoFront class
             self.evals = len(pop)
@@ -250,7 +250,8 @@ class RoutePlanner:
                 # Record statistics
                 record = mstats.compile(front)
                 log.record(gen=gen, evals=self.evals, **record)
-                print('\r', log.stream)
+                if gen % 10 == 0:
+                    print('\r', log.stream)
 
                 totalEvals += self.evals
                 self.evals = 0
@@ -335,7 +336,8 @@ class RoutePlanner:
                 # Record statistics
                 record = mstats.compile(front)
                 log.record(gen=gen, evals=evals, **record)
-                print('\r', log.stream)
+                if gen % 10 == 0:
+                    print('\r', log.stream)
 
                 totalEvals += evals
                 # Step 4: Termination
@@ -384,7 +386,8 @@ class RoutePlanner:
                 # Record statistics
                 record = mstats.compile(front)
                 log.record(gen=gen, evals=evals, **record)
-                print('\r', log.stream)
+                if gen % 10 == 0:
+                    print('\r', log.stream)
 
                 totalEvals += evals
                 # Step 4: Termination

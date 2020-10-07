@@ -235,5 +235,5 @@ class Operators:
                     del ind2.fitness.values
                     return ind1, ind2
         else:
-            print('skipped crossover', end='\n ')
+            print('skipped crossover', end='\r ')
         return ind1, ind2
