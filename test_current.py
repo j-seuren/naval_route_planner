@@ -18,9 +18,8 @@ parameters = {'DIR': DIR,
 
 TEST_SPEED = False
 
-
-eastLocations = [('E1', (-50.0, 38.0)), ('E2', (-52.5, 42.0)), ('E3', (-55.0, 46.0))]
-westLocations = [('W1', (-72.0, 32.0)), ('W2', (-73.0, 35.5)), ('W3', (-74.0, 39.0))]
+eastLocations = [('E1', (-50.0, 38.0)), ('E2', (-55.0, 46.0))]
+westLocations = [('W1', (-72.67, 34.33)), ('W2', (-73.33, 36.67))]
 inputGulf = {'instance': 'Gulf', 'input': {'from': [], 'to': []}}
 for west in westLocations:
     for east in eastLocations:
@@ -29,7 +28,7 @@ for west in westLocations:
         inputGulf['input']['from'].append(east)
         inputGulf['input']['to'].append(west)
 
-inputGulf['input']['departureDates'] = [datetime(2014, 11, 15), datetime(2015, 5, 15)]
+inputGulf['input']['departureDates'] = [datetime(2014, 11, 25), datetime(2015, 5, 4)]
 
 inputKC = {'instance': 'KC', 'input': {'from': [('K', locations['KeelungC']),
                                                 ('T', locations['Tokyo'])

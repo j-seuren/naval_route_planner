@@ -241,11 +241,14 @@ if __name__ == '__main__':
     westNorm = westVec / lenWest
     eastNorm = eastVec / lenEast
 
-    locRange = np.linspace(0, 1, 3)
+    locRange = np.linspace(0, 1, 4)
     westLocations, eastLocations = [], []
     for f in locRange:
         eastLocations.append(tuple(f * eastVec + eastBot))
         westLocations.append(tuple(f * westVec + westBot))
+
+    westLocations = westLocations[1:3]
+    eastLocations = eastLocations[0] + eastLocations[-1]
 
     print(eastLocations, '\n', westLocations)
 

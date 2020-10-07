@@ -122,7 +122,7 @@ class MergedPlots:
 
         return cmap
 
-    def plot_ind(self, ind, m, label=None, line='solid', color='k', cmap=None):
+    def plot_ind(self, ind, m, label=None, line='solid', color='k', alpha=0.5, cmap=None):
         waypoints, speeds = zip(*ind)
         for i, leg in enumerate(zip(waypoints[:-1], waypoints[1:])):
             color = cmap((speeds[i] - self.vMin) / self.dV) if cmap and speeds[i] is not None else color
@@ -130,7 +130,7 @@ class MergedPlots:
             m.drawgreatcircle(leg[0][0], leg[0][1], leg[1][0], leg[1][1], label=label, linestyle=line, linewidth=1,
                               alpha=0.5, color=color, zorder=3)
 
-    def merged_routes(self, zoom=1, initial=False, intervalRoutes=None, colorbar=False, save=False, hull=True):
+    def merged_routes(self, zoom=1, initial=False, intervalRoutes=None, colorbar=False, alpha=0.5, save=False, hull=True):
         routeFig, routeAx = plt.subplots()
         w, h = routeFig.get_size_inches()
         routeFig.set_size_inches(w * zoom, h * zoom)
@@ -153,10 +153,10 @@ class MergedPlots:
             C, V = '', ''
             R0 = 'E'
         elif self.experiment == 'bathymetry':
-            labels = ['Incl. depth, long (DL)', 'Incl. depth, short (DS)',
-                      'Excl. depth, long (RL)', 'Excl. depth, short (RS)']
+            labels = ['L', 'S',
+                      'RL', 'RS']
             C, V = '', ''
-            R0 = 'D'
+            R0 = ''
         else:
             labels = ['Constant speed - ref. (CR)', 'Constant speed (C)',
                       'Variable speed - ref. (VR)', 'Variable speed (V)']
@@ -170,7 +170,7 @@ class MergedPlots:
                 for subInitRoute in initRoute['route']:
                     for objRoute in subInitRoute.values():
                         self.initialLabel = 'Initial routes' if self.initialLabel == 'not set' else None
-                        self.plot_ind(objRoute, m, label=self.initialLabel)
+                        self.plot_ind(objRoute, m,  alpha=1, label=self.initialLabel)
         label = None
         for file in self.outFiles:
             S = C if 'C' in file['filename'] else V
@@ -201,15 +201,18 @@ class MergedPlots:
                 for fit, ind in front.items():
                     if self.experiment == 'bathymetry':
                         bLabel = '{}{}'.format(labelString, next(shortLong))
-                        rLabel = [la for la in labels if bLabel in la][0]
+                        try:
+                            rLabel = [la for la in labels if bLabel in la][0]
+                        except IndexError:
+                            rLabel = bLabel
                     else:
                         rLabel = labelString
                     if intervalRoutes and not intervalRoutes[0] < fit[0] < intervalRoutes[1]:
                         continue
                     label = rLabel if label != rLabel and cmap is None else None
-                    self.plot_ind(ind, m, label=label, color=color, cmap=cmap)
+                    self.plot_ind(ind, m, label=label, color=color, alpha=alpha, cmap=cmap)
         if cmap is None or self.initialLabel is None:
-            routeAx.legend(loc='lower right', prop=fontProp)
+            routeAx.legend(loc='upper right', prop=fontProp)
 
         # plt.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
         # plt.margins(0, 0)
@@ -268,7 +271,9 @@ def get_front(frontIn, planner, experiment, date):
 
     objVals, fronts = [], []
     for front in frontIn:
-        newFits = [planner.evaluator.evaluate(ind, revert=False, includePenalty=False) for ind in front]
+        # newFits = [planner.evaluator.evaluate(ind, revert=False, includePenalty=False) for ind in front]
+        newFits = [ind.fitness.values for ind in front]
+        print(newFits)
         fronts.append({newFits[f]: ind for f, ind in enumerate(front.items)})
         objVals.append(np.array(newFits))
 
@@ -323,7 +328,7 @@ def set_extent(proc, initial):
                         for x, y in zip(lons, lats):
                             minx, miny = min(minx, x), min(miny, y)
                             maxx, maxy = max(maxx, x), max(maxy, y)
-        margin = 0.1 * max((maxx - minx), (maxy - miny)) / 2
+        margin = 0.15 * max((maxx - minx), (maxy - miny)) / 2
         return max(minx - margin, -180), max(miny - margin, -90), min(maxx + margin, 180), min(maxy + margin, 90)
     else:
         return -180, -80, 180, 80
@@ -382,6 +387,6 @@ _directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/bathy
 mergedPlots = MergedPlots(_directory, datetime(2014, 11, 25), experiment='bathymetry', contains='VC')
 
 mergedPlots.merged_pareto(save=False)
-mergedPlots.merged_routes(zoom=1.2, initial=False, colorbar=False, save=False, hull=False)
+mergedPlots.merged_routes(zoom=1.2, initial=False, colorbar=False, alpha=1, save=False, hull=False)
 
 plt.show()

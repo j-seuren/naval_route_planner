@@ -76,7 +76,7 @@ class Evaluator:
             speedKnots = ind[e][1]
 
             # Leg travel time and fuel cost
-            legHours = self.leg_hours(p1, p2, hours, speedKnots)
+            legHours, nauticalMiles = self.leg_hours(p1, p2, hours, speedKnots)
             legCost = self.vessel.fuelCostPerDay[speedKnots] * legHours / 24.  # x1000 EUR or USD
 
             # If leg intersects ECA increase fuel consumption by ecaFactor
@@ -84,9 +84,9 @@ class Evaluator:
                 legCost *= self.ecaFactor
 
             if self.includePenalty:
-                timePenalty, costPenalty = self.e_feasible(p1, p2)
-                legHours += timePenalty
-                legCost += costPenalty
+                nSegs = self.e_feasible(p1, p2)
+                legCost += (nSegs * self.segLengthF / nauticalMiles) * legCost * self.penaltyValue
+                legHours += (nSegs * self.segLengthF / nauticalMiles) * legHours * self.penaltyValue
 
             # Increment objective values
             hours += legHours
@@ -102,7 +102,7 @@ class Evaluator:
     def feasible(self, ind):
         for i in range(len(ind)-1):
             p1, p2 = sorted((ind[i][0], ind[i+1][0]))
-            if not self.e_feasible(p1, p2):
+            if self.e_feasible(p1, p2) == 'inf':
                 return False
         return True
 
@@ -129,15 +129,14 @@ class Evaluator:
             lineSegs = segs
 
         # Check feasibility of each segment, and penalize sailing through shallow water
-        timePenalty = costPenalty = 0.
+        nSegs = 0
         for q1, q2 in zip(lineSegs[:-1, :], lineSegs[1:, :]):
             if not np.isnan(np.sum([q1, q2])):  # Skip segments crossing datum line
                 if geo_x_geos(self.landRtree, q1, q2):  # If segment crosses land obstacle
-                    return False
+                    return 'inf'
                 if self.includePenalty and not geo_x_geos(self.bathRtree, q1, q2):
-                    timePenalty += self.penaltyValue['time']
-                    costPenalty += self.penaltyValue['cost']
-        return timePenalty, costPenalty
+                    nSegs += 1
+        return nSegs
 
     @lru_cache(maxsize=None)
     def leg_hours(self, p1, p2, startHours, speedKnots):
@@ -153,7 +152,7 @@ class Evaluator:
                 legHours += segmentTT
         else:
             legHours = nauticalMiles / speedKnots
-        return legHours  # Travel time in days
+        return legHours, nauticalMiles  # Travel time in days
 
     def calc_seg_hours(self, p1, p2, speedKnots, currentHours):
         try:

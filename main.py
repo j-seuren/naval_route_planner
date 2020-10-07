@@ -65,8 +65,7 @@ class RoutePlanner:
                              'avoidAntarctic': True,
                              'avoidArctic': True,
                              'res': 'i',           # Resolution of shorelines
-                             'penaltyValue': {'time': -criteria.get('minimalTime', 1),
-                                              'cost': -criteria.get('minimalCost', 1)},
+                             'penaltyValue': 1,    # Penalty value for Bathymetry
                              'graphDens': 4,       # Recursion level graph
                              'graphVarDens': 6,    # Variable recursion level graph
                              'splits': 3,          # Threshold for split_polygon (val 3 yields best performance)

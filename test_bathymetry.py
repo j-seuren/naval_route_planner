@@ -22,7 +22,7 @@ inputDict = inputBath
 criteria = {'minimalTime': -3, 'minimalCost': -15}
 
 speedOps = ['insert', 'move', 'delete'] if parameters['speed'] == 'constant' else ['speed', 'insert', 'move', 'delete']
-par = {'mutationOperators': speedOps, 'gen': 800, 'radius': 0.9, 'graphDens': 4, 'graphVarDens': 6, 'delFactor': 1.1}
+par = {'mutationOperators': speedOps, 'gen': 100, 'radius': 0.9, 'graphDens': 4, 'graphVarDens': 6, 'delFactor': 1.1}
 
 for bathymetry in [True, False]:
     parameters['bathymetry'] = bathymetry

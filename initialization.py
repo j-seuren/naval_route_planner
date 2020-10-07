@@ -117,7 +117,7 @@ class Initializer:
                     print('Too few points in neighborhood')
                     break
                 neighbor = graph.nodes[n]['deg']
-                if self.evaluator.e_feasible(endPoint, neighbor):
+                if not self.evaluator.e_feasible(endPoint, neighbor) == 'inf':
                     nrEdges += 1
                     graph.add_edge(ptKey, n, miles=d[n])
                 else:

@@ -33,8 +33,8 @@ inputWeather = {'instance': 'WTH', 'input': {'from': [
                                              'departureDates': [
                                                                 datetime(2017, 9, 4),
                                                                 datetime(2011, 5, 28),  # DEP 0000Z 28 May 2011, ETA 0000Z 11 June 2011
-                                                                datetime(2011, 1, 25),  # DEP 03:00 p.m. ETA: 00:30 p.m. 30/01/2011
-                                                                datetime(2013, 9, 24),  # 2013 09 24 12:00am
+                                                                datetime(2011, 1, 25, 15),  # DEP 03:00 p.m. ETA: 00:30 p.m. 30/01/2011
+                                                                datetime(2013, 9, 24, 12),  # 2013 09 24 12:00am
                                                                 datetime(2015, 6, 21)  # June 21, 2015 at 00:00
                                                                 ]}
                 }
