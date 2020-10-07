@@ -276,7 +276,7 @@ if __name__ == "__main__":
         print('n_days:', max_days)
 
         if _start_date:
-            planner.evaluator.currentOperator = weather.CurrentOperator(_start_date, max_days)
+            planner.evaluator.currentOp = weather.CurrentOperator(_start_date, max_days)
 
         for _p, _path in best_inds.items():
             for _k, _ind_list in _path.items():

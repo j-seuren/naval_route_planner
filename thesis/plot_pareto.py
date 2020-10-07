@@ -139,7 +139,7 @@ class MergedPlots:
 
         # Plot navigation area
         if self.experiment == 'current':
-            cData = self.planner.evaluator.currentOperator.data
+            cData = self.planner.evaluator.currentOp.data
             lons0 = np.linspace(-179.875, 179.875, 1440)
             lats0 = np.linspace(-89.875, 89.875, 720)
             currentDict = {'u': cData[0, 0], 'v': cData[1, 0], 'lons': lons0, 'lats': lats0}

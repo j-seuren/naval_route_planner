@@ -3,6 +3,7 @@ import itertools
 import matplotlib.colors as cl
 import matplotlib.pyplot as plt
 import numpy as np
+import numpy.ma as ma
 
 from data_config.wind_data import WindDataRetriever
 from matplotlib import cm, patches
@@ -154,10 +155,11 @@ class RoutePlotter:
                 bathymetry=False,
                 ecas=False,
                 colorbar=True,
-                wps=True
+                wps=True,
+                KC=False
                 ):
         m = self.navigation_area(ax, resolution, current=current, weather=weatherDate, bathymetry=bathymetry,
-                                 eca=ecas)
+                                 eca=ecas, KC=KC)
 
         if initial:
             for initRoute in self.processedResults['initialRoutes']:
@@ -187,7 +189,7 @@ class RoutePlotter:
 
         return ax
 
-    def navigation_area(self, ax, resolution='c', current=None, bathymetry=False, eca=False, weather=None):
+    def navigation_area(self, ax, resolution='c', current=None, bathymetry=False, eca=False, weather=None, KC=False):
         left, bottom, right, top = self.extent
         m = Basemap(projection='merc', resolution=resolution,
                     llcrnrlat=bottom, urcrnrlat=top,
@@ -221,20 +223,62 @@ class RoutePlotter:
             ax.add_collection(PatchCollection(ps, facecolor='green', alpha=0.5, zorder=3))
 
         if current:
+            # if KC:
+            #     uDict, vDict = current['uDict'], current['vDict']
+            #     keys = current['keys']
+            #     self.currents_kc(ax, m, uDict, vDict, keys)
+            # else:
             uin, vin = current['u'], current['v']
             lons, lats = current['lons'], current['lats']
             self.currents(ax, m, uin, vin, lons, lats)
 
         return m
 
-    def currents(self, ax, m, uin, vin, lons, lats):
+    # def currents_kc(self, ax, m, uDict, vDict, keys):
+    #     uin, vin, lons, lats = np.empty([len(lat), len(lon)], [], [], []
+    #     for key in keys:
+    #         lon, lat = key
+    #         key = tuple(key)
+    #         uin.append(uDict[key])
+    #         vin.append(vDict[key])
+    #         lons.append(lon)
+    #         lats.append(lat)
+    #
+    #     lons = np.array(lons)
+    #     lats = np.array(lats)
+    #     uin = np.array(uin)
+    #     vin = np.array(vin)
+    #
+    #     vLat = int((max(lats) - min(lats)) * 3)
+    #     vLon = int((max(lons) - min(lats)) * 3)
+    #     uin = ma.masked_where(uin == 0.0, uin)
+    #     vin = ma.masked_where(vin == 0.0, vin)
+    #
+    #     uRot, vRot, x, y = m.transform_vector(uin, vin, lons, lats, vLon, vLat, returnxy=True)
+    #
+    #     Q = m.quiver(x, y, uRot, vRot, np.hypot(uRot, vRot), pivot='mid', width=0.002, headlength=4, cmap='PuBu',
+    #                  scale=90, ax=ax)
+    #     ax.quiverkey(Q, 0.5, -0.1, 2, r'$2$ knots', labelpos='E')
+
+    def currents(self, ax, m, uin, vin, lons, lats, KC=True):
         # Transform vector and coordinate data
         dLon = self.extent[2] - self.extent[0]
         dLat = self.extent[3] - self.extent[1]
 
+        # if KC:
+        #     vLat = int((max(lats) - min(lats)) * 1)
+        #     vLon = int((max(lons) - min(lats)) * 1)
+        #     uin = ma.masked_where(uin == 0.0, uin)
+        #     vin = ma.masked_where(vin == 0.0, vin)
+        #     print(vLat, vLon)
+        # else:
         vLon = int(dLon * 4)
         vLat = int(dLat * 4)
         uRot, vRot, x, y = m.transform_vector(uin, vin, lons, lats, vLon, vLat, returnxy=True)
+
+        # velocities = np.hypot(uRot, vRot)
+        # velocities = ma.masked_where(velocities == 0.0, velocities) if KC else velocities
+
         Q = m.quiver(x, y, uRot, vRot, np.hypot(uRot, vRot), pivot='mid', width=0.002, headlength=4, cmap='PuBu',
                      scale=90, ax=ax)
         ax.quiverkey(Q, 0.5, -0.1, 2, r'$2$ knots', labelpos='E')

@@ -5,13 +5,20 @@ import numpy as np
 
 from dask.cache import Cache
 from mpl_toolkits import basemap
+from scipy.spatial import distance
 
 
 class CurrentOperator:
-    def __init__(self, t0, nDays, DIR):
+    def __init__(self, t0, nDays, DIR, KC):
         self.t0 = t0.replace(second=0, microsecond=0, minute=0, hour=0)
         self.nDays = nDays
-        self.data = np.array(current_data.CurrentDataRetriever(self.t0, self.nDays, DIR=DIR).get_data())
+        if KC:
+            self.data, self.uDict, self.vDict, self.lo, self.la = current_data.CurrentDataRetriever(self.t0, self.nDays, DIR=DIR).get_kc_data()
+            self.keys = np.array(list(self.uDict.keys()))
+
+            self.get_grid_pt_current = self.get_grid_pt_current_kc
+        else:
+            self.data = np.array(current_data.CurrentDataRetriever(self.t0, self.nDays, DIR=DIR).get_data())
 
         cache = Cache(2e9)  # Leverage two gigabytes of memory
         cache.register()  # Turn cache on globally
@@ -31,6 +38,21 @@ class CurrentOperator:
             u_pt = v_pt = 0.0
 
         return u_pt, v_pt
+
+    def get_grid_pt_current_kc(self, _, lon, lat):
+        # print(distance.cdist(s1, s2).min(axis=1))
+
+        minIdx = np.argmin(distance.cdist(self.keys, [(lon, lat)]))
+        assert isinstance(minIdx, np.int64)
+        k = tuple(self.keys[minIdx])
+
+        return self.uDict[k], self.vDict[k]
+
+
+def find_nearest_idx(array, value):
+    array = np.asarray(array)
+    idx = (np.abs(array - value)).argmin()
+    return idx
 
 
 def plot_current_field(uin, vin, lons, lats):

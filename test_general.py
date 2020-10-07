@@ -25,7 +25,7 @@ def get_df(procList):
     return df
 
 
-def single_experiment(planner, parameters, startEnd, depDate, fileString, genDir, saveFig=True):
+def single_experiment(planner, inputDict, parameters, startEnd, depDate, fileString, genDir, saveFig=True):
     rawListFP = genDir / 'raw/{}'.format(fileString)
     if os.path.exists(rawListFP):
         return None
@@ -56,8 +56,14 @@ def single_experiment(planner, parameters, startEnd, depDate, fileString, genDir
             frontFig, _ = statisticsPlotter.plot_fronts()
             statsFig, _ = statisticsPlotter.plot_stats()
 
-            if current:
-                cData = planner.evaluator.currentOperator.data
+            if current and inputDict['instance'] != 'KC':
+                cData = planner.evaluator.currentOp.data
+                # if inputDict['instance'] == 'KC':
+                #     uDict = planner.evaluator.currentOp.uDict
+                #     vDict = planner.evaluator.currentOp.vDict
+                #     keys = planner.evaluator.currentOp.keys
+                #     currentDict = {'uDict': uDict, 'vDict': vDict, 'keys': keys}
+                # else:
                 lons0 = np.linspace(-179.875, 179.875, 1440)
                 lats0 = np.linspace(-89.875, 89.875, 720)
                 currentDict = {'u': cData[0, 0], 'v': cData[1, 0], 'lons': lons0, 'lats': lats0}
@@ -68,7 +74,7 @@ def single_experiment(planner, parameters, startEnd, depDate, fileString, genDir
             routePlotter = plot_results.RoutePlotter(parameters['DIR'], proc, rawResults=raw, vessel=planner.vessel)
             routeFig, routeAx = plt.subplots()
             routePlotter.results(routeAx, initial=False, ecas=ecas, bathymetry=parameters['bathymetry'], nRoutes=4,
-                                 weatherDate=weatherDate, current=currentDict, colorbar=True)
+                                 weatherDate=weatherDate, current=currentDict, colorbar=True, KC=inputDict['instance'] == 'KC')
 
             for figName, fig in {'front': frontFig, 'stats': statsFig, 'routes': routeFig}.items():
                 fp = genDir / 'figures/{}_{}'.format(fileString, itr)
@@ -112,7 +118,7 @@ def multiple_experiments(inputDict, planner, parameters, genDir):
             print('location combination {} of {}'.format(routeIdx + 1, len(origins[d])))
             fileString2 = fileString + '_{}{}'.format(startKey, endKey)
             fp = genDir / 'tables/csv/{}.csv'.format(fileString)
-            df = single_experiment(planner, parameters, (start, end), depDate, fileString2, genDir,
+            df = single_experiment(planner, inputDict, parameters, (start, end), depDate, fileString2, genDir,
                                    saveFig=True)
             if df is None:
                 df = pd.read_csv(fp)

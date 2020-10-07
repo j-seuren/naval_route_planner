@@ -1,6 +1,8 @@
 import datetime
+import math
 import numpy as np
 import os
+import pandas as pd
 import xarray as xr
 
 from ftplib import FTP
@@ -98,7 +100,8 @@ class CurrentDataRetriever:
         f = 'Y%d_YDAY%03d_NDAYS%03d.nc' % (t_s.year, t_s.timetuple().tm_yday, nDays)
         self.dataFP = Path(d / f)
         self.dsFTP = Path('/data/globcurrent/v3.0/global_025_deg/total_hs')
-        self.dsSave = DIR / 'data/currents/netcdf_IN'
+        self.dataDir = DIR / 'data/currents/'
+        self.dsSave = self.dataDir / 'netcdf_IN'
 
     def get_data(self):
         # First check if combined netCDF file exists
@@ -112,20 +115,20 @@ class CurrentDataRetriever:
             saveFPs = []
             with FTP(host=self.host, user=self.user, passwd=self.passwd) as ftp:
                 for day in range(self.nDays):
-                    # Get path appendix
+                    # Get path appendiloc
                     t = self.tStart + datetime.timedelta(days=day)
                     y, yday = t.year, t.timetuple().tm_yday
-                    path_appendix = Path('%d/%03d' % (y, yday))
+                    path_appendiloc = Path('%d/%03d' % (y, yday))
 
                     # Set FTP current working directory and save directory
-                    ftp.cwd(Path(self.dsFTP / path_appendix).as_posix())
-                    saveDir = Path(self.dsSave / path_appendix)
+                    ftp.cwd(Path(self.dsFTP / path_appendiloc).as_posiloc())
+                    saveDir = Path(self.dsSave / path_appendiloc)
                     if not path.exists(saveDir):
                         os.makedirs(saveDir)
 
                     # Append files to file_list
                     files = [f for f in ftp.nlst() if '0000' in f]
-                    _saveFPs = [Path(saveDir / f).as_posix() for f in files]
+                    _saveFPs = [Path(saveDir / f).as_posiloc() for f in files]
                     saveFPs.extend(_saveFPs)
                     for saveFP, loadFP in zip(_saveFPs, files):
                         if not path.isfile(saveFP):  # If files does not exist, download from FTP server
@@ -139,6 +142,50 @@ class CurrentDataRetriever:
                 ds.to_netcdf(self.dataFP)
                 print('done')
                 return ds.to_array().data
+
+    def get_kc_data(self):
+        # computing the drift along each arc
+        df = pd.read_csv(self.dataDir / 'caldepth0.csv')
+        uDict, vDict, numDict = {}, {}, {}
+        lons, lats = [], []
+        for i in range(len(df)):
+            lon = df['longitude_degree'].iloc[i] + df['longitude_minute'].iloc[i] / 60.0
+            if lon not in lons:
+                lons.append(lon)
+            lat = df['latitude_degree'].iloc[i] + df['latitude_minute'].iloc[i] / 60.0
+            if lat not in lats:
+                lats.append(lat)
+
+            k = (lon, lat)
+            if k in uDict:
+                uDict[k] += df['velocity'].iloc[i] * math.cos(math.pi * df['direction'].iloc[i] / 180.0)
+                vDict[k] += df['velocity'].iloc[i] * math.sin(math.pi * df['direction'].iloc[i] / 180.0)
+                numDict[k] += 1.0
+            else:
+                uDict[k] = df['velocity'].iloc[i] * math.cos(math.pi * df['direction'].iloc[i] / 180.0)
+                vDict[k] = df['velocity'].iloc[i] * math.sin(math.pi * df['direction'].iloc[i] / 180.0)
+                numDict[k] = 1.0
+
+        lons, lats = np.array(sorted(lons)), np.array(sorted(lats))
+
+        data = np.empty([2, len(lats), len(lons)])
+        for k, u in uDict.items():
+            lon, lat = k
+            lonIdx = np.where(lons == lon)
+            latIdx = np.where(lats == lat)
+            assert len(lonIdx) == 1 and len(latIdx) == 1
+            data[0, latIdx, lonIdx] = u / numDict[k]
+            uDict[k] = u / numDict[k]
+
+        for k, v in vDict.items():
+            lon, lat = k
+            lonIdx = np.where(lons == lon)
+            latIdx = np.where(lats == lat)
+            assert len(lonIdx) == 1 and len(latIdx) == 1
+            data[1, latIdx, lonIdx] = v / numDict[k]
+            vDict[k] = v / numDict[k]
+
+        return data, uDict, vDict, lons, lats
 
 
 def ms_to_knots(ds):
@@ -158,4 +205,4 @@ if __name__ == '__main__':
     from pathlib import Path
     DIR = Path('D:/')
 
-    data = CurrentDataRetriever(datetime(2014, 10, 28), nDays=6, DIR=DIR).get_data()
+    data = CurrentDataRetriever(datetime(2014, 10, 28), nDays=6, DIR=DIR).get_kc_data()

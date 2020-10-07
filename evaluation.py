@@ -40,8 +40,8 @@ class Evaluator:
         self.segLengthF = parameters['segLengthF']    # Max segment length (for feasibility)
         self.segLengthC = parameters['segLengthC']    # Max segment length (for currents)
         self.geod = geod                # Geod class instance
-        self.currentOperator = None
-        self.weatherOperator = None
+        self.currentOp = None
+        self.weatherOp = None
         self.inclWeather = None
         self.inclCurrent = None
         self.bathymetry = False if bathRtree is None else True
@@ -58,11 +58,11 @@ class Evaluator:
         self.inclCurrent = inclCurr
         if inclCurr:
             assert isinstance(startDate, datetime.date), 'Set start date'
-            self.currentOperator = weather.CurrentOperator(startDate, nDays, DIR=self.DIR)
+            self.currentOp = weather.CurrentOperator(startDate, nDays, DIR=self.DIR, KC=self.vessel.name == 'Tanaka')
             # self.currentOperator.da = create_currents(nDays)
         if inclWeather:
             assert isinstance(startDate, datetime.date), 'Set start date'
-            self.weatherOperator = weather.WindOperator(startDate, nDays, DIR=self.DIR)
+            self.weatherOp = weather.WindOperator(startDate, nDays, DIR=self.DIR)
 
     @delta_penalty
     def evaluate(self, ind, revert=None, includePenalty=None):
@@ -167,13 +167,13 @@ class Evaluator:
         lon, lat = p1 if abs(p1[0] - p2[0]) > 300 else ((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2)
         if self.inclWeather:
             # Beaufort number (BN) and true wind direction (TWD) at (lon, lat)
-            BN, windDeg = self.weatherOperator.get_grid_pt_wind(now, lon, lat)
+            BN, windDeg = self.weatherOp.get_grid_pt_wind(now, lon, lat)
             headingDeg = bearingDeg
             speedKnots = self.vessel.reduced_speed(windDeg, headingDeg, BN, speedKnots)
 
         if self.inclCurrent:
             # Eastward and northward current velocities at (lon, lat)
-            uKnots, vKnots = self.currentOperator.get_grid_pt_current(now, lon, lat)
+            uKnots, vKnots = self.currentOp.get_grid_pt_current(now, lon, lat)
 
             # Calculate speed over ground (actualSpeed)
             actualSpeedKnots = calc_sog(radians(bearingDeg), uKnots, vKnots, speedKnots)
@@ -304,7 +304,11 @@ def calc_sog(bearingRad, Se, Sn, V):
 
     # Calculate speed over ground (sog)
     sinB, cosB = sin(bearingRad), cos(bearingRad)
-    return Se * sinB + Sn * cosB + sqrt(V * V - (Se * cosB - Sn * sinB) ** 2)
+    try:
+        result = Se * sinB + Sn * cosB + sqrt(V * V - (Se * cosB - Sn * sinB) ** 2)
+    except ValueError:
+        result = V
+    return result
 
 
 def geo_x_geos(treeDict, p1, p2=None):
