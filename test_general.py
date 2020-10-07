@@ -56,17 +56,16 @@ def single_experiment(planner, inputDict, parameters, startEnd, depDate, fileStr
             frontFig, _ = statisticsPlotter.plot_fronts()
             statsFig, _ = statisticsPlotter.plot_stats()
 
-            if current and inputDict['instance'] != 'KC':
+            if current:
                 cData = planner.evaluator.currentOp.data
-                # if inputDict['instance'] == 'KC':
-                #     uDict = planner.evaluator.currentOp.uDict
-                #     vDict = planner.evaluator.currentOp.vDict
-                #     keys = planner.evaluator.currentOp.keys
-                #     currentDict = {'uDict': uDict, 'vDict': vDict, 'keys': keys}
-                # else:
-                lons0 = np.linspace(-179.875, 179.875, 1440)
-                lats0 = np.linspace(-89.875, 89.875, 720)
-                currentDict = {'u': cData[0, 0], 'v': cData[1, 0], 'lons': lons0, 'lats': lats0}
+                if inputDict['instance'] == 'KC':
+                    lons0 = planner.evaluator.currentOp.lo
+                    lats0 = planner.evaluator.currentOp.la
+                    currentDict = {'u': cData[0], 'v': cData[1], 'lons': lons0, 'lats': lats0}
+                else:
+                    lons0 = np.linspace(-179.875, 179.875, 1440)
+                    lats0 = np.linspace(-89.875, 89.875, 720)
+                    currentDict = {'u': cData[0, 0], 'v': cData[1, 0], 'lons': lons0, 'lats': lats0}
             else:
                 currentDict = None
 

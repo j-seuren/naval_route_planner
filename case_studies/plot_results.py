@@ -223,11 +223,6 @@ class RoutePlotter:
             ax.add_collection(PatchCollection(ps, facecolor='green', alpha=0.5, zorder=3))
 
         if current:
-            # if KC:
-            #     uDict, vDict = current['uDict'], current['vDict']
-            #     keys = current['keys']
-            #     self.currents_kc(ax, m, uDict, vDict, keys)
-            # else:
             uin, vin = current['u'], current['v']
             lons, lats = current['lons'], current['lats']
             self.currents(ax, m, uin, vin, lons, lats)

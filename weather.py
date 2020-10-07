@@ -5,7 +5,6 @@ import numpy as np
 
 from dask.cache import Cache
 from mpl_toolkits import basemap
-from scipy.spatial import distance
 
 
 class CurrentOperator:
@@ -13,9 +12,7 @@ class CurrentOperator:
         self.t0 = t0.replace(second=0, microsecond=0, minute=0, hour=0)
         self.nDays = nDays
         if KC:
-            self.data, self.uDict, self.vDict, self.lo, self.la = current_data.CurrentDataRetriever(self.t0, self.nDays, DIR=DIR).get_kc_data()
-            self.keys = np.array(list(self.uDict.keys()))
-
+            self.data, self.lo, self.la = current_data.CurrentDataRetriever(self.t0, self.nDays, DIR=DIR).get_kc_data()
             self.get_grid_pt_current = self.get_grid_pt_current_kc
         else:
             self.data = np.array(current_data.CurrentDataRetriever(self.t0, self.nDays, DIR=DIR).get_data())
@@ -40,13 +37,10 @@ class CurrentOperator:
         return u_pt, v_pt
 
     def get_grid_pt_current_kc(self, _, lon, lat):
-        # print(distance.cdist(s1, s2).min(axis=1))
+        lonIdx = find_nearest_idx(self.lo, lon)
+        latIdx = find_nearest_idx(self.la, lat)
 
-        minIdx = np.argmin(distance.cdist(self.keys, [(lon, lat)]))
-        assert isinstance(minIdx, np.int64)
-        k = tuple(self.keys[minIdx])
-
-        return self.uDict[k], self.vDict[k]
+        return self.data[0, latIdx, lonIdx], self.data[0, latIdx, lonIdx]
 
 
 def find_nearest_idx(array, value):

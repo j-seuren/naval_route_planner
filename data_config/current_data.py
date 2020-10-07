@@ -8,6 +8,7 @@ import xarray as xr
 from ftplib import FTP
 from pathlib import Path
 from os import path
+from scipy import interpolate
 #
 #
 # def ncdump(nc_fid, verb=True):
@@ -168,13 +169,14 @@ class CurrentDataRetriever:
 
         lons, lats = np.array(sorted(lons)), np.array(sorted(lats))
 
-        data = np.empty([2, len(lats), len(lons)])
+        array = np.empty([2, len(lats), len(lons)])
+        array[:] = np.nan
         for k, u in uDict.items():
             lon, lat = k
             lonIdx = np.where(lons == lon)
             latIdx = np.where(lats == lat)
             assert len(lonIdx) == 1 and len(latIdx) == 1
-            data[0, latIdx, lonIdx] = u / numDict[k]
+            array[0, latIdx, lonIdx] = u / numDict[k]
             uDict[k] = u / numDict[k]
 
         for k, v in vDict.items():
@@ -182,10 +184,26 @@ class CurrentDataRetriever:
             lonIdx = np.where(lons == lon)
             latIdx = np.where(lats == lat)
             assert len(lonIdx) == 1 and len(latIdx) == 1
-            data[1, latIdx, lonIdx] = v / numDict[k]
+            array[1, latIdx, lonIdx] = v / numDict[k]
             vDict[k] = v / numDict[k]
 
-        return data, uDict, vDict, lons, lats
+        print(np.min(array), np.max(array))
+        print(np.min(array[0]), np.max(array[0]))
+        print(np.min(array[1]), np.max(array[1]))
+
+        array = np.ma.masked_invalid(array)
+        for i in range(2):
+            arr = array[i]
+            x = np.arange(0, arr.shape[1])
+            y = np.arange(0, arr.shape[0])
+            xx, yy = np.meshgrid(x, y)
+            # get only the valid values
+            x1 = xx[~arr.mask]
+            y1 = yy[~arr.mask]
+            newArr = arr[~arr.mask]
+            array[i] = interpolate.griddata((x1, y1), newArr.ravel(), (xx, yy), fill_value=0.)
+
+        return array, lons, lats
 
 
 def ms_to_knots(ds):
@@ -201,8 +219,33 @@ def ms_to_knots(ds):
 
 
 if __name__ == '__main__':
+    import matplotlib.pyplot as plt
+
     from datetime import datetime
+    from mpl_toolkits.basemap import Basemap
     from pathlib import Path
     DIR = Path('D:/')
 
-    data = CurrentDataRetriever(datetime(2014, 10, 28), nDays=6, DIR=DIR).get_kc_data()
+
+    def currents(uin, vin, lons, lats, extent):
+        m = Basemap(projection='merc', resolution='l', llcrnrlon=extent[0], llcrnrlat=extent[1], urcrnrlon=extent[2],
+                    urcrnrlat=extent[3])
+        m.drawmapboundary()
+        m.drawcoastlines()
+        m.fillcontinents()
+        m.drawparallels(np.arange(24., 36, 2.), labels=[1, 0, 0, 0], fontsize=8)
+        m.drawmeridians(np.arange(120., 142, 2.), labels=[0, 0, 0, 1], fontsize=8)
+
+        vLat = int((max(lats) - min(lats)) * 4)
+        vLon = int((max(lons) - min(lons)) * 4)
+        uRot, vRot, x, y = m.transform_vector(uin, vin, lons, lats, vLon, vLat, returnxy=True)
+        m.quiver(x, y, uRot, vRot, np.hypot(uRot, vRot), pivot='mid', width=0.002, headlength=4, cmap='PuBu', scale=90)
+
+        plt.show()
+
+    data, lons0, lats0 = CurrentDataRetriever(datetime(2014, 10, 28), nDays=6, DIR=DIR).get_kc_data()
+    _uin, _vin = data[0], data[1]
+
+    _extent = (120, 23, 142, 37)
+
+    currents(_uin, _vin, lons0, lats0, _extent)
