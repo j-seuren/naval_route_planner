@@ -546,9 +546,9 @@ class RoutePlanner:
                 travelTime += edgeTravelTime
             if travelTime > maxTravelTime:
                 maxTravelTime = travelTime
-        days = int(math.ceil(maxTravelTime / 24))
+        days = min(int(math.ceil(maxTravelTime / 24)), 30)
         print('Number of days:', days)
-        return min(days, 30)
+        return days
 
     def create_route_response(self, obj, bestWeighted, wps, objValue, fitValue, xCanals):
         return {'optimizationCriterion': obj,
