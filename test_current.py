@@ -62,6 +62,7 @@ for current in [True, False]:
                                         bathymetry=parameters['bathymetry'],
                                         ecaFactor=parameters['ecaFactor'],
                                         criteria=criteria,
+                                        fuelPrice=1. if inputDict['instance'] == 'KC' else 300,
                                         vesselName='Tanaka' if inputDict['instance'] == 'KC' else 'Fairmaster_2')
             print('VESSEL:', planner.vessel.name, 'speed', speed)
             parameters['current'] = current
