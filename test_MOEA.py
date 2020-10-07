@@ -22,9 +22,9 @@ criteria = {'minimalTime': True, 'minimalCost': True}
 
 
 inputMOEA = {'instance': 'MOEA', 'input': {'from': [('C', locations['Cape Town']),
-                                                ('D', locations['Dubai'])
+                                                ('M', locations['Mombasa'])
                                                 ],
-                                           'to': [('D', locations['Dubai']),
+                                           'to': [('M', locations['Mombasa']),
                                                   ('C', locations['Cape Town'])
                                                   ],
                                            'departureDates': [datetime(2014, 11, 25)]}}
