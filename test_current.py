@@ -47,7 +47,7 @@ TEST_SPEED = False if inputDict['instance'] == 'KC' else TEST_SPEED
 criteria = {'minimalTime': True, 'minimalCost': True}
 
 for current in [True, False]:
-    for speed in ['constant', 'var']:
+    for speed in ['var', 'constant']:
         if not TEST_SPEED and speed == 'constant':
             continue
         speedOps = ['insert', 'move', 'delete'] if speed == 'constant' else ['speed', 'insert', 'move', 'delete']

@@ -86,13 +86,11 @@ class Evaluator:
             if self.includePenalty:
                 nSegs = self.e_feasible(p1, p2)
                 legCost += (nSegs * self.segLengthF / nauticalMiles) * legCost * self.penaltyValue
-                legHours += (nSegs * self.segLengthF / nauticalMiles) * legHours * self.penaltyValue
+                legHours += (nSegs * self.segLengthF / nauticalMiles) * legHours / 24. * self.penaltyValue
 
             # Increment objective values
             hours += legHours
             cost += legCost
-
-
 
         days = hours / 24.
         if revert:

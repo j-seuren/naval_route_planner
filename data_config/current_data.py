@@ -115,20 +115,20 @@ class CurrentDataRetriever:
             saveFPs = []
             with FTP(host=self.host, user=self.user, passwd=self.passwd) as ftp:
                 for day in range(self.nDays):
-                    # Get path appendiloc
+                    # Get path appendix
                     t = self.tStart + datetime.timedelta(days=day)
                     y, yday = t.year, t.timetuple().tm_yday
-                    path_appendiloc = Path('%d/%03d' % (y, yday))
+                    path_appendix = Path('%d/%03d' % (y, yday))
 
                     # Set FTP current working directory and save directory
-                    ftp.cwd(Path(self.dsFTP / path_appendiloc).as_posiloc())
-                    saveDir = Path(self.dsSave / path_appendiloc)
+                    ftp.cwd(Path(self.dsFTP / path_appendix).as_posix())
+                    saveDir = Path(self.dsSave / path_appendix)
                     if not path.exists(saveDir):
                         os.makedirs(saveDir)
 
                     # Append files to file_list
                     files = [f for f in ftp.nlst() if '0000' in f]
-                    _saveFPs = [Path(saveDir / f).as_posiloc() for f in files]
+                    _saveFPs = [Path(saveDir / f).as_posix() for f in files]
                     saveFPs.extend(_saveFPs)
                     for saveFP, loadFP in zip(_saveFPs, files):
                         if not path.isfile(saveFP):  # If files does not exist, download from FTP server
