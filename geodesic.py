@@ -50,11 +50,10 @@ class Geodesic:
             Returns ellipsoidal distance
             """
         (lon1, lat1), (lon2, lat2) = p1, p2
-        az12, az21, dist = self.ref_sys.inv(lon1, lat1, lon2, lat2)
+        bearingDeg, az21, dist = self.ref_sys.inv(lon1, lat1, lon2, lat2)
 
         if bearing:
-            return dist / 1852.0, calc_bearing(p1, p2)
-            # return dist / 1852.0, az12
+            return dist / 1852.0, bearingDeg
         else:
             return dist / 1852.0  # To nautical miles
 
@@ -144,7 +143,7 @@ def calc_bearing(p1, p2):
     if abs(dLam) > math.pi:  # take shortest route: dLam < PI
         dLam = dLam - math.copysign(2 * math.pi, dLam)
 
-    return math.atan2(dLam, dPsi)
+    return math.degrees(math.atan2(dLam, dPsi))
 
 
 if __name__ == '__main__':

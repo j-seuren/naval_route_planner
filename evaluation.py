@@ -410,5 +410,17 @@ if __name__ == '__main__':
 
         return evaluator
 
-    evl = test_evaluator(datetime.datetime(2015, 6, 21))
-    evl.calc_seg_hours((179, 0), (-179, 0), 9.9, 100)
+    # evl = test_evaluator(datetime.datetime(2015, 6, 21))
+    # evl.calc_seg_hours((179, 0), (-179, 0), 9.9, 100)
+
+    def test_calc_sog():
+        _V = 100
+        bearingRads = np.radians(np.linspace(-180, 170, 36))
+
+        Se = -10
+        Sn = 0
+        output2 = [calc_sog(bearingRad, Se, Sn, _V) for bearingRad in bearingRads]
+
+        plt.scatter(np.degrees(bearingRads), output2)
+
+        plt.show()

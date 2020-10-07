@@ -12,7 +12,7 @@ parameters = {'DIR': DIR,
               'weather': False,
               'ecaFactor': 1.0,
               'exp': 'current',
-              'iterations': 5,
+              'iterations': 1,
               'MOEA': 'NSGA2',
               }
 
