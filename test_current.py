@@ -52,7 +52,7 @@ for current in [True, False]:
             continue
         speedOps = ['insert', 'move', 'delete'] if speed == 'constant' else ['speed', 'insert', 'move', 'delete']
         res = 'l' if inputDict['instance'] == 'KC' else 'i'
-        par = {'mutationOperators': speedOps, 'res': res, 'n': 4, 'gen': 1}
+        par = {'mutationOperators': speedOps, 'res': res}
 
         nSpeeds = [0, -1] if speed == 'constant' else [0]
         for speedIdx in nSpeeds:
