@@ -320,7 +320,7 @@ class RoutePlanner:
             self.cxpb = p['cxpb']
             self.mutpb = p['mutpb']
 
-        def optimize(self, pop, result, routeIdx, subIdx):
+        def optimize(self, pop):
             mstats, log = support.statistics(), support.logbook()  # DEAP statistics and logbook
             front = tools.ParetoFront()  # Initialize ParetoFront class
             evals = len(pop)
@@ -369,7 +369,7 @@ class RoutePlanner:
             self.mutpb = p['mutpb']
             self.sizeArchive = self.sizePop  # SPEA2 characteristic parameter
 
-        def optimize(self, pop, result, routeIdx, subIdx):
+        def optimize(self, pop):
             mstats, log = support.statistics(), support.logbook()  # DEAP statistics and logbook
             front = tools.ParetoFront()  # Initialize ParetoFront class
             evals = len(pop)
@@ -507,7 +507,7 @@ class RoutePlanner:
                 self.tb.register("individual", initialization.init_individual, self.tb, subRoute)
 
                 # Begin the generational process
-                front, log = MOEA.optimize(initialPop, result, routeIdx, subIdx)
+                front, log = MOEA.optimize(initialPop)
                 self.tb.unregister("individual")
 
                 hypervolume = indicators.hypervolume(front)
