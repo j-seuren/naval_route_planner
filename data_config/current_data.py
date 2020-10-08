@@ -239,10 +239,11 @@ if __name__ == '__main__':
         vLat = int((max(lats) - min(lats)) * 4)
         vLon = int((max(lons) - min(lons)) * 4)
         uRot, vRot, x, y = m.transform_vector(uin, vin, lons, lats, vLon, vLat, returnxy=True)
-        Q = m.quiver(x, y, uRot, vRot, np.hypot(uRot, vRot), pivot='mid', width=0.002, headlength=4, cmap='PuBu', scale=90)
+        m.contourf(x, y, np.hypot(uRot, vRot), cmap='Blues')
+        Q = m.quiver(x, y, uRot, vRot, np.hypot(uRot, vRot), pivot='mid', width=0.002, color='k', headlength=4, scale=90)
         plt.quiverkey(Q, 0.45, -0.1, 2, r'$2$ knots', labelpos='E')
 
-        plt.savefig(DIR / 'output/figures' / 'KC_data.pdf', bbox_inches='tight', pad_inches=0.3)
+        # plt.savefig(DIR / 'output/figures' / 'KC_data.pdf', bbox_inches='tight', pad_inches=0.3)
         plt.show()
 
     data, lons0, lats0 = CurrentDataRetriever(datetime(2014, 10, 28), nDays=6, DIR=DIR).get_kc_data()

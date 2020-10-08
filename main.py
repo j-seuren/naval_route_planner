@@ -96,7 +96,7 @@ class RoutePlanner:
 
                              # Evaluation parameters
                              'segLengthF': 15,     # Length of linear approx. of great circle track for feasibility
-                             'segLengthC': 15      # same for ocean currents and wind along route
+                             'segLengthC': 8       # same for ocean currents and wind along route
                              }
         self.p = {**defaultParameters, **inputParameters} if inputParameters else defaultParameters
         self.tb = _tb if tb is None else tb

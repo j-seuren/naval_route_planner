@@ -12,29 +12,29 @@ parameters = {'DIR': DIR,
               'current': False,
               'ecaFactor': 1.0,
               'exp': 'weather',
-              'iterations': 5,
+              'iterations': 1,
               'MOEA': 'NSGA2',
               }
 
 inputWeather = {'instance': 'WTH', 'input': {'from': [
                                                       ('Ny', locations['New York']),  # Kuhlemann
-                                                      ('K', locations['Keelung']),  # Lin2013
                                                       ('No', locations['Normandy']),  # Shao2012
                                                       ('P', locations['Plymouth']),  # Marie
+                                                      ('K', locations['Keelung']),  # Lin2013
                                                       ('V', locations['Valencia'])  # Vettor2016
                                                       ],
                                              'to': [
                                                     ('P', locations['Paramaribo']),
-                                                    ('S', locations['San Francisco']),
                                                     ('Ny', locations['New York']),
                                                     ('H', locations['Havana']),
+                                                    ('S', locations['San Francisco']),
                                                     ('Ma', locations['Malta'])
                                                     ],
                                              'departureDates': [
                                                                 datetime(2017, 9, 4),
-                                                                datetime(2011, 5, 28),  # DEP 0000Z 28 May 2011, ETA 0000Z 11 June 2011
                                                                 datetime(2011, 1, 25, 15),  # DEP 03:00 p.m. ETA: 00:30 p.m. 30/01/2011
                                                                 datetime(2013, 9, 24, 12),  # 2013 09 24 12:00am
+                                                                datetime(2011, 5, 28),  # DEP 0000Z 28 May 2011, ETA 0000Z 11 June 2011
                                                                 datetime(2015, 6, 21)  # June 21, 2015 at 00:00
                                                                 ]}
                 }

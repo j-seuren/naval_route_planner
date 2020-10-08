@@ -10,6 +10,7 @@ import pprint
 import tikzplotlib
 
 # from copy import deepcopy
+from data_config.wind_data import WindDataRetriever
 from datetime import datetime
 from deap import tools
 from pathlib import Path
@@ -41,6 +42,8 @@ class MergedPlots:
         self.dV = vMax - self.vMin
 
         self.initialLabel = 'not set'
+
+        self.date = date
 
         # Fronts and routes
         self.outFiles = []
@@ -130,7 +133,7 @@ class MergedPlots:
             m.drawgreatcircle(leg[0][0], leg[0][1], leg[1][0], leg[1][1], label=label, linestyle=line, linewidth=width,
                               alpha=alpha, color=color, zorder=3)
 
-    def merged_routes(self, zoom=1, initial=False, intervalRoutes=None, colorbar=False, alpha=0.5, save=False, hull=True):
+    def merged_routes(self, zoom=1, it=0, initial=False, intervalRoutes=None, colorbar=False, alpha=0.5, save=False, hull=True):
         routeFig, routeAx = plt.subplots()
         w, h = routeFig.get_size_inches()
         routeFig.set_size_inches(w * zoom, h * zoom)
@@ -143,10 +146,13 @@ class MergedPlots:
             lons0 = np.linspace(-179.875, 179.875, 1440)
             lats0 = np.linspace(-89.875, 89.875, 720)
             currentDict = {'u': cData[0, 0], 'v': cData[1, 0], 'lons': lons0, 'lats': lats0}
+            m = navigation_area(routeAx, self.outFiles[it]['proc'], initial, current=currentDict)
+        elif self.experiment == 'weather':
+            m = navigation_area(routeAx, self.outFiles[it]['proc'], initial, weather=self.date)
         else:
-            currentDict = None
-        m = navigation_area(routeAx, self.outFiles[0]['proc'], initial, eca=self.experiment == 'eca',
-                            current=currentDict, bathymetry=self.experiment == 'bathymetry')
+            m = navigation_area(routeAx, self.outFiles[it]['proc'], initial,
+                                eca=self.experiment == 'eca',
+                                bathymetry=self.experiment == 'bathymetry')
 
         if self.experiment == 'eca':
             labels = ['Incl. ECA (E)', 'Excl. ECA (R)']
@@ -347,7 +353,53 @@ def currents(ax, m, uin, vin, lons, lats, extent):
     ax.quiverkey(Q, 0.4, 1.1, 2, r'$2$ knots', labelpos='E')
 
 
-def navigation_area(ax, proc, initial, eca=False, current=None, bathymetry=False):
+def weather_contour(m, dateTime, travelDays, lonStart, lonEnd):
+    hourPeriod = 24//6
+    travelDaysCeil = int(np.ceil(travelDays))
+    print(travelDays)
+    print(travelDays * 4)
+
+    # Get wind data
+    retriever = WindDataRetriever(nDays=travelDaysCeil, startDate=dateTime)
+    ds = retriever.get_data(forecast=False)
+
+    # Create lon indices
+    resolution = 0.5
+    lonStart_idx = int(round((lonStart + 180) / resolution))
+    lonStart_idx = 0 if lonStart_idx == 720 else lonStart_idx
+    lonEnd_idx = int(round((lonEnd + 180) / resolution))
+    lonEnd_idx = 0 if lonEnd_idx == 720 else lonEnd_idx
+    (lonS, lonT) = (lonStart_idx, lonEnd_idx) if lonStart_idx < lonEnd_idx else (lonEnd_idx, lonStart_idx)
+    lonIndices = np.linspace(lonS, lonT, travelDaysCeil * 4 + 1).astype(int)
+    print(len(lonIndices), '\n', lonIndices)
+    lonPairs = zip(lonIndices[:-1], lonIndices[1:])
+
+    # Create date indices
+    dateIndices = np.linspace(0, travelDays * hourPeriod, travelDaysCeil * 4).astype(int)
+    print(len(dateIndices), '\n', dateIndices)
+
+    # Initialize variables for contourf
+    lons, lats = np.linspace(-180, 179.5, 720), np.linspace(-90, 89.5, 360)
+    x, y = m(*np.meshgrid(lons, lats))
+    maxWind, C1 = 0, None
+    Cs = [None for _ in range(len(dateIndices))]
+
+    for i, (dateInd, lonPair) in enumerate(zip(dateIndices, lonPairs)):
+        lon0, lon1 = min(lonPair), max(lonPair) + 1
+        BNarr = ds[0, dateInd, :-1, lon0:lon1]
+        xx, yy = x[:, lon0:lon1], y[:, lon0:lon1]
+        Cs[i] = m.contourf(xx, yy, BNarr, vmin=0, vmax=12, cmap=cm.get_cmap('jet', 12))
+        if np.max(BNarr) > maxWind:
+            C1 = Cs[i]
+
+    cb = m.colorbar(C1, norm=plt.Normalize(vmin=0, vmax=12), size=0.2, pad=0.2, location='bottom')
+    vDif = 12
+    nTicks = 13
+    cb.ax.set_xticklabels(['%.f' % round(i * vDif / (nTicks - 1), 1) for i in range(nTicks)], fontsize=8)
+    cb.set_label('Wind [BFT]', fontproperties=fontProp)
+
+
+def navigation_area(ax, proc, initial, eca=False, current=None, weather=None, bathymetry=False):
     extent = set_extent(proc, initial)
     left, bottom, right, top = extent
     m = Basemap(projection='merc', resolution='i', llcrnrlat=bottom, urcrnrlat=top, llcrnrlon=left,
@@ -377,22 +429,34 @@ def navigation_area(ax, proc, initial, eca=False, current=None, bathymetry=False
         ax.add_collection(PatchCollection(ps, facecolor='white', zorder=2))
         m.drawmapboundary(color='black', fill_color='khaki')
 
+    if weather:
+        minTravelDays = proc['routeResponse'][0]['travelTime']
+        waypoints = proc['routeResponse'][0]['waypoints']
+        lon0, lon1 = waypoints[0]['lon'], waypoints[-1]['lon']
+        try:
+            maxTravelDays = proc['routeResponse'][1]['travelTime']
+        except IndexError:
+            maxTravelDays = minTravelDays
+        avgTravelDays = (minTravelDays + maxTravelDays) / 2
+        weather_contour(m, weather, avgTravelDays, lon0, lon1)
+
     return m
 
-#  BATHYMETRY
-# _directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/bathymetry results'
-# mergedPlots = MergedPlots(_directory, datetime(2014, 11, 25), experiment='bathymetry', contains='VC')
-# mergedPlots.merged_routes(zoom=1.5, initial=True, colorbar=False, alpha=1, save=True, hull=False)
 
-#  ECA
-# _directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/eca results/Flo'
-# contains='FloSa'
+if __name__ == '__main__':
+    #  BATHYMETRY
+    # _directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/bathymetry results'
+    # mergedPlots = MergedPlots(_directory, datetime(2014, 11, 25), experiment='bathymetry', contains='VC')
+    # mergedPlots.merged_routes(zoom=1.5, initial=True, colorbar=False, alpha=1, save=True, hull=False)
 
+    #  ECA
+    # _directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/eca results/Flo'
+    # contains='FloSa'
 
-_directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/bathymetry results'
-mergedPlots = MergedPlots(_directory, datetime(2014, 11, 25), experiment='bathymetry', contains='VC')
+    _directory = 'D:/output/weather/WTH/NSGA2_varSP_BFalse_ECA1.0/5/raw'
+    mergedPlots = MergedPlots(_directory, datetime(2011, 5, 28), experiment='weather', contains='PH')
 
-# mergedPlots.merged_pareto(save=False)
-mergedPlots.merged_routes(zoom=1.5, initial=True, colorbar=False, alpha=1, save=True, hull=False)
+    # mergedPlots.merged_pareto(save=False)
+    mergedPlots.merged_routes(zoom=1.2, initial=False, colorbar=True, alpha=0.5, save=False, hull=True)
 
-plt.show()
+    plt.show()

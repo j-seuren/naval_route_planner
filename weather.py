@@ -22,11 +22,12 @@ class CurrentOperator:
         cache.register()  # Turn cache on globally
 
     def get_grid_pt_current(self, date_in, lon, lat):
+        hourPeriod = 3
         lonIdx = int(round((lon + 179.875) / 0.25))
         latIdx = int(round((lat + 89.875) / 0.25))
         delta = date_in - self.t0
         if delta.days < self.nDays:
-            dayIdx = delta.seconds // 3600 // 3
+            dayIdx = int(delta.seconds / 3600 // hourPeriod)
             vals = self.data[:, dayIdx, latIdx, lonIdx]
             u_pt, v_pt = vals[0], vals[1]
 
@@ -83,10 +84,11 @@ class WindOperator:
 
     def get_grid_pt_wind(self, time, lon, lat):
         resolution = 0.5
+        hourPeriod = 6
         lon_idx = int(round((lon + 180) / resolution))
         lon_idx = 0 if lon_idx == 720 else lon_idx  # data has no cyclic column; hence, refer long 180 to -180
         lat_idx = int(round((lat + 90) / resolution))
-        step_idx = (time - self.t0).seconds // 3600 // 3
+        step_idx = int((time - self.t0).seconds / 3600 // hourPeriod)
         vals = self.data[:, step_idx, lat_idx, lon_idx]
         BN = vals[0]
         TWD = vals[1]

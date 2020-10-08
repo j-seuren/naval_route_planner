@@ -3,21 +3,15 @@ import itertools
 import matplotlib.colors as cl
 import matplotlib.pyplot as plt
 import numpy as np
-import numpy.ma as ma
 
 from data_config.wind_data import WindDataRetriever
-from matplotlib import cm, patches
+from matplotlib import cm, patches, font_manager
 from matplotlib.collections import PatchCollection
 from mpl_toolkits.basemap import Basemap
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from pathlib import Path
 
-plt.rcParams.update({
-    # "text.usetex": True,
-    "font.size": 10,
-    "font.family": "serif",
-    "font.serif": ["TeX Gyre Pagella"],
-})
+fontPropFP = "C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/tex-gyre-pagella.regular.otf"
+fontProp = font_manager.FontProperties(fname=fontPropFP)
 
 
 def update(population):
@@ -47,6 +41,8 @@ class StatisticsPlotter:
     def plot_stats(self):
         logs = self.rawResults['logs']
         fig, axs = plt.subplots(1, len(logs))
+        plt.xticks(fontproperties=fontProp)
+        plt.yticks(fontproperties=fontProp)
         for i, log in enumerate(logs):
             if len(logs) == 1:
                 statistics(log, axs)
@@ -54,19 +50,28 @@ class StatisticsPlotter:
                 statistics(log, axs[i])
         return fig, axs
 
-    def plot_fronts(self):
+    def plot_fronts(self, adjustKC=False):
         fronts = self.rawResults['fronts']
         fig, axs = plt.subplots(1, len(fronts))
+        plt.xticks(fontproperties=fontProp)
+        plt.yticks(fontproperties=fontProp)
         for i, front in enumerate(fronts):
             concatFront = concatenated_front(front)
             ax = axs if len(fronts) == 1 else axs[i]
 
+            if adjustKC:
+                concatFront[:, 1] = concatFront[:, 1] * 1000
+                concatFront[:, 0] = concatFront[:, 0] * 24
             # Plot front
             ax.scatter(concatFront[:, 0], concatFront[:, 1], c="b", s=1)
             ax.axis("tight")
             ax.grid()
-            ax.set_xlabel('Travel time [days]')
-            ax.set_ylabel('Fuel costs [x1000 EUR per tonne]')
+            ax.set_xlabel('Travel time [d]', fontproperties=fontProp)
+            ax.set_ylabel(r'Fuel costs [$\times$ 1000 UDS]', fontproperties=fontProp)
+
+            if adjustKC:
+                ax.set_xlabel('Travel time [h]', fontproperties=fontProp)
+                ax.set_ylabel(r'Fuel consumption [t]', fontproperties=fontProp)
 
         return fig, axs
 
@@ -74,14 +79,15 @@ class StatisticsPlotter:
 def statistics(log, ax, title=None):
     for subLog in log:
         genNumber = subLog.select("gen")
-        fitMin = subLog.chapters["fitness"].select("min")
+        fitMin = subLog.chapters["fitness"].select("min") / np.array([1, 10])
         avgSize = subLog.chapters["size"].select("avg")
 
         ax.title.set_text(title)
         # Plot minimum Fitness
-        line1 = ax.plot(genNumber, fitMin, "b-", label="Minimum fitness")
-        ax.set_xlabel("Generation")
-        ax.set_ylabel("Fitness", color="b")
+        line1_0 = ax.plot(genNumber, fitMin[:, 0], "b-", label="Min. travel time [d]")
+        line1_1 = ax.plot(genNumber, fitMin[:, 1], "b--", label=r"Min. fuel cost [$ \times 10^4$ USD]")
+        ax.set_xlabel("Generation", fontproperties=fontProp)
+        ax.set_ylabel("Fitness", color="b", fontproperties=fontProp)
         for tl in ax.get_yticklabels():
             tl.set_color("b")
 
@@ -89,12 +95,13 @@ def statistics(log, ax, title=None):
         ax2 = ax.twinx()
         line2 = ax2.plot(genNumber, avgSize, "r-", label="Average nr. waypoints")
         ax2.set_ylabel("Size", color="r")
+        plt.yticks(fontproperties=fontProp)
         for tl in ax2.get_yticklabels():
             tl.set_color("r")
 
-        lines = line1 + line2
+        lines = line1_0 + line1_1 + line2
         labs = [line.get_label() for line in lines]
-        ax.legend(lines, labs, loc="center right")
+        ax.legend(lines, labs, loc="upper right", prop=fontProp)
 
 
 def concatenated_front(front):
@@ -328,7 +335,7 @@ def plot_weather(m, ax, dateTime):
     vDif = 12
     nTicks = 13
     cb.ax.set_xticklabels(['%.f' % round(i * vDif / (nTicks - 1), 1) for i in range(nTicks)], fontsize=8)
-    cb.set_label('Wind [BFT]')
+    cb.set_label('Wind [BFT]', fontproperties=fontProp)
 
 
 if __name__ == '__main__':
@@ -336,6 +343,7 @@ if __name__ == '__main__':
     import pickle
 
     from deap import base, creator
+    from pathlib import Path
 
     creator.create("FitnessMin", base.Fitness, weights=(-1, -1))
     creator.create("Individual", list, fitness=creator.FitnessMin)
@@ -349,11 +357,25 @@ if __name__ == '__main__':
     # _fig.suptitle('This is a somewhat long figure title', fontsize=16)
     # plt.show()
 
-    with open('C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/eca results/Flo/V_FloSt_2', 'rb') as f:
-        rawList = pickle.load(f)
+    directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/Current results/KC/'
+    files = os.listdir(directory)
+    for file in files:
+        fp = Path(directory + file)
+        if '.png' in file or fp.is_dir():
+            continue
+        with open(fp, 'rb') as f:
+            rawList = pickle.load(f)
+        if 'R' in file:
+            file = 'R/' + file
 
-    statisticsPlotter = StatisticsPlotter(rawList[0], DIR=Path('D:/'))
-    frontFig, _ = statisticsPlotter.plot_fronts()
+        for i, raw in enumerate(rawList):
+            statisticsPlotter = StatisticsPlotter(raw, DIR=Path('D:/'))
+            frontFig, _ = statisticsPlotter.plot_fronts(adjustKC=True)
+            statsFig, _ = statisticsPlotter.plot_stats()
+            frontFig.savefig(directory + 'front/' + file + '_front{}.png'.format(i), dpi=300)
+            statsFig.savefig(directory + 'stats/' + file + '_stats{}.png'.format(i), dpi=300)
+            # plt.show()
+            plt.close('all')
 
     plt.show()
 
