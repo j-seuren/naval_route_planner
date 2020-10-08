@@ -250,7 +250,8 @@ class RoutePlanner:
                 # Record statistics
                 record = mstats.compile(front)
                 log.record(gen=gen, evals=self.evals, **record)
-                print('\r', log.stream)
+                print('\r', end='')
+                print(log.stream)
 
                 totalEvals += self.evals
                 self.evals = 0
@@ -335,7 +336,8 @@ class RoutePlanner:
                 # Record statistics
                 record = mstats.compile(front)
                 log.record(gen=gen, evals=evals, **record)
-                print('\r', log.stream)
+                print('\r', end='')
+                print(log.stream)
 
                 totalEvals += evals
                 # Step 4: Termination
@@ -384,7 +386,8 @@ class RoutePlanner:
                 # Record statistics
                 record = mstats.compile(front)
                 log.record(gen=gen, evals=evals, **record)
-                print('\r', log.stream)
+                print('\r', end='')
+                print(log.stream)
 
                 totalEvals += evals
                 # Step 4: Termination

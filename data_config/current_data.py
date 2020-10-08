@@ -1,14 +1,14 @@
 import datetime
-import math
 import numpy as np
 import os
 import pandas as pd
+import pickle
+import scipy
 import xarray as xr
 
 from ftplib import FTP
 from pathlib import Path
 from os import path
-from scipy import interpolate
 #
 #
 # def ncdump(nc_fid, verb=True):
@@ -144,64 +144,72 @@ class CurrentDataRetriever:
                 print('done')
                 return ds.to_array().data
 
-    def get_kc_data(self):
-        # computing the drift along each arc
+    def get_kc_data(self, step=1/6, interpolate=False):
+        appendix = '_interpolate' if interpolate else ''
+        fp = DIR / 'data/currents/KC_processed{}'.format(appendix)
+
+        lons = np.arange(120, 142, step)
+        lats = np.arange(23, 37, step)
+
+        if os.path.exists(fp):
+            with open(fp, 'rb') as fh:
+                array = pickle.load(fh)
+            return array, lons, lats
+
         df = pd.read_csv(self.dataDir / 'caldepth0.csv')
+        df['lons'] = df['longitude_degree'] + df['longitude_minute'] / 60.
+        df['lats'] = df['latitude_degree'] + df['latitude_minute'] / 60.
+        df['u'] = df['velocity'] * np.cos(np.deg2rad(df['direction']))
+        df['v'] = df['velocity'] * np.sin(np.deg2rad(df['direction']))
+
         uDict, vDict, numDict = {}, {}, {}
-        lons, lats = [], []
-        for i in range(len(df)):
-            lon = df['longitude_degree'].iloc[i] + df['longitude_minute'].iloc[i] / 60.0
-            if lon not in lons:
-                lons.append(lon)
-            lat = df['latitude_degree'].iloc[i] + df['latitude_minute'].iloc[i] / 60.0
-            if lat not in lats:
-                lats.append(lat)
+        for index, row in df.iterrows():
+            k = (row['lats'], row['lons'])
 
-            k = (lon, lat)
             if k in uDict:
-                uDict[k] += df['velocity'].iloc[i] * math.cos(math.pi * df['direction'].iloc[i] / 180.0)
-                vDict[k] += df['velocity'].iloc[i] * math.sin(math.pi * df['direction'].iloc[i] / 180.0)
-                numDict[k] += 1.0
+                uDict[k] += row['u']
+                vDict[k] += row['v']
+                numDict[k] += 1.
             else:
-                uDict[k] = df['velocity'].iloc[i] * math.cos(math.pi * df['direction'].iloc[i] / 180.0)
-                vDict[k] = df['velocity'].iloc[i] * math.sin(math.pi * df['direction'].iloc[i] / 180.0)
-                numDict[k] = 1.0
+                uDict[k] = row['u']
+                vDict[k] = row['v']
+                numDict[k] = 1.
 
-        lons, lats = np.array(sorted(lons)), np.array(sorted(lats))
+        xx, yy = np.meshgrid(lons, lats)
+        u = np.empty(xx.shape)
+        v = np.empty(xx.shape)
+        step2 = step / 2.
+
+        print('binning ocean currents:')
+        for i, lat in enumerate(lats):
+            for j, lon in enumerate(lons):
+                if j % 10 == 0:
+                    print('\r', i, j, end='')
+                points = {k: v for k, v in numDict.items() if abs(k[0] - lat) <= step2 and abs(k[1] - lon) <= step2}
+                nPoints = sum(points.values())
+
+                v[i, j] = np.sum([vDict[k] for k in points]) / nPoints if nPoints > 0 else 0.
+                u[i, j] = np.sum([uDict[k] for k in points]) / nPoints if nPoints > 0 else 0.
 
         array = np.empty([2, len(lats), len(lons)])
-        array[:] = np.nan
-        for k, u in uDict.items():
-            lon, lat = k
-            lonIdx = np.where(lons == lon)
-            latIdx = np.where(lats == lat)
-            assert len(lonIdx) == 1 and len(latIdx) == 1
-            array[0, latIdx, lonIdx] = u / numDict[k]
-            uDict[k] = u / numDict[k]
+        array[0], array[1] = u, v
+        print('\r\r done')
 
-        for k, v in vDict.items():
-            lon, lat = k
-            lonIdx = np.where(lons == lon)
-            latIdx = np.where(lats == lat)
-            assert len(lonIdx) == 1 and len(latIdx) == 1
-            array[1, latIdx, lonIdx] = v / numDict[k]
-            vDict[k] = v / numDict[k]
+        if interpolate:
+            array = np.ma.masked_invalid(array)
+            for i in range(2):
+                arr = array[i]
+                x = np.arange(0, arr.shape[1])
+                y = np.arange(0, arr.shape[0])
+                xx, yy = np.meshgrid(x, y)
+                # get only the valid values
+                x1 = xx[~arr.mask]
+                y1 = yy[~arr.mask]
+                newArr = arr[~arr.mask]
+                array[i] = scipy.interpolate.griddata((x1, y1), newArr.ravel(), (xx, yy), fill_value=0.)
 
-        print(np.min(array), np.max(array))
-        print(np.min(array[0]), np.max(array[0]))
-        print(np.min(array[1]), np.max(array[1]))
-
-        array = np.ma.masked_invalid(array)
-        for i in range(2):
-            arr = array[i]
-            x = np.arange(0, arr.shape[1])
-            y = np.arange(0, arr.shape[0])
-            xx, yy = np.meshgrid(x, y)
-            # get only the valid values
-            x1 = xx[~arr.mask]
-            y1 = yy[~arr.mask]
-            newArr = arr[~arr.mask]
-            array[i] = interpolate.griddata((x1, y1), newArr.ravel(), (xx, yy), fill_value=0.)
+        with open(fp, 'wb') as fh:
+            pickle.dump(array, fh)
 
         return array, lons, lats
 
@@ -236,19 +244,27 @@ if __name__ == '__main__':
         m.fillcontinents()
         m.drawparallels(np.arange(24., 38, 2.), labels=[1, 0, 0, 0], fontsize=8)
         m.drawmeridians(np.arange(120., 144, 2.), labels=[0, 0, 0, 1], fontsize=8)
-        vLat = int((max(lats) - min(lats)) * 4)
-        vLon = int((max(lons) - min(lons)) * 4)
+        vLat = int((max(lats) - min(lats)) * 6)
+        vLon = int((max(lons) - min(lons)) * 6)
+        print(min(lons), min(lats), max(lons), max(lats))
         uRot, vRot, x, y = m.transform_vector(uin, vin, lons, lats, vLon, vLat, returnxy=True)
-        m.contourf(x, y, np.hypot(uRot, vRot), cmap='Blues')
-        Q = m.quiver(x, y, uRot, vRot, np.hypot(uRot, vRot), pivot='mid', width=0.002, color='k', headlength=4, scale=90)
-        plt.quiverkey(Q, 0.45, -0.1, 2, r'$2$ knots', labelpos='E')
+        C = m.contourf(x, y, np.hypot(uRot, vRot), cmap='Blues')
+        cb = m.colorbar(C, size=0.2, pad=0.05, location='right')
+        cb.set_label('Current velocity [knots]', rotation=270, labelpad=15)
+        Q = m.quiver(x, y, uRot, vRot, np.hypot(uRot, vRot), cmap='Greys', pivot='mid', width=0.002, headlength=4,
+                     scale=60)
+        # plt.quiverkey(Q, 0.45, -0.1, 2, r'$2$ knots', labelpos='E')
 
         # plt.savefig(DIR / 'output/figures' / 'KC_data.pdf', bbox_inches='tight', pad_inches=0.3)
         plt.show()
 
-    data, lons0, lats0 = CurrentDataRetriever(datetime(2014, 10, 28), nDays=6, DIR=DIR).get_kc_data()
+    data, lons0, lats0 = CurrentDataRetriever(datetime(2014, 10, 28), nDays=6, DIR=DIR).get_kc_data(interpolate=True)
     _uin, _vin = data[0], data[1]
+    lonSlice, latSlice = slice(12, 121), slice(12, 71)
+    # lons = np.arange(122, 140, step)
+    # lats = np.arange(25, 35, step)
 
-    _extent = (120, 23, 142, 37)
+    _extent = (120, 25, 142, 37)
 
+    currents(_uin[latSlice, lonSlice], _vin[latSlice, lonSlice], lons0[lonSlice], lats0[latSlice], _extent)
     currents(_uin, _vin, lons0, lats0, _extent)

@@ -352,6 +352,7 @@ if __name__ == '__main__':
 
     from deap import base, creator
     from pathlib import Path
+    from main import RoutePlanner
 
     creator.create("FitnessMin", base.Fitness, weights=(-1, -1))
     creator.create("Individual", list, fitness=creator.FitnessMin)

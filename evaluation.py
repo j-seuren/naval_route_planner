@@ -9,7 +9,6 @@ from functools import lru_cache, wraps
 from math import cos, sin, sqrt, radians, pow
 from pathlib import Path
 from shapely.geometry import LineString, Point
-# from case_studies.demos import create_currents
 
 
 def delta_penalty(func):
@@ -68,7 +67,7 @@ class Evaluator:
     def evaluate(self, ind, revert=None, includePenalty=None):
         self.includePenalty = self.bathymetry if includePenalty is None else includePenalty
         revert = self.revertOutput if revert is None else revert
-        hours = cost = 0.
+        hours = cost = dist = ecaDist = 0.
 
         for e in range(len(ind) - 1):
             # Leg endpoints and boat speed
@@ -82,6 +81,7 @@ class Evaluator:
             # If leg intersects ECA increase fuel consumption by ecaFactor
             if geo_x_geos(self.ecaRtree, p1, p2):
                 legCost *= self.ecaFactor
+                ecaDist += nauticalMiles
 
             if self.includePenalty:
                 nSegs = self.e_feasible(p1, p2)
@@ -91,11 +91,44 @@ class Evaluator:
             # Increment objective values
             hours += legHours
             cost += legCost
+            dist += nauticalMiles
 
         days = hours / 24.
         if revert:
             return cost, days
+        # if includePenalty is not None:
+        #     print('hours', hours, 'distance', dist, 'ecaDist', ecaDist)
         return days, cost
+
+    def evaluate2(self, ind):
+        hours = cost = dist = ecaDist = 0.
+
+        for e in range(len(ind) - 1):
+            # Leg endpoints and boat speed
+            p1, p2 = sorted((ind[e][0], ind[e+1][0]))
+            speedKnots = ind[e][1]
+
+            # Leg travel time and fuel cost
+            legHours, nauticalMiles = self.leg_hours(p1, p2, hours, speedKnots)
+            legCost = self.vessel.fuelCostPerDay[speedKnots] * legHours / 24.  # x1000 EUR or USD
+
+            # If leg intersects ECA increase fuel consumption by ecaFactor
+            if geo_x_geos(self.ecaRtree, p1, p2):
+                legCost *= self.ecaFactor
+                ecaDist += nauticalMiles
+
+            if self.includePenalty:
+                nSegs = self.e_feasible(p1, p2)
+                legCost += (nSegs * self.segLengthF / nauticalMiles) * legCost * self.penaltyValue
+                legHours += (nSegs * self.segLengthF / nauticalMiles) * legHours / 24. * self.penaltyValue
+
+            # Increment objective values
+            hours += legHours
+            cost += legCost
+            dist += nauticalMiles
+
+        days = hours / 24.
+        return days, cost, dist, ecaDist
 
     def feasible(self, ind):
         for i in range(len(ind)-1):
@@ -425,3 +458,22 @@ if __name__ == '__main__':
         plt.scatter(np.degrees(bearingRads), output2)
 
         plt.show()
+
+if __name__ == '__main__':
+    import pickle
+
+    from main import RoutePlanner
+    from pathlib import Path
+
+    fp = Path('C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/eca results/Flo/0_FloSa')
+
+    evaluate = RoutePlanner().evaluator.evaluate
+
+    with open(fp, 'rb') as fh:
+        rawList = pickle.load(fh)
+
+    front = rawList[0]['fronts'][0][0]
+    for _ind in front:
+        T, FC = evaluate(_ind, includePenalty=False)
+        print(T, FC)
+

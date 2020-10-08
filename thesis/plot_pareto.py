@@ -58,12 +58,14 @@ class MergedPlots:
             self.outFiles.append({'fronts': fronts, 'hulls': hulls, 'proc': proc, 'raw': raw, 'filename': rawFN})
 
     def merged_pareto(self, save=False):
-        frontFig, frontAx = plt.subplots()
-        frontAx.set_xlabel('Travel time [d]', fontproperties=fontProp)
-        frontAx.set_ylabel('Fuel costs [x1000 USD]', fontproperties=fontProp)
-        cycleFront = frontAx._get_lines.prop_cycler
+        fig, ax1 = plt.subplots()
+        ax1.set_xlabel('Travel time [d]', fontproperties=fontProp)
+        ax1.set_ylabel('Fuel costs [x1000 USD]', fontproperties=fontProp)
+        cycleFront = ax1._get_lines.prop_cycler
 
         if self.experiment == 'eca':
+            ax2 = ax1.twinx()
+            ax2.set_ylabel("ECA distance [nm]")
             labels = ['Incl. ECA (E)', 'Excl. ECA (R)']
             C, V = '', ''
             R0 = 'E'
@@ -88,16 +90,25 @@ class MergedPlots:
 
             next_color = next_color if noLabel else next(cycleFront)['color']
             # Plot front
-            (marker, s, zorder) = ('s', 5, 2) if 'C' in labelString else ('o', 1, 1)
+            (marker, s, zorder) = ('s', 5, 3) if 'C' in labelString else ('o', 1, 2)
             for front in file['fronts']:
                 travelTimes, fuelCosts = zip(*list(front.keys()))
-                frontAx.scatter(travelTimes, fuelCosts,
-                                color=next_color, marker=marker, s=s, zorder=zorder, label=label)
+                ax1.scatter(travelTimes, fuelCosts, color=next_color, marker=marker, s=s, zorder=zorder, label=label)
+                if self.experiment == 'eca':
+                    if 'R' in label:
+                        continue
+                    _, inds = zip(*front.items())
+                    result = map(self.planner.evaluator.evaluate2, inds)
+                    _, _, distance, distEca = zip(*result)
+                    ax2.scatter(travelTimes, distEca, c='grey', alpha=0.3, marker='.', s=1, zorder=1)
+                    ax2.set_ylim(ymin=0)
+
             for hull in file['hulls']:
                 travelTimes, fuelCosts = zip(*list(hull.keys()))
-                frontAx.scatter(travelTimes, fuelCosts, color=next_color, marker='x', zorder=zorder)
+                ax1.scatter(travelTimes, fuelCosts, color=next_color, marker='x', zorder=zorder)
 
-        frontAx.legend(prop=fontProp)
+        ax1.legend(prop=fontProp)
+        plt.grid()
         plt.xticks(fontproperties=fontProp)
         plt.yticks(fontproperties=fontProp)
 
@@ -105,8 +116,8 @@ class MergedPlots:
         # plt.margins(0, 0)
 
         if save:
-            frontFig.savefig('{}_front_merged'.format(self.fn), dpi=300)
-            frontFig.savefig('{}_front_merged.pdf'.format(self.fn), bbox_inches='tight', pad_inches=0)
+            fig.savefig('{}_front_merged'.format(self.fn), dpi=300)
+            fig.savefig('{}_front_merged.pdf'.format(self.fn), bbox_inches='tight', pad_inches=0)
             tikzplotlib.save("{}_front_merged.tex".format(self.fn))
 
     def colorbar(self, ax):
@@ -278,8 +289,8 @@ def get_front(frontIn, planner, experiment, date):
 
     objVals, fronts = [], []
     for front in frontIn:
-        # newFits = [planner.evaluator.evaluate(ind, revert=False, includePenalty=False) for ind in front]
-        newFits = [ind.fitness.values for ind in front]
+        newFits = [planner.evaluator.evaluate(ind, revert=False, includePenalty=False) for ind in front]
+        # newFits = [ind.fitness.values for ind in front]
         print(newFits)
         fronts.append({newFits[f]: ind for f, ind in enumerate(front.items)})
         objVals.append(np.array(newFits))
@@ -450,13 +461,15 @@ if __name__ == '__main__':
     # mergedPlots.merged_routes(zoom=1.5, initial=True, colorbar=False, alpha=1, save=True, hull=False)
 
     #  ECA
-    # _directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/eca results/Flo'
-    # contains='FloSa'
+    _directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/eca results/Flo'
+    mergedPlots = MergedPlots(_directory, datetime(2011, 5, 28), experiment='eca', contains='FloSa')
+    mergedPlots.merged_pareto(save=False)
+    # mergedPlots.merged_routes(zoom=1.2, initial=False, colorbar=True, alpha=0.5, save=False, hull=True)
 
-    _directory = 'D:/output/weather/WTH/NSGA2_varSP_BFalse_ECA1.0/5/raw'
-    mergedPlots = MergedPlots(_directory, datetime(2011, 5, 28), experiment='weather', contains='PH')
-
-    # mergedPlots.merged_pareto(save=False)
-    mergedPlots.merged_routes(zoom=1.2, initial=False, colorbar=True, alpha=0.5, save=False, hull=True)
+    # _directory = 'D:/output/weather/WTH/NSGA2_varSP_BFalse_ECA1.0/5/raw'
+    # mergedPlots = MergedPlots(_directory, datetime(2011, 5, 28), experiment='weather', contains='PH')
+    #
+    # # mergedPlots.merged_pareto(save=False)
+    # mergedPlots.merged_routes(zoom=1.2, initial=False, colorbar=True, alpha=0.5, save=False, hull=True)
 
     plt.show()
