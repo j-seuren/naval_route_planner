@@ -146,7 +146,7 @@ class CurrentDataRetriever:
 
     def get_kc_data(self, step=1/6, interpolate=False):
         appendix = '_interpolate' if interpolate else ''
-        fp = DIR / 'data/currents/KC_processed{}'.format(appendix)
+        fp = self.dataDir / 'KC_processed{}'.format(appendix)
 
         lons = np.arange(120, 142, step)
         lats = np.arange(23, 37, step)

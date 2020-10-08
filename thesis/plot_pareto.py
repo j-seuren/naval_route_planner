@@ -15,7 +15,6 @@ from datetime import datetime
 from deap import tools
 from pathlib import Path
 from mpl_toolkits.basemap import Basemap
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib import font_manager as fm
 from matplotlib import cm, patches
 from matplotlib.collections import PatchCollection
@@ -73,6 +72,10 @@ class MergedPlots:
             labels = ['Incl. bathymetry (B)', 'Excl. bathymetry (R)']
             C, V = '', ''
             R0 = 'B'
+        # elif self.experiment == 'weather':
+        #     labels = ['Incl. weather (W)', 'Excl. weather (R)']
+        #     C, V = '', ''
+        #     R0 = ''
         else:
             labels = ['Constant speed - ref. (CR)', 'Constant speed (C)',
                       'Variable speed - ref. (VR)', 'Variable speed (V)']
@@ -120,15 +123,14 @@ class MergedPlots:
             fig.savefig('{}_front_merged.pdf'.format(self.fn), bbox_inches='tight', pad_inches=0)
             tikzplotlib.save("{}_front_merged.tex".format(self.fn))
 
-    def colorbar(self, ax):
+    def colorbar(self, m):
         cmap = cm.get_cmap('jet', 12)
         cmapList = [cmap(i) for i in range(cmap.N)][1:-1]
         cmap = cl.LinearSegmentedColormap.from_list('Custom cmap', cmapList, cmap.N - 2)
-        # Create color bar
+
         sm = plt.cm.ScalarMappable(cmap=cmap)
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size=0.2, pad=0.05)  # Colorbar axis
-        cb = plt.colorbar(sm, norm=plt.Normalize(vmin=self.vMin, vmax=self.vMin + self.dV), cax=cax)
+        cb = m.colorbar(sm, norm=plt.Normalize(vmin=self.vMin, vmax=self.vMin + self.dV),
+                        size=0.2, pad=0.05, location='right')
         nTicks = 6
         cb.ax.set_yticklabels(['%.1f' % round(self.vMin + i * self.dV / (nTicks - 1), 1) for i in range(nTicks)],
                               fontproperties=fontProp)
@@ -149,7 +151,6 @@ class MergedPlots:
         w, h = routeFig.get_size_inches()
         routeFig.set_size_inches(w * zoom, h * zoom)
         cycleRoute = routeAx._get_lines.prop_cycler
-        cmap = self.colorbar(routeAx) if colorbar else None
 
         # Plot navigation area
         if self.experiment == 'current':
@@ -164,6 +165,8 @@ class MergedPlots:
             m = navigation_area(routeAx, self.outFiles[it]['proc'], initial,
                                 eca=self.experiment == 'eca',
                                 bathymetry=self.experiment == 'bathymetry')
+
+        cmap = self.colorbar(m) if colorbar else None
 
         if self.experiment == 'eca':
             labels = ['Incl. ECA (E)', 'Excl. ECA (R)']
@@ -196,19 +199,6 @@ class MergedPlots:
                 continue
             labelString = '{}{}'.format(S, R)
 
-            # if not intervalRoutes:  # or R == 'R':  # Plot route responses
-            #     color = next(cycleRoute)['color']
-            #     for r, route in enumerate(file['proc']['routeResponse']):
-            #         if self.experiment != 'bathymetry' and r > 1:
-            #             break
-            #         elif r % 2 != 0:
-            #             continue
-            #         label0 = '{}{}'.format(rLabel, appLabels[r]) if self.experiment != 'bathymetry' and R != 'R' else rLabel
-            #         label = label0 if label != label0 else None
-            #         ind = [((leg['lon'], leg['lat']), leg['speed']) for leg in route['waypoints']]
-            #         line = 'dashed' if r > 0 and self.experiment != 'bathymetry' else 'solid'
-            #         self.plot_ind(ind, m, label=label, color=color, line=line)
-
             fronts = file['hulls'] if hull else file['fronts']
             shortLong = iter(['S', 'L'])
             for front in fronts:
@@ -231,9 +221,6 @@ class MergedPlots:
                         self.plot_ind(ind, m, label=label, color=color, alpha=alpha, cmap=cmap)
         if cmap is None or self.initialLabel is None:
             routeAx.legend(loc='upper right', prop=fontProp)
-
-        # plt.subplots_adjust(top=1, bottom=0, right=1, left=0, hspace=0, wspace=0)
-        # plt.margins(0, 0)
 
         if save:
             routeFig.savefig('{}_route_merged'.format(self.fn), dpi=300)
@@ -392,7 +379,6 @@ def weather_contour(m, dateTime, travelDays, lonStart, lonEnd):
     # Initialize variables for contourf
     lons, lats = np.linspace(-180, 179.5, 720), np.linspace(-90, 89.5, 360)
     x, y = m(*np.meshgrid(lons, lats))
-    maxWind, C1 = 0, None
     Cs = [None for _ in range(len(dateIndices))]
 
     for i, (dateInd, lonPair) in enumerate(zip(dateIndices, lonPairs)):
@@ -400,13 +386,10 @@ def weather_contour(m, dateTime, travelDays, lonStart, lonEnd):
         BNarr = ds[0, dateInd, :-1, lon0:lon1]
         xx, yy = x[:, lon0:lon1], y[:, lon0:lon1]
         Cs[i] = m.contourf(xx, yy, BNarr, vmin=0, vmax=12, cmap=cm.get_cmap('jet', 12))
-        if np.max(BNarr) > maxWind:
-            C1 = Cs[i]
 
-    cb = m.colorbar(C1, norm=plt.Normalize(vmin=0, vmax=12), size=0.2, pad=0.2, location='bottom')
-    vDif = 12
-    nTicks = 13
-    cb.ax.set_xticklabels(['%.f' % round(i * vDif / (nTicks - 1), 1) for i in range(nTicks)], fontsize=8)
+    ncolors = 12
+    sm = plt.cm.ScalarMappable(norm=plt.Normalize(vmin=0, vmax=12), cmap=cm.get_cmap('jet', 12))
+    cb = m.colorbar(sm, norm=plt.Normalize(vmin=0, vmax=12), size=0.2, pad=0.2, location='bottom')
     cb.set_label('Wind [BFT]', fontproperties=fontProp)
 
 
@@ -449,7 +432,7 @@ def navigation_area(ax, proc, initial, eca=False, current=None, weather=None, ba
         except IndexError:
             maxTravelDays = minTravelDays
         avgTravelDays = (minTravelDays + maxTravelDays) / 2
-        weather_contour(m, weather, avgTravelDays, lon0, lon1)
+        weather_contour(m, weather, 7.5, lon0, lon1)
 
     return m
 
@@ -461,15 +444,15 @@ if __name__ == '__main__':
     # mergedPlots.merged_routes(zoom=1.5, initial=True, colorbar=False, alpha=1, save=True, hull=False)
 
     #  ECA
-    _directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/eca results/Flo'
-    mergedPlots = MergedPlots(_directory, datetime(2011, 5, 28), experiment='eca', contains='FloSa')
-    mergedPlots.merged_pareto(save=False)
+    # _directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/eca results/Flo'
+    # mergedPlots = MergedPlots(_directory, datetime(2011, 5, 28), experiment='eca', contains='FloSa')
+    # mergedPlots.merged_pareto(save=False)
     # mergedPlots.merged_routes(zoom=1.2, initial=False, colorbar=True, alpha=0.5, save=False, hull=True)
 
-    # _directory = 'D:/output/weather/WTH/NSGA2_varSP_BFalse_ECA1.0/5/raw'
-    # mergedPlots = MergedPlots(_directory, datetime(2011, 5, 28), experiment='weather', contains='PH')
-    #
-    # # mergedPlots.merged_pareto(save=False)
-    # mergedPlots.merged_routes(zoom=1.2, initial=False, colorbar=True, alpha=0.5, save=False, hull=True)
+    _directory = 'D:/output/weather/WTH/NSGA2_varSP_BFalse_ECA1.0/1/raw'
+    mergedPlots = MergedPlots(_directory, datetime(2011, 5, 28), experiment='weather', contains='NoNy')
+
+    mergedPlots.merged_pareto(save=False)
+    mergedPlots.merged_routes(zoom=1.2, initial=False, intervalRoutes=[4, 8], colorbar=True, alpha=0.5, save=True, hull=False)
 
     plt.show()
