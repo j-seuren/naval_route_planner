@@ -10,8 +10,8 @@ from matplotlib.collections import PatchCollection
 from mpl_toolkits.basemap import Basemap
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-fontPropFP = "C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/tex-gyre-pagella.regular.otf"
-fontProp = font_manager.FontProperties(fname=fontPropFP)
+# fontPropFP = "C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/tex-gyre-pagella.regular.otf"
+# fontProp = font_manager.FontProperties(fname=fontPropFP)
 
 
 def update(population):
@@ -41,8 +41,8 @@ class StatisticsPlotter:
     def plot_stats(self):
         logs = self.rawResults['logs']
         fig, axs = plt.subplots(1, len(logs))
-        plt.xticks(fontproperties=fontProp)
-        plt.yticks(fontproperties=fontProp)
+        # plt.xticks(fontproperties=fontProp)
+        # plt.yticks(fontproperties=fontProp)
         for i, log in enumerate(logs):
             if len(logs) == 1:
                 statistics(log, axs)
@@ -53,8 +53,8 @@ class StatisticsPlotter:
     def plot_fronts(self, adjustKC=False):
         fronts = self.rawResults['fronts']
         fig, axs = plt.subplots(1, len(fronts))
-        plt.xticks(fontproperties=fontProp)
-        plt.yticks(fontproperties=fontProp)
+        # plt.xticks(fontproperties=fontProp)
+        # plt.yticks(fontproperties=fontProp)
         for i, front in enumerate(fronts):
             concatFront = concatenated_front(front)
             ax = axs if len(fronts) == 1 else axs[i]
@@ -66,12 +66,16 @@ class StatisticsPlotter:
             ax.scatter(concatFront[:, 0], concatFront[:, 1], c="b", s=1)
             ax.axis("tight")
             ax.grid()
-            ax.set_xlabel('Travel time [d]', fontproperties=fontProp)
-            ax.set_ylabel(r'Fuel costs [$\times$ 1000 UDS]', fontproperties=fontProp)
+            # ax.set_xlabel('Travel time [d]', fontproperties=fontProp)
+            # ax.set_ylabel(r'Fuel costs [$\times$ 1000 UDS]', fontproperties=fontProp)
+            ax.set_xlabel('Travel time [d]')
+            ax.set_ylabel(r'Fuel costs [$\times$ 1000 UDS]')
 
             if adjustKC:
-                ax.set_xlabel('Travel time [h]', fontproperties=fontProp)
-                ax.set_ylabel(r'Fuel consumption [t]', fontproperties=fontProp)
+                ax.set_xlabel('Travel time [h]')
+                ax.set_ylabel(r'Fuel consumption [t]')
+                # ax.set_xlabel('Travel time [h]', fontproperties=fontProp)
+                # ax.set_ylabel(r'Fuel consumption [t]', fontproperties=fontProp)
 
         return fig, axs
 
@@ -86,8 +90,10 @@ def statistics(log, ax, title=None):
         # Plot minimum Fitness
         line1_0 = ax.plot(genNumber, fitMin[:, 0], "b-", label="Min. travel time [d]")
         line1_1 = ax.plot(genNumber, fitMin[:, 1], "b--", label=r"Min. fuel cost [$ \times 10^4$ USD]")
-        ax.set_xlabel("Generation", fontproperties=fontProp)
-        ax.set_ylabel("Fitness", color="b", fontproperties=fontProp)
+        ax.set_xlabel("Generation")
+        ax.set_ylabel("Fitness", color="b")
+        # ax.set_xlabel("Generation", fontproperties=fontProp)
+        # ax.set_ylabel("Fitness", color="b", fontproperties=fontProp)
         for tl in ax.get_yticklabels():
             tl.set_color("b")
 
@@ -95,13 +101,14 @@ def statistics(log, ax, title=None):
         ax2 = ax.twinx()
         line2 = ax2.plot(genNumber, avgSize, "r-", label="Average nr. waypoints")
         ax2.set_ylabel("Size", color="r")
-        plt.yticks(fontproperties=fontProp)
+        # plt.yticks(fontproperties=fontProp)
         for tl in ax2.get_yticklabels():
             tl.set_color("r")
 
         lines = line1_0 + line1_1 + line2
         labs = [line.get_label() for line in lines]
-        ax.legend(lines, labs, loc="upper right", prop=fontProp)
+        # ax.legend(lines, labs, loc="upper right", prop=fontProp)
+        ax.legend(lines, labs, loc="upper right")
 
 
 def concatenated_front(front):
@@ -335,7 +342,8 @@ def plot_weather(m, ax, dateTime):
     vDif = 12
     nTicks = 13
     cb.ax.set_xticklabels(['%.f' % round(i * vDif / (nTicks - 1), 1) for i in range(nTicks)], fontsize=8)
-    cb.set_label('Wind [BFT]', fontproperties=fontProp)
+    # cb.set_label('Wind [BFT]', fontproperties=fontProp)
+    cb.set_label('Wind [BFT]')
 
 
 if __name__ == '__main__':
