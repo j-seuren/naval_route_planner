@@ -34,15 +34,14 @@ inputDict = inputMOEA
 
 speedOps = ['insert', 'move', 'delete'] if parameters['speed'] == 'constant' else ['speed', 'insert', 'move', 'delete']
 par = {'mutationOperators': speedOps, 'n': 100, 'maxEvaluations': 25000}
-planner = main.RoutePlanner(inputParameters=par, bathymetry=parameters['bathymetry'],
-                            ecaFactor=parameters['ecaFactor'], criteria=criteria)
 
 for MOEA in ['NSGA2', 'SPEA2', 'MPAES']:
     parameters['MOEA'] = MOEA
     planner = main.RoutePlanner(inputParameters=par,
                                 bathymetry=parameters['bathymetry'],
                                 ecaFactor=parameters['ecaFactor'],
-                                criteria=criteria)
+                                criteria=criteria,
+                                seeds=range(parameters['iterations']))
 
     # Create directories
     _dir = DIR / 'output' / parameters['exp'] / inputDict['instance']

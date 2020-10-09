@@ -42,7 +42,7 @@ def single_experiment(planner, inputDict, parameters, startEnd, depDate, fileStr
         t0 = time.time()
         seed = itr if seed else None
         rawIn = planner.compute(startEnd, startDate=depDate, recompute=True, weather=weather, current=current,
-                              algorithm=parameters['MOEA'], seed=seed)
+                              algorithm=parameters['MOEA'])
         t1 = time.time() - t0
 
         updateDict = {exp: 1.5593} if exp == 'eca' else {exp: depDate}

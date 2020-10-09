@@ -51,7 +51,11 @@ class RoutePlanner:
                  inputParameters=None,
                  tb=None,
                  criteria=None,
-                 seed=None):
+                 seed=None,
+                 seeds=None):
+        self.seeds = iter(seeds) if seeds is not None else None
+        seed = None if self.seeds else seed
+
         np.random.seed(seed)
         random.seed(seed)
 
@@ -453,12 +457,12 @@ class RoutePlanner:
         if not recompute and os.path.exists(self.procResultsFP):
             return None
 
-        newParameters, reinitialize = {}, False
+        newParameters = {'seed': next(self.seeds)} if self.seeds is not None else {}
+
         if self.p['avoidAntarctic'] != avoidAntarctic or self.p['avoidArctic'] != avoidArctic:
-            reinitialize = True
             newParameters['avoidAntarctic'] = avoidAntarctic
             newParameters['avoidArctic'] = avoidArctic
-            self.update_parameters(newParameters, reinitialize=reinitialize)
+        self.update_parameters(newParameters)
 
         key = tuple(sorted(startEnd))
         # Get initial paths
@@ -530,11 +534,12 @@ class RoutePlanner:
 
         return result
 
-    def update_parameters(self, newParameters, reinitialize=False):
+    def update_parameters(self, newParameters):
         self.p = {**self.p, **newParameters}
-        self.operators = Operators(self.evaluator.e_feasible, self.vessel, self.geod, self.p, self.operators.seed)
+        seed = newParameters.get('seed', self.operators.seed)
+        self.operators = Operators(self.evaluator.e_feasible, self.vessel, self.geod, self.p, seed)
 
-        if reinitialize:
+        if 'seed' in newParameters or 'avoidAntarctic' in newParameters or 'avoidArctic' in newParameters:
             # Re-populate R-Tree structures
             navAreaGenerator = NavigableAreaGenerator(self.p, DIR=DIR)
             self.evaluator.landRtree = navAreaGenerator.get_shoreline_rtree()
@@ -542,7 +547,7 @@ class RoutePlanner:
             self.initializer = initialization.Initializer(self.evaluator, self.vessel, self.evaluator.landRtree,
                                                           self.evaluator.ecaRtree, self.initializer.bathTree,
                                                           self.geod, self.p, creator.Individual, self.speedIdx, DIR,
-                                                          self.initializer.seed)
+                                                          seed)
 
     def get_days(self, pop):
         """
