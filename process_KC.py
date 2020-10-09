@@ -2,13 +2,13 @@ import indicators
 import os
 import pickle
 import main
+import numpy as np
 import pandas as pd
 
 from datetime import datetime
+from geodesic import Geodesic
 from deap import tools
 from pathlib import Path
-
-planner = main.RoutePlanner(bathymetry=False, ecaFactor=1)
 
 
 def create_raw_dicts():
@@ -17,43 +17,41 @@ def create_raw_dicts():
     os.chdir(loadDir)
 
     refFiles = [file for file in os.listdir(rawDir) if 'R' in file]
-    refFronts2014, refFronts2015 = {}, {}
-    for d, date in enumerate([datetime(2014, 11, 15), datetime(2015, 5, 15)]):
-        refFrontsDict = refFronts2014 if d == 0 else refFronts2015
-        planner.evaluator.set_classes(inclCurr=True, inclWeather=False, nDays=7, startDate=date)
-        evaluate = planner.evaluator.evaluate
+    print('refFiles', refFiles)
+    planner = main.RoutePlanner(bathymetry=False, fuelPrice=1., ecaFactor=1, vesselName='Tanaka')
+    planner.evaluator.set_classes(inclCurr=True, inclWeather=False, nDays=7, startDate=datetime(2014, 11, 15))
+    evaluate = planner.evaluator.evaluate
 
-        for refFile in refFiles:
-            split = refFile.split('_')
-            pair = split[-1]
-            with open(rawDir / refFile, 'rb') as fh:
-                refRawList = pickle.load(fh)
-            refFronts = [refRaw['fronts'][0][0] for refRaw in refRawList]
-            newRefFronts = []
-            for oldFront in refFronts:
-                fits = [evaluate(ind, revert=False, includePenalty=False) for ind in oldFront]
-                for fit, ind in zip(fits, oldFront.items):
-                    ind.fitness.values = fit
-                newFront = tools.ParetoFront()
-                newFront.update(oldFront.items)
-                newRefFronts.append(newFront)
-            refFrontsDict[pair] = newRefFronts
+    refFrontsDict = {}
+    for refFile in refFiles:
+        split = refFile.split('_')
+        pair = split[-1]
+        with open(rawDir / refFile, 'rb') as fh:
+            refRawList = pickle.load(fh)
+        refFronts = [refRaw['fronts'][0][0] for refRaw in refRawList]
+        newRefFronts = []
+        for oldFront in refFronts:
+            fits = [evaluate(ind, revert=False, includePenalty=False) for ind in oldFront]
+            for fit, ind in zip(fits, oldFront.items):
+                ind.fitness.values = fit
+            newFront = tools.ParetoFront()
+            newFront.update(oldFront.items)
+            newRefFronts.append(newFront)
+        refFrontsDict[pair] = newRefFronts
 
     files = [file for file in os.listdir(rawDir) if 'R' not in file]
+    print('files', files)
 
-    fronts14, fronts15 = {}, {}
+    frontsDict = {}
     for file in files:
         split = file.split('_')
         pair = split[-1]
         with open(rawDir / file, 'rb') as fh:
             rawList = pickle.load(fh)
         fronts = [raw['fronts'][0][0] for raw in rawList]
-        if '2014' in file:
-            fronts14[pair] = (fronts, refFronts2014[pair])
-        else:
-            fronts15[pair] = (fronts, refFronts2015[pair])
+        frontsDict[pair] = (fronts, refFrontsDict[pair])
 
-    return fronts14, fronts15
+    return frontsDict, planner
 
 
 writer = pd.ExcelWriter('output.xlsx')
@@ -64,9 +62,8 @@ def compute_metrics(name, frontsDict):
     dfBinaryHV = pd.DataFrame(columns=pairs)
     dfCoverage = pd.DataFrame(columns=pairs)
 
-    for pair, frontTup in frontsDict.items():
+    for pair, (fronts, refFronts) in frontsDict.items():
         print('\r', pair, end='')
-        fronts, refFronts = frontTup
 
         for front, refFront in zip(fronts, refFronts):
             biHV = indicators.binary_hypervolume(front, refFront)
@@ -85,43 +82,48 @@ def compute_metrics(name, frontsDict):
     dfBinaryHV.to_excel(writer, sheet_name='{}_B'.format(name))
 
 
-def save_fronts(name, frontsDict):
-
-    pairs = list(frontsDict.keys())
-
-    index = ['TT', 'FC']
-    dfFronts = pd.DataFrame(columns=pairs)
-    dfRefFronts = pd.DataFrame(columns=pairs)
-    df = pd.DataFrame(np.random.randn(3, 8), index=['A', 'B', 'C'], columns=index)
-
+def save_fronts(frontsDict, planner):
+    evaluate2 = planner.evaluator.evaluate2
     for pair, frontTup in frontsDict.items():
         print('\r', pair, end='')
         fronts, refFronts = frontTup
+        dfPairList, refDFPairList = [], []
+        for run, (front, refFront) in enumerate(zip(fronts, refFronts)):
+            dfFronts = pd.DataFrame()
+            dfRefFronts = pd.DataFrame()
 
-        for front, refFront in zip(fronts, refFronts):
-            biHV = indicators.binary_hypervolume(front, refFront)
-            coverage = indicators.two_sets_coverage(front, refFront)
-            dfFronts = dfFronts.append({pair: biHV}, ignore_index=True)
-            dfRefFronts = dfRefFronts.append({pair: coverage}, ignore_index=True)
+            dataFrames = []
+            for idx, (df, f) in enumerate(zip((dfFronts, dfRefFronts), (front, refFront))):
+                days, cost, dist, _, avgSpeed = zip(*map(evaluate2, f.items))
 
-    for df in [dfFronts, dfRefFronts]:
-        mean, std, minn, maxx = df.mean(), df.std(), df.min(), df.max()
-        df.loc['mean'] = mean
-        df.loc['std'] = std
-        df.loc['min'] = minn
-        df.loc['max'] = maxx
+                cost = np.array(cost) * 1000.
+                hours = np.array(days) * 24.
+                currentSpeed = np.array(dist) / np.array(hours) - np.array(avgSpeed)
+                df0 = pd.DataFrame(np.transpose(np.stack([hours, cost, dist, avgSpeed, currentSpeed])),
+                                   columns=['T', 'C', 'D', 'V', 'S'])
+                mean, std, min, max = df0.mean(), df0.std(), df0.min(), df0.max()
+                dfStat = pd.DataFrame([mean, std, min, max], index=['mean', 'std', 'min', 'max'])
+                dfStatPairList = dfPairList if idx == 0 else refDFPairList
+                dfStatPairList.append(dfStat)
+                df0 = dfStat.append(df0, ignore_index=False)
+                dataFrames.append(df0)
+            dfFronts, dfRefFronts = dataFrames
+            dfRefFronts.to_excel(writer, sheet_name='{}_R{}'.format(pair, run))
+            dfFronts.to_excel(writer, sheet_name='{}_{}'.format(pair, run))
+        dfPair = pd.concat(dfPairList).groupby(level=0).mean()
+        dfRefPair = pd.concat(refDFPairList).groupby(level=0).mean()
+        dfPair.to_excel(writer, sheet_name='SUMMARY_{}'.format(pair))
+        dfRefPair.to_excel(writer, sheet_name='SUMMARY_{}_R'.format(pair))
 
-    dfRefFronts.to_excel(writer, sheet_name='{}_C'.format(name))
-    dfFronts.to_excel(writer, sheet_name='{}_B'.format(name))
+    # for df in [dfFronts, dfRefFronts]:
+    #     mean, minn, maxx = df.mean(), df.min(), df.max()
+    #     df.loc['mean'] = mean
+    #     df.loc['min'] = minn
+    #     df.loc['max'] = maxx
 
+frontsDict, _planner = create_raw_dicts()
 
-fronts2014, fronts2015 = create_raw_dicts()
-
-inputDict = {'2014': fronts2014, '2015': fronts2015} if len(fronts2015) > 0 else {'2014': fronts2014}
-
-for key, _fronts in inputDict.items():
-    print('\r', key, end='\n')
-    compute_metrics(key, _fronts)
-    save_front(key, _fronts)
+# compute_metrics(key, _fronts)
+save_fronts(frontsDict, _planner)
 
 writer.close()

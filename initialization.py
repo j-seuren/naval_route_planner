@@ -19,7 +19,10 @@ class Initializer:
                  p,
                  container,
                  speedIdx,
-                 DIR):
+                 DIR,
+                 seed):
+        random.seed(seed)
+        self.seed = seed
         self.evaluator = evaluator
         self.vessel = vessel          # Vessel class
         self.landTree = landTree              # R-tree spatial index for shorelines

@@ -55,27 +55,28 @@ class StatisticsPlotter:
         fig, axs = plt.subplots(1, len(fronts))
         # plt.xticks(fontproperties=fontProp)
         # plt.yticks(fontproperties=fontProp)
-        for i, front in enumerate(fronts):
-            concatFront = concatenated_front(front)
-            ax = axs if len(fronts) == 1 else axs[i]
+        if len(fronts[0][0]) > 0:
+            for fr, front in enumerate(fronts):
+                concatFront = concatenated_front(front)
+                ax = axs if len(fronts) == 1 else axs[fr]
 
-            if adjustKC:
-                concatFront[:, 1] = concatFront[:, 1] * 1000
-                concatFront[:, 0] = concatFront[:, 0] * 24
-            # Plot front
-            ax.scatter(concatFront[:, 0], concatFront[:, 1], c="b", s=1)
-            ax.axis("tight")
-            ax.grid()
-            # ax.set_xlabel('Travel time [d]', fontproperties=fontProp)
-            # ax.set_ylabel(r'Fuel costs [$/times$ 1000 UDS]', fontproperties=fontProp)
-            ax.set_xlabel('Travel time [d]')
-            ax.set_ylabel(r'Fuel costs [$/times$ 1000 UDS]')
+                if adjustKC:
+                    concatFront[:, 1] = concatFront[:, 1] * 1000
+                    concatFront[:, 0] = concatFront[:, 0] * 24
+                # Plot front
+                ax.scatter(concatFront[:, 0], concatFront[:, 1], c="b", s=1)
+                ax.axis("tight")
+                ax.grid()
+                # ax.set_xlabel('Travel time [d]', fontproperties=fontProp)
+                # ax.set_ylabel(r'Fuel costs [$/times$ 1000 UDS]', fontproperties=fontProp)
+                ax.set_xlabel('Travel time [d]')
+                ax.set_ylabel(r'Fuel costs [$/times$ 1000 UDS]')
 
-            if adjustKC:
-                ax.set_xlabel('Travel time [h]')
-                ax.set_ylabel(r'Fuel consumption [t]')
-                # ax.set_xlabel('Travel time [h]', fontproperties=fontProp)
-                # ax.set_ylabel(r'Fuel consumption [t]', fontproperties=fontProp)
+                if adjustKC:
+                    ax.set_xlabel('Travel time [h]')
+                    ax.set_ylabel(r'Fuel consumption [t]')
+                    # ax.set_xlabel('Travel time [h]', fontproperties=fontProp)
+                    # ax.set_ylabel(r'Fuel consumption [t]', fontproperties=fontProp)
 
         return fig, axs
 

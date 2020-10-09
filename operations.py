@@ -19,8 +19,12 @@ class Operators:
                  e_feasible,
                  vessel,
                  geod,
-                 par
+                 par,
+                 seed
                  ):
+        self.seed = seed
+        random.seed(seed)
+        np.random.seed(seed)
         self.e_feasible = e_feasible
         self.vessel = vessel                    # Vessel class instance
         self.geod = geod                        # GreatCircle class instance

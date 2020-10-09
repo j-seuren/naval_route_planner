@@ -61,8 +61,8 @@ writer = pd.ExcelWriter('output.xlsx')
 
 def compute_metrics(name, frontsDict):
     pairs = list(frontsDict.keys())
-    dfBinaryHV = pd.DataFrame(columns=pairs)
-    dfCoverage = pd.DataFrame(columns=pairs)
+    dfBinaryHV = pd.DataFrame(columns=pairs, index=range(5))
+    dfCoverage = pd.DataFrame(columns=pairs, index=range(5))
 
     for pair, frontTup in frontsDict.items():
         print('\r', pair, end='')
@@ -71,8 +71,8 @@ def compute_metrics(name, frontsDict):
         for run, (front, refFront) in enumerate(zip(fronts, refFronts)):
             biHV = indicators.binary_hypervolume(front, refFront)
             coverage = indicators.two_sets_coverage(front, refFront)
-            dfBinaryHV[pair].iloc[run] = biHV
-            dfCoverage[pair].iloc[run] = coverage
+            dfBinaryHV.iloc[run][pair] = biHV
+            dfCoverage.iloc[run][pair] = coverage
 
     for df in [dfBinaryHV, dfCoverage]:
         mean, std, minn, maxx = df.mean(), df.std(), df.min(), df.max()

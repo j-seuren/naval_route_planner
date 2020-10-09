@@ -34,7 +34,7 @@ class Evaluator:
         self.landRtree = landRtree      # R-tree spatial index dictionary for shorelines
         self.ecaRtree = ecaRtree        # R-tree spatial index dictionary for ECAs
         self.bathRtree = bathRtree      # R-tree spatial index dictionary for bathymetry
-        self.ecaFactor = ecaFactor      # Multiplication factor for ECA fuel
+        self.ecaFactor = float(ecaFactor) # Multiplication factor for ECA fuel
         self.startDate = startDate      # Start date of voyage
         self.segLengthF = parameters['segLengthF']    # Max segment length (for feasibility)
         self.segLengthC = parameters['segLengthC']    # Max segment length (for currents)
@@ -69,17 +69,17 @@ class Evaluator:
         revert = self.revertOutput if revert is None else revert
         hours = cost = dist = ecaDist = 0.
 
-        for e in range(len(ind) - 1):
+        for wp1, wp2 in zip(ind[:-1], ind[1:]):
             # Leg endpoints and boat speed
-            p1, p2 = sorted((ind[e][0], ind[e+1][0]))
-            speedKnots = ind[e][1]
+            p1, speedKnots = wp1
+            p2 = wp2[0]
 
             # Leg travel time and fuel cost
             legHours, nauticalMiles = self.leg_hours(p1, p2, hours, speedKnots)
             legCost = self.vessel.fuelCostPerDay[speedKnots] * legHours / 24.  # x1000 EUR or USD
 
             # If leg intersects ECA increase fuel consumption by ecaFactor
-            if geo_x_geos(self.ecaRtree, p1, p2):
+            if self.ecaFactor != 1.0 and geo_x_geos(self.ecaRtree, p1, p2):
                 legCost *= self.ecaFactor
                 ecaDist += nauticalMiles
 
@@ -101,12 +101,12 @@ class Evaluator:
         return days, cost
 
     def evaluate2(self, ind):
-        hours = cost = dist = ecaDist = 0.
+        hours = cost = dist = ecaDist = speedDist = 0.
 
         for e in range(len(ind) - 1):
             # Leg endpoints and boat speed
-            p1, p2 = sorted((ind[e][0], ind[e+1][0]))
-            speedKnots = ind[e][1]
+            p1, speedKnots = ind[e]
+            p2 = ind[e+1][0]
 
             # Leg travel time and fuel cost
             legHours, nauticalMiles = self.leg_hours(p1, p2, hours, speedKnots)
@@ -126,9 +126,11 @@ class Evaluator:
             hours += legHours
             cost += legCost
             dist += nauticalMiles
+            speedDist += speedKnots * nauticalMiles
 
+        avgSpeed = speedDist / dist
         days = hours / 24.
-        return days, cost, dist, ecaDist
+        return days, cost, dist, ecaDist, avgSpeed
 
     def feasible(self, ind):
         for i in range(len(ind)-1):

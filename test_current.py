@@ -16,7 +16,7 @@ parameters = {'DIR': DIR,
               'MOEA': 'NSGA2',
               }
 
-TEST_SPEED = False
+TEST_SPEED = True
 
 eastLocations = [('E1', (-50.0, 38.0)), ('E2', (-55.0, 46.0))]
 westLocations = [('W1', (-72.67, 34.33)), ('W2', (-73.33, 36.67))]
@@ -56,7 +56,7 @@ for current in [True, False]:
 
         nSpeeds = [0, -1] if speed == 'constant' else [0]
         for speedIdx in nSpeeds:
-            planner = main.RoutePlanner(speedIdx=speedIdx,
+            planner = main.RoutePlanner(constantSpeedIdx=speedIdx,
                                         inputParameters=par,
                                         bathymetry=parameters['bathymetry'],
                                         ecaFactor=parameters['ecaFactor'],

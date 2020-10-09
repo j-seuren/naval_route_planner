@@ -42,7 +42,7 @@ def crowding_distance(pop):
 
 class RoutePlanner:
     def __init__(self,
-                 speedIdx=0,
+                 constantSpeedIdx=None,
                  vesselName='Fairmaster_2',
                  shipLoading='normal',
                  ecaFactor=1.5593,
@@ -50,14 +50,23 @@ class RoutePlanner:
                  bathymetry=False,
                  inputParameters=None,
                  tb=None,
-                 criteria=None):
-        if criteria is None:
+                 criteria=None,
+                 seed=None):
+        np.random.seed(seed)
+        random.seed(seed)
+
+        if criteria is None and constantSpeedIdx is None:
             criteria = _criteria
         else:
-            weights = (-1, -1) if criteria['minimalTime'] and criteria['minimalCost'] else (-1,)
+            if constantSpeedIdx is None and (criteria['minimalTime'] and criteria['minimalCost']):
+                weights = (-1, -1)
+            else:
+                weights = (-1,)
 
             creator.create("FitnessMin", base.Fitness, weights=weights)
             creator.create("Individual", list, fitness=creator.FitnessMin)
+
+        constantSpeedIdx = 0 if constantSpeedIdx is None else constantSpeedIdx
 
         # Set parameters
         defaultParameters = {
@@ -123,7 +132,7 @@ class RoutePlanner:
                                               criteria,
                                               self.p,
                                               DIR=DIR)
-        self.speedIdx = speedIdx
+        self.speedIdx = constantSpeedIdx
         # Initialize "Initializer"
         self.initializer = initialization.Initializer(self.evaluator,
                                                       self.vessel,
@@ -134,7 +143,8 @@ class RoutePlanner:
                                                       self.p,
                                                       creator.Individual,
                                                       self.speedIdx,
-                                                      DIR)
+                                                      DIR,
+                                                      seed)
 
         # Load previously calculated initial paths
         self.initPathsDir = DIR / 'output/initialRoutes/RES_{}_D{}_VD_{}'.format(self.p['res'],
@@ -143,13 +153,13 @@ class RoutePlanner:
         if not os.path.exists(self.initPathsDir):
             os.mkdir(self.initPathsDir)
         self.initRoutesList = []
-        if speedIdx == 0:  # Initial paths are computed for speedIdx = 0
+        if constantSpeedIdx == 0:  # Initial paths are computed for speedIdx = 0
             for fp in os.listdir(self.initPathsDir):
                 with open(self.initPathsDir / fp, 'rb') as file:
                     self.initRoutesList.append(pickle.load(file))
 
         # Initialize "Operator" and register it's functions
-        self.operators = Operators(self.evaluator.e_feasible, self.vessel, self.geod, self.p)
+        self.operators = Operators(self.evaluator.e_feasible, self.vessel, self.geod, self.p, seed)
         self.tb.register("mutate", self.operators.mutate)
         self.tb.register("mate", self.operators.cx_one_point)
         self.tb.register("population", initialization.init_repeat_list)
@@ -412,13 +422,12 @@ class RoutePlanner:
                 gen += 1
 
     def compute(self, startEnd, recompute=False, startDate=None, current=False,
-                weather=False, algorithm='NSGA2', seed=None, avoidArctic=True, avoidAntarctic=True):
-        random.seed(seed)
+                weather=False, algorithm='NSGA2', avoidArctic=True, avoidAntarctic=True):
         print('Parameters:')
         pp.pprint(self.p)
         print('\nCompute input:')
         pp.pprint({'startEnd': startEnd, 'recompute': recompute, 'startDate': startDate, 'current': current,
-                   'weather': weather, 'algorithm': algorithm, 'seed': seed, 'avoidArctic': avoidArctic,
+                   'weather': weather, 'algorithm': algorithm, 'avoidArctic': avoidArctic,
                    'avoidAntarctic': avoidAntarctic})
         support.clear_caches()  # Clear caches
         start, end = startEnd
@@ -523,7 +532,7 @@ class RoutePlanner:
 
     def update_parameters(self, newParameters, reinitialize=False):
         self.p = {**self.p, **newParameters}
-        self.operators = Operators(self.evaluator.e_feasible, self.vessel, self.geod, self.p)
+        self.operators = Operators(self.evaluator.e_feasible, self.vessel, self.geod, self.p, self.operators.seed)
 
         if reinitialize:
             # Re-populate R-Tree structures
@@ -532,7 +541,8 @@ class RoutePlanner:
             self.evaluator.ecaRtree = navAreaGenerator.get_eca_rtree()
             self.initializer = initialization.Initializer(self.evaluator, self.vessel, self.evaluator.landRtree,
                                                           self.evaluator.ecaRtree, self.initializer.bathTree,
-                                                          self.geod, self.p, creator.Individual, self.speedIdx, DIR)
+                                                          self.geod, self.p, creator.Individual, self.speedIdx, DIR,
+                                                          self.initializer.seed)
 
     def get_days(self, pop):
         """
@@ -543,7 +553,7 @@ class RoutePlanner:
         for ind in pop:
             travelTime = 0.0
             for i in range(len(ind) - 1):
-                p1, p2 = sorted((ind[i][0], ind[i+1][0]))
+                p1, p2 = (ind[i][0], ind[i+1][0])
                 edgeDist = self.geod.distance(p1, p2)
                 edgeTravelTime = edgeDist / boatSpeed
                 travelTime += edgeTravelTime
@@ -699,7 +709,7 @@ if __name__ == "__main__":
     # parameters = {'gen': 200,  # Min number of generations
     #               'n': 100}    # Population size
     startDate = datetime(2017, 9, 4)
-    kwargsPlanner = {'inputParameters': {}, 'tb': _tb, 'ecaFactor': 1.0,
+    kwargsPlanner = {'inputParameters': {}, 'tb': _tb, 'ecaFactor': 1.0, 'constantSpeedIdx': 2,
                      'criteria': _criteria}
     kwargsCompute = {'startEnd': _startEnd, 'startDate': startDate, 'recompute': True, 'current': False,
                      'weather': False, 'seed': 1, 'algorithm': 'NSGA2'}
