@@ -28,12 +28,12 @@ pp = pprint.PrettyPrinter()
 
 
 class MergedPlots:
-    def __init__(self, directory, date, experiment, contains):
+    def __init__(self, directory, date, experiment, contains, idx=0):
         os.chdir(directory)
         self.files = [file for file in os.listdir() if contains in file]
         pp.pprint(self.files)
-
-        self.planner = main.RoutePlanner(bathymetry=False, ecaFactor=1)
+        vesselName = 'Tanaka' if experiment == 'KC' else 'Fairmaster_2'
+        self.planner = main.RoutePlanner(bathymetry=False, ecaFactor=1, vesselName=vesselName)
         self.experiment = experiment
         self.fn = '{}'.format(datetime.now().strftime('%m%d%H%M'))
 
@@ -43,18 +43,66 @@ class MergedPlots:
         self.initialLabel = 'not set'
 
         self.date = date
+        self.idx = idx
+        self.merged_pareto = self.merged_pareto_kc if experiment == 'KC' else self.merged_pareto
 
         # Fronts and routes
         self.outFiles = []
         for i, rawFN in enumerate(self.files):
             with open(rawFN, 'rb') as f:
                 rawList = pickle.load(f)
-            updateDict = {experiment: 1.5593} if experiment == 'eca' else {experiment: date}
-            updateDict = None if experiment == 'bathymetry' else updateDict
-            proc, raw = self.planner.post_process(rawList[0], updateEvaluator=updateDict)
+            if experiment == 'eca':
+                updateDict = {experiment: 1.5593}
+            elif experiment == 'bathymetry':
+                updateDict = None
+            elif experiment == 'KC':
+                updateDict = {'KC': None, 'current': date}
+            else:
+                updateDict = {experiment: date}
+
+            proc, raw = self.planner.post_process(rawList[idx], updateEvaluator=updateDict)
             fronts, hulls = zip(*[get_front(_front, self.planner, experiment, date) for _front in raw['fronts']])
 
             self.outFiles.append({'fronts': fronts, 'hulls': hulls, 'proc': proc, 'raw': raw, 'filename': rawFN})
+
+    def merged_pareto_kc(self, hull=False, save=False):
+        fig, ax1 = plt.subplots()
+        ax1.set_xlabel('Travel time [d]', fontproperties=fontProp)
+        ax1.set_ylabel(r'Fuel costs [$\times$ 1000 USD]', fontproperties=fontProp)
+        cycleFront = ax1._get_lines.prop_cycler
+
+        labels = ['Incl. current', 'Reference (R)']
+
+        labelString, next_color = '', 'black'
+        label = None
+        for file in self.outFiles:
+            newLabel = labels[-1] if 'R' in file else labels[0]
+            if newLabel == label:
+                label = None
+            else:
+                label = newLabel
+                next_color = next(cycleFront)['color']
+
+            # Plot front
+            marker, s, zorder = 'o', 1, 2
+            for front in file['fronts']:
+                travelTimes, fuelCosts = zip(*list(front.keys()))
+                ax1.scatter(travelTimes, fuelCosts, color=next_color, marker=marker, s=s, zorder=zorder, label=label)
+
+            if hull:
+                for hull in file['hulls']:
+                    travelTimes, fuelCosts = zip(*list(hull.keys()))
+                    ax1.scatter(travelTimes, fuelCosts, color=next_color, marker='x', zorder=zorder)
+
+        ax1.legend(prop=fontProp)
+        plt.grid()
+        plt.xticks(fontproperties=fontProp)
+        plt.yticks(fontproperties=fontProp)
+
+        if save:
+            fig.savefig('{}_frontM_{}'.format(self.fn, self.idx), dpi=300)
+            fig.savefig('{}_frontM_{}.pdf'.format(self.fn, self.idx), bbox_inches='tight', pad_inches=0)
+            tikzplotlib.save("{}_frontM_{}.tex".format(self.fn, self.idx))
 
     def merged_pareto(self, save=False):
         fig, ax1 = plt.subplots()
@@ -76,6 +124,10 @@ class MergedPlots:
         #     labels = ['Incl. weather (W)', 'Excl. weather (R)']
         #     C, V = '', ''
         #     R0 = ''
+        elif self.experiment == 'KC':
+            labels = ['Incl. current', 'Reference (R)']
+            C, V = '', ''
+            R0 = ''
         else:
             labels = ['Constant speed - ref. (CR)', 'Constant speed (C)',
                       'Variable speed - ref. (VR)', 'Variable speed (V)']
@@ -89,7 +141,6 @@ class MergedPlots:
             noLabel = True if labelString == newLabelString else False
             labelString = newLabelString
             label = None if noLabel else [label for label in labels if labelString in label][0]
-            print(label)
 
             next_color = next_color if noLabel else next(cycleFront)['color']
             # Plot front
@@ -119,9 +170,9 @@ class MergedPlots:
         # plt.margins(0, 0)
 
         if save:
-            fig.savefig('{}_front_merged'.format(self.fn), dpi=300)
-            fig.savefig('{}_front_merged.pdf'.format(self.fn), bbox_inches='tight', pad_inches=0)
-            tikzplotlib.save("{}_front_merged.tex".format(self.fn))
+            fig.savefig('{}_frontM_{}'.format(self.fn, self.idx), dpi=300)
+            fig.savefig('{}_frontM_{}.pdf'.format(self.fn, self.idx), bbox_inches='tight', pad_inches=0)
+            tikzplotlib.save("{}_frontM_{}.tex".format(self.fn, self.idx))
 
     def colorbar(self, m):
         cmap = cm.get_cmap('jet', 12)
@@ -145,6 +196,48 @@ class MergedPlots:
             label = None if i > 0 else label
             m.drawgreatcircle(leg[0][0], leg[0][1], leg[1][0], leg[1][1], label=label, linestyle=line, linewidth=width,
                               alpha=alpha, color=color, zorder=3)
+
+    def merged_routes_kc(self, zoom=1, it=0, initial=False, intervalRoutes=None, colorbar=False, alpha=0.5, save=False,
+                         hull=True):
+        routeFig, routeAx = plt.subplots()
+        w, h = routeFig.get_size_inches()
+        routeFig.set_size_inches(w * zoom, h * zoom)
+        cycleRoute = routeAx._get_lines.prop_cycler
+
+        # Plot navigation area
+        m = navigation_area(routeAx, self.outFiles[it]['proc'], initial)
+
+        # Plot initial routes
+        if initial:
+            for initRoute in self.outFiles[-1]['raw']['initialRoutes']:
+                for subInitRoute in initRoute['route']:
+                    for objRoute in subInitRoute.values():
+                        self.initialLabel = 'Initial' if self.initialLabel == 'not set' else None
+                        self.plot_ind(objRoute, m, alpha=1, label=self.initialLabel)
+
+        cmap = self.colorbar(m) if colorbar else None
+
+        label = None
+        for file in self.outFiles:
+            newLabel = 'Great circle' if 'R' in file else None
+            label = None if newLabel == label else newLabel
+
+            fronts = file['hulls'] if hull else file['fronts']
+            for i, front in enumerate(fronts):
+                color = next(cycleRoute)['color'] if cmap is None and 'R' not in file else 'k'
+                for j, (fit, ind) in enumerate(front.items()):
+                    if i > 0 and j > 0 and 'R' in file:
+                        continue
+                    if intervalRoutes and not intervalRoutes[0] < fit[0] < intervalRoutes[1]:
+                        continue
+                    label = None if j > 0 or cmap is None else label
+                    self.plot_ind(ind, m, label=label, color=color, alpha=alpha, cmap=cmap)
+        if cmap is None or self.initialLabel is None:
+            routeAx.legend(loc='upper right', prop=fontProp)
+
+        if save:
+            routeFig.savefig('{}_routeM_{}'.format(self.fn, self.idx), dpi=300)
+            routeFig.savefig('{}_routeM_{}.pdf'.format(self.fn, self.idx), bbox_inches='tight', pad_inches=.01)
 
     def merged_routes(self, zoom=1, it=0, initial=False, intervalRoutes=None, colorbar=False, alpha=0.5, save=False, hull=True):
         routeFig, routeAx = plt.subplots()
@@ -223,9 +316,9 @@ class MergedPlots:
             routeAx.legend(loc='upper right', prop=fontProp)
 
         if save:
-            routeFig.savefig('{}_route_merged'.format(self.fn), dpi=300)
-            routeFig.savefig('{}_route_merged.pdf'.format(self.fn), bbox_inches='tight', pad_inches=.01)
-            # tikzplotlib.save("{}_route_merged.tex".format(self.fn))
+            routeFig.savefig('{}_routeM_{}'.format(self.fn, self.idx), dpi=300)
+            routeFig.savefig('{}_routeM_{}.pdf'.format(self.fn, self.idx), bbox_inches='tight', pad_inches=.01)
+            # tikzplotlib.save("{}_routeM_{}.tex".format(self.fn, self.idx))
 
 
 def update(population):
@@ -278,7 +371,6 @@ def get_front(frontIn, planner, experiment, date):
     for front in frontIn:
         newFits = [planner.evaluator.evaluate(ind, revert=False, includePenalty=False) for ind in front]
         # newFits = [ind.fitness.values for ind in front]
-        print(newFits)
         fronts.append({newFits[f]: ind for f, ind in enumerate(front.items)})
         objVals.append(np.array(newFits))
 
@@ -354,8 +446,7 @@ def currents(ax, m, uin, vin, lons, lats, extent):
 def weather_contour(m, dateTime, travelDays, lonStart, lonEnd):
     hourPeriod = 24//6
     travelDaysCeil = int(np.ceil(travelDays))
-    print(travelDays)
-    print(travelDays * 4)
+    print('weather travel days', travelDays)
 
     # Get wind data
     retriever = WindDataRetriever(nDays=travelDaysCeil, startDate=dateTime)
@@ -369,12 +460,12 @@ def weather_contour(m, dateTime, travelDays, lonStart, lonEnd):
     lonEnd_idx = 0 if lonEnd_idx == 720 else lonEnd_idx
     (lonS, lonT) = (lonStart_idx, lonEnd_idx) if lonStart_idx < lonEnd_idx else (lonEnd_idx, lonStart_idx)
     lonIndices = np.linspace(lonS, lonT, travelDaysCeil * 4 + 1).astype(int)
-    print(len(lonIndices), '\n', lonIndices)
+    print('weather lng indices', len(lonIndices), ':', lonIndices)
     lonPairs = zip(lonIndices[:-1], lonIndices[1:])
 
     # Create date indices
     dateIndices = np.linspace(0, travelDays * hourPeriod, travelDaysCeil * 4).astype(int)
-    print(len(dateIndices), '\n', dateIndices)
+    print('weather date indices', len(dateIndices), ':', dateIndices)
 
     # Initialize variables for contourf
     lons, lats = np.linspace(-180, 179.5, 720), np.linspace(-90, 89.5, 360)
@@ -449,10 +540,13 @@ if __name__ == '__main__':
     # mergedPlots.merged_pareto(save=False)
     # mergedPlots.merged_routes(zoom=1.2, initial=False, colorbar=True, alpha=0.5, save=False, hull=True)
 
-    _directory = 'D:/output/weather/WTH/NSGA2_varSP_BFalse_ECA1.0/1/raw'
-    mergedPlots = MergedPlots(_directory, datetime(2011, 5, 28), experiment='weather', contains='NoNy')
+    _directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/Current results/KC'
+    nRaws = 1
+    for _idx in range(min(nRaws, 5)):
+        mergedPlots = MergedPlots(_directory, datetime(2011, 5, 28), experiment='KC', contains='11_25', idx=_idx)
 
-    mergedPlots.merged_pareto(save=False)
-    mergedPlots.merged_routes(zoom=1.2, initial=False, intervalRoutes=[4, 8], colorbar=True, alpha=0.5, save=True, hull=False)
+        mergedPlots.merged_pareto(save=False)
+        mergedPlots.merged_routes(zoom=1.2, initial=False, intervalRoutes=None, colorbar=True, alpha=0.5, save=False,
+                                  hull=False)
 
-    plt.show()
+        plt.show()

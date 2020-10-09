@@ -45,25 +45,31 @@ def triple_hypervolume(A, B, C):
     return hvABC - hvBC
 
 
-def two_sets_coverage(A, B, pop=True):
-    objA = np.array([ind.fitness.values for ind in A]) if pop else A
-    objB = np.array([ind.fitness.values for ind in B]) if pop else B
+def two_sets_coverage(A, B):
+    """
+    Input DEAP ParetoFronts
+    """
 
     weakly_dominated_B = 0
-    for fitIndB in objB:
+    fitsA = [fit.values for fit in A.keys]
+    fitsB = [fit.values for fit in B.keys]
+    for fitB in fitsB:
         B_weakly_dominated = False
-        for fitIndA in objA:
-            A_weakly_dominates = False
-            for valA, valB in zip(fitIndA, fitIndB):
-                if valA < valB:
-                    A_weakly_dominates = True
+        for fitA in fitsA:
+            A_weakly_dominates = True
+            not_equal = False
+            for valA, valB in zip(fitA, fitB):
+                if valA > valB:
+                    A_weakly_dominates = False
+                    not_equal = True
                     break
-            if A_weakly_dominates:
+                elif valA < valB:
+                    not_equal = True
+            if A_weakly_dominates and not_equal:
                 B_weakly_dominated = True
                 break
         if B_weakly_dominated:
             weakly_dominated_B += 1
-
     return weakly_dominated_B / len(B)
 
 

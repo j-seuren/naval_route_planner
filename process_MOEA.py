@@ -1,66 +1,83 @@
 import indicators
 import os
+import pandas as pd
 import pickle
 import main
 # import matplotlib.pyplot as plt
 import numpy as np
 
-from datetime import datetime
-from deap import tools
-from geodesic import Geodesic
+from itertools import combinations, permutations
+# from datetime import datetime
+# from deap import tools
+# from geodesic import Geodesic
+from pathlib import Path
 
-planner = main.RoutePlanner(bathymetry=False, ecaFactor=1)
+# planner = main.RoutePlanner(bathymetry=False, ecaFactor=1)
+loadDir = Path('C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/MOEA results/CT_MO')
+rawDir = loadDir / 'raws'
+os.chdir(loadDir)
 
-
-loadDir = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/MOEA results/'
-rawDir = loadDir + 'raws/'
-os.chdir(rawDir)
-
-westLocations = ['W1', 'W2', 'W3']
-eastLocations = ['E1', 'E2', 'E3']
-
-raw14KT, raw15KT = {}, {}
-raw14TK, raw15TK = {}, {}
-for file in os.listdir():
+raw14MC, raw15MC = {}, {}
+raw14CM, raw15CM = {}, {}
+for file in os.listdir(rawDir):
     split = file.split('_')
     MOEA = split[0]
-    with open(rawDir + file, 'rb') as fh:
+    with open(rawDir / file, 'rb') as fh:
         rawList = pickle.load(fh)
     if '2014' in file:
-        rDict = raw14TK if 'TK' in file else raw14KT
+        rDict = raw14CM if 'CM' in file else raw14MC
     else:
-        rDict = raw15TK if 'TK' in file else raw15KT
+        rDict = raw15CM if 'CM' in file else raw15MC
     rDict[MOEA] = rawList
 
 # planner.evaluator.set_classes(inclCurr=True, inclWeather=False, nDays=7, startDate=datetime(2014, 11, 15))
 # evaluate = planner.evaluator.evaluate
 
-bestHV = [0, 0, 0]
-def compute_triple_hypervolumes(rawDict):
-    # 'SPEA2', 'NSGA2', 'MPAES'
-    SP, NS, MP = [], [], []
-    for rawSP, rawNS, rawMP in zip(rawDict['SPEA2'], rawDict['NSGA2'], rawDict['MPAES']):
-        frontSP = rawSP['fronts'][0][0]
-        frontNS = rawNS['fronts'][0][0]
-        frontMP = rawMP['fronts'][0][0]
-        hvSP = indicators.triple_hypervolume(frontSP, frontNS, frontMP)
-        hvNS = indicators.triple_hypervolume(frontNS, frontMP, frontSP)
-        hvMP = indicators.triple_hypervolume(frontMP, frontSP, frontNS)
-        SP.append(hvSP)
-        NS.append(hvNS)
-        MP.append(hvMP)
-        hvList = [hvSP, hvNS, hvMP]
-        bestIdx = np.argmax(hvList)
-        print(hvList, bestIdx)
-        bestHV[bestIdx] += 1
-
-    print('SPEA2', np.average(SP), np.std(SP))
-    print('NSGA2', np.average(NS), np.std(NS))
-    print('MPAES', np.average(MP), np.std(MP))
-    print(bestHV)
+writer = pd.ExcelWriter('output.xlsx')
 
 
-for rDict in [raw14TK, raw14KT, raw15KT, raw15TK]:
-    compute_triple_hypervolumes(rDict)
+def compute_metrics(name, rawDict):
+    dfTernaryHV = pd.DataFrame(columns=[0, 1, 2])
+    dfBinaryHV = pd.DataFrame(columns=list(permutations(range(3), r=2)))
+    dfCoverage = pd.DataFrame()
+
+    for i, rawTup in enumerate(zip(rawDict['SPEA2'], rawDict['NSGA2'], rawDict['MPAES'])):
+        print('\r', i, end='')
+        fronts = [rawL['fronts'][0][0] for rawL in rawTup]
+
+        ternaryRow = {}
+        for A_idx in range(3):
+            f2, f3 = np.delete(fronts, A_idx)
+            trHV = indicators.triple_hypervolume(fronts[A_idx], f2, f3)
+            ternaryRow[A_idx] = trHV
+
+        dfTernaryHV = dfTernaryHV.append(ternaryRow, ignore_index=True)
+
+        perms = permutations(range(3), r=2)
+        coverageRow, binaryHVRow = {}, {}
+        for A_idx, B_idx in perms:
+            f1, f2 = fronts[A_idx], fronts[B_idx]
+            biHV = indicators.binary_hypervolume(f1, f2)
+            coverage = indicators.two_sets_coverage(f1, f2)
+            coverageRow[(A_idx, B_idx)] = biHV
+            binaryHVRow[(A_idx, B_idx)] = coverage
+        dfBinaryHV = dfBinaryHV.append(binaryHVRow, ignore_index=True)
+        dfCoverage = dfCoverage.append(coverageRow, ignore_index=True)
+
+    for df in [dfTernaryHV, dfBinaryHV, dfCoverage]:
+        df.loc['mean'] = df.mean()
+        df.loc['std'] = df.std()
+        df.loc['min'] = df.min()
+        df.loc['max'] = df.max()
+
+    dfCoverage.to_excel(writer, sheet_name='{}_C'.format(name))
+    dfBinaryHV.to_excel(writer, sheet_name='{}_B'.format(name))
+    dfTernaryHV.to_excel(writer, sheet_name='{}_T'.format(name))
 
 
+for key, rDict in {'14CM': raw14CM, '14MC': raw14MC}.items():
+    print('\r', key, end='\n')
+    compute_metrics(key, rDict)
+
+
+writer.close()

@@ -53,4 +53,4 @@ for MOEA in ['NSGA2', 'SPEA2', 'MPAES']:
                                                   parameters['iterations'])
     createDirs = [genDir / 'tables/csv', genDir / 'figures', genDir / 'raw']
     [os.makedirs(directory) for directory in createDirs if not os.path.exists(directory)]
-    multiple_experiments(inputDict, planner, parameters, genDir=genDir)
+    multiple_experiments(inputDict, planner, parameters, genDir=genDir, seed=True)

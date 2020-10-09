@@ -25,7 +25,7 @@ def get_df(procList):
     return df
 
 
-def single_experiment(planner, inputDict, parameters, startEnd, depDate, fileString, genDir, saveFig=True):
+def single_experiment(planner, inputDict, parameters, startEnd, depDate, fileString, genDir, seed, saveFig=True):
     rawListFP = genDir / 'raw/{}'.format(fileString)
     if os.path.exists(rawListFP):
         return None
@@ -40,8 +40,9 @@ def single_experiment(planner, inputDict, parameters, startEnd, depDate, fileStr
     for itr in range(parameters['iterations']):
         print('ITERATION {} of {}'.format(itr + 1, parameters['iterations']))
         t0 = time.time()
+        seed = itr if seed else None
         raw = planner.compute(startEnd, startDate=depDate, recompute=True, weather=weather, current=current,
-                              algorithm=parameters['MOEA'])
+                              algorithm=parameters['MOEA'], seed=seed)
         t1 = time.time() - t0
 
         updateDict = {exp: 1.5593} if exp == 'eca' else {exp: depDate}
@@ -89,7 +90,7 @@ def single_experiment(planner, inputDict, parameters, startEnd, depDate, fileStr
     return get_df(procList)
 
 
-def multiple_experiments(inputDict, planner, parameters, genDir):
+def multiple_experiments(inputDict, planner, parameters, genDir, seed=None):
     depDates = inputDict['input']['departureDates']
     timestamp = datetime.now().strftime('%m%d-%H%M')
 
@@ -117,7 +118,7 @@ def multiple_experiments(inputDict, planner, parameters, genDir):
             print('location combination {} of {}'.format(routeIdx + 1, len(origins[d])))
             fileString2 = fileString + '_{}{}'.format(startKey, endKey)
             fp = genDir / 'tables/csv/{}.csv'.format(fileString)
-            df = single_experiment(planner, inputDict, parameters, (start, end), depDate, fileString2, genDir,
+            df = single_experiment(planner, inputDict, parameters, (start, end), depDate, fileString2, genDir, seed,
                                    saveFig=True)
             if df is None:
                 df = pd.read_csv(fp)

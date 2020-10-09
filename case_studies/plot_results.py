@@ -67,9 +67,9 @@ class StatisticsPlotter:
             ax.axis("tight")
             ax.grid()
             # ax.set_xlabel('Travel time [d]', fontproperties=fontProp)
-            # ax.set_ylabel(r'Fuel costs [$\times$ 1000 UDS]', fontproperties=fontProp)
+            # ax.set_ylabel(r'Fuel costs [$/times$ 1000 UDS]', fontproperties=fontProp)
             ax.set_xlabel('Travel time [d]')
-            ax.set_ylabel(r'Fuel costs [$\times$ 1000 UDS]')
+            ax.set_ylabel(r'Fuel costs [$/times$ 1000 UDS]')
 
             if adjustKC:
                 ax.set_xlabel('Travel time [h]')
@@ -89,7 +89,7 @@ def statistics(log, ax, title=None):
         ax.title.set_text(title)
         # Plot minimum Fitness
         line1_0 = ax.plot(genNumber, fitMin[:, 0], "b-", label="Min. travel time [d]")
-        line1_1 = ax.plot(genNumber, fitMin[:, 1], "b--", label=r"Min. fuel cost [$ \times 10^4$ USD]")
+        line1_1 = ax.plot(genNumber, fitMin[:, 1], "b--", label=r"Min. fuel cost [$ /times 10^4$ USD]")
         ax.set_xlabel("Generation")
         ax.set_ylabel("Fitness", color="b")
         # ax.set_xlabel("Generation", fontproperties=fontProp)
