@@ -41,12 +41,12 @@ def single_experiment(planner, inputDict, parameters, startEnd, depDate, fileStr
         print('ITERATION {} of {}'.format(itr + 1, parameters['iterations']))
         t0 = time.time()
         seed = itr if seed else None
-        raw = planner.compute(startEnd, startDate=depDate, recompute=True, weather=weather, current=current,
+        rawIn = planner.compute(startEnd, startDate=depDate, recompute=True, weather=weather, current=current,
                               algorithm=parameters['MOEA'], seed=seed)
         t1 = time.time() - t0
 
         updateDict = {exp: 1.5593} if exp == 'eca' else {exp: depDate}
-        proc, raw = planner.post_process(raw, updateEvaluator=updateDict)
+        proc, raw = planner.post_process(rawIn, updateEvaluator=updateDict)
         proc['computationTime'] = t1
         rawList.append(raw)
         procList.append(proc)

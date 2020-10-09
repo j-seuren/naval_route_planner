@@ -9,7 +9,7 @@ from matplotlib import cm, patches, font_manager
 from matplotlib.collections import PatchCollection
 from mpl_toolkits.basemap import Basemap
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-
+from pathlib import Path
 # fontPropFP = "C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/tex-gyre-pagella.regular.otf"
 # fontProp = font_manager.FontProperties(fname=fontPropFP)
 
@@ -350,12 +350,8 @@ if __name__ == '__main__':
     import os
     import pickle
 
-    from deap import base, creator
     from pathlib import Path
-    from main import RoutePlanner
-
-    creator.create("FitnessMin", base.Fitness, weights=(-1, -1))
-    creator.create("Individual", list, fitness=creator.FitnessMin)
+    import main
 
     os.chdir('..')
     # routePlotter = RoutePlotter(DIR=Path('D:/'))

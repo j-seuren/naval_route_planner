@@ -45,6 +45,7 @@ class MergedPlots:
         self.date = date
         self.idx = idx
         self.merged_pareto = self.merged_pareto_kc if experiment == 'KC' else self.merged_pareto
+        self.merged_routes = self.merged_routes_kc if experiment == 'KC' else self.merged_routes
 
         # Fronts and routes
         self.outFiles = []
@@ -217,23 +218,35 @@ class MergedPlots:
 
         cmap = self.colorbar(m) if colorbar else None
 
-        label = None
-        for file in self.outFiles:
-            newLabel = 'Great circle' if 'R' in file else None
-            label = None if newLabel == label else newLabel
+        oldLabel = None
+        for f, outFile in enumerate(self.outFiles):
+            newLabel = 'Great circle' if 'R' in self.files[f] else None
+            label = None if newLabel == oldLabel else newLabel
 
-            fronts = file['hulls'] if hull else file['fronts']
+            fronts = outFile['hulls'] if hull else outFile['fronts']
             for i, front in enumerate(fronts):
-                color = next(cycleRoute)['color'] if cmap is None and 'R' not in file else 'k'
-                for j, (fit, ind) in enumerate(front.items()):
-                    if i > 0 and j > 0 and 'R' in file:
+                if 'R' in self.files[f]:
+                    if i > 0:
                         continue
+                    cmapR = None
+                    color = 'k'
+                else:
+                    print('front', i)
+                    cmapR = cmap
+                    color = next(cycleRoute)['color']
+                for j, (fit, ind) in enumerate(front.items()):
+                    if 'R' in self.files[f]:
+                        if j > 0:
+                            continue
+                    else:
+                        print('ind', j)
                     if intervalRoutes and not intervalRoutes[0] < fit[0] < intervalRoutes[1]:
                         continue
-                    label = None if j > 0 or cmap is None else label
-                    self.plot_ind(ind, m, label=label, color=color, alpha=alpha, cmap=cmap)
-        if cmap is None or self.initialLabel is None:
-            routeAx.legend(loc='upper right', prop=fontProp)
+                    label = None if j > 0 or cmapR is None else label
+                    self.plot_ind(ind, m, label=label, color=color, alpha=alpha, cmap=cmapR)
+
+            oldLabel = newLabel
+        routeAx.legend(loc='upper right', prop=fontProp)
 
         if save:
             routeFig.savefig('{}_routeM_{}'.format(self.fn, self.idx), dpi=300)

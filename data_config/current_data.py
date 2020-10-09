@@ -3,14 +3,14 @@ import numpy as np
 import os
 import pandas as pd
 import pickle
-import scipy
+from scipy import interpolate
 import xarray as xr
 
 from ftplib import FTP
 from pathlib import Path
 from os import path
-#
-#
+
+
 # def ncdump(nc_fid, verb=True):
 #     """
 #     ncdump outputs dimensions, variables and their attribute information.
@@ -144,8 +144,8 @@ class CurrentDataRetriever:
                 print('done')
                 return ds.to_array().data
 
-    def get_kc_data(self, step=1/6, interpolate=False):
-        appendix = '_interpolate' if interpolate else ''
+    def get_kc_data(self, step=1/6, itp=True):
+        appendix = '_interpolate' if itp else ''
         fp = self.dataDir / 'KC_processed{}'.format(appendix)
 
         lons = np.arange(120, 142, step)
@@ -195,7 +195,7 @@ class CurrentDataRetriever:
         array[0], array[1] = u, v
         print('\r\r done')
 
-        if interpolate:
+        if itp:
             array = np.ma.masked_invalid(array)
             for i in range(2):
                 arr = array[i]
@@ -206,7 +206,7 @@ class CurrentDataRetriever:
                 x1 = xx[~arr.mask]
                 y1 = yy[~arr.mask]
                 newArr = arr[~arr.mask]
-                array[i] = scipy.interpolate.griddata((x1, y1), newArr.ravel(), (xx, yy), fill_value=0.)
+                array[i] = interpolate.griddata((x1, y1), newArr.ravel(), (xx, yy), fill_value=0.)
 
         with open(fp, 'wb') as fh:
             pickle.dump(array, fh)
@@ -258,7 +258,7 @@ if __name__ == '__main__':
         # plt.savefig(DIR / 'output/figures' / 'KC_data.pdf', bbox_inches='tight', pad_inches=0.3)
         plt.show()
 
-    data, lons0, lats0 = CurrentDataRetriever(datetime(2014, 10, 28), nDays=6, DIR=DIR).get_kc_data(interpolate=True)
+    data, lons0, lats0 = CurrentDataRetriever(datetime(2014, 10, 28), nDays=6, DIR=DIR).get_kc_data(itp=False)
     _uin, _vin = data[0], data[1]
     lonSlice, latSlice = slice(12, 121), slice(12, 71)
     # lons = np.arange(122, 140, step)

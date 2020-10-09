@@ -39,7 +39,7 @@ writer = pd.ExcelWriter('output.xlsx')
 def compute_metrics(name, rawDict):
     dfTernaryHV = pd.DataFrame(columns=[0, 1, 2])
     dfBinaryHV = pd.DataFrame(columns=list(permutations(range(3), r=2)))
-    dfCoverage = pd.DataFrame()
+    dfCoverage = pd.DataFrame(columns=list(permutations(range(3), r=2)))
 
     for i, rawTup in enumerate(zip(rawDict['SPEA2'], rawDict['NSGA2'], rawDict['MPAES'])):
         print('\r', i, end='')

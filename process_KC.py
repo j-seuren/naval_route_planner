@@ -12,11 +12,11 @@ planner = main.RoutePlanner(bathymetry=False, ecaFactor=1)
 
 
 def create_raw_dicts():
-    loadDir = Path('C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/Current results/Gulf/download_6-10/')
-    gulfDir = loadDir / 'var'
+    loadDir = Path('C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/Current results/KC')
+    rawDir = loadDir / 'raws_8_10'
     os.chdir(loadDir)
 
-    refFiles = [file for file in os.listdir(gulfDir) if 'R' in file]
+    refFiles = [file for file in os.listdir(rawDir) if 'R' in file]
     refFronts2014, refFronts2015 = {}, {}
     for d, date in enumerate([datetime(2014, 11, 15), datetime(2015, 5, 15)]):
         refFrontsDict = refFronts2014 if d == 0 else refFronts2015
@@ -26,7 +26,7 @@ def create_raw_dicts():
         for refFile in refFiles:
             split = refFile.split('_')
             pair = split[-1]
-            with open(gulfDir / refFile, 'rb') as fh:
+            with open(rawDir / refFile, 'rb') as fh:
                 refRawList = pickle.load(fh)
             refFronts = [refRaw['fronts'][0][0] for refRaw in refRawList]
             newRefFronts = []
@@ -39,13 +39,13 @@ def create_raw_dicts():
                 newRefFronts.append(newFront)
             refFrontsDict[pair] = newRefFronts
 
-    files = [file for file in os.listdir(gulfDir) if 'R' not in file]
+    files = [file for file in os.listdir(rawDir) if 'R' not in file]
 
     fronts14, fronts15 = {}, {}
     for file in files:
         split = file.split('_')
         pair = split[-1]
-        with open(gulfDir / file, 'rb') as fh:
+        with open(rawDir / file, 'rb') as fh:
             rawList = pickle.load(fh)
         fronts = [raw['fronts'][0][0] for raw in rawList]
         if '2014' in file:
@@ -68,11 +68,11 @@ def compute_metrics(name, frontsDict):
         print('\r', pair, end='')
         fronts, refFronts = frontTup
 
-        for run, (front, refFront) in enumerate(zip(fronts, refFronts)):
+        for front, refFront in zip(fronts, refFronts):
             biHV = indicators.binary_hypervolume(front, refFront)
             coverage = indicators.two_sets_coverage(front, refFront)
-            dfBinaryHV[pair].iloc[run] = biHV
-            dfCoverage[pair].iloc[run] = coverage
+            dfBinaryHV = dfBinaryHV.append({pair: biHV}, ignore_index=True)
+            dfCoverage = dfCoverage.append({pair: coverage}, ignore_index=True)
 
     for df in [dfBinaryHV, dfCoverage]:
         mean, std, minn, maxx = df.mean(), df.std(), df.min(), df.max()
@@ -85,10 +85,43 @@ def compute_metrics(name, frontsDict):
     dfBinaryHV.to_excel(writer, sheet_name='{}_B'.format(name))
 
 
+def save_fronts(name, frontsDict):
+
+    pairs = list(frontsDict.keys())
+
+    index = ['TT', 'FC']
+    dfFronts = pd.DataFrame(columns=pairs)
+    dfRefFronts = pd.DataFrame(columns=pairs)
+    df = pd.DataFrame(np.random.randn(3, 8), index=['A', 'B', 'C'], columns=index)
+
+    for pair, frontTup in frontsDict.items():
+        print('\r', pair, end='')
+        fronts, refFronts = frontTup
+
+        for front, refFront in zip(fronts, refFronts):
+            biHV = indicators.binary_hypervolume(front, refFront)
+            coverage = indicators.two_sets_coverage(front, refFront)
+            dfFronts = dfFronts.append({pair: biHV}, ignore_index=True)
+            dfRefFronts = dfRefFronts.append({pair: coverage}, ignore_index=True)
+
+    for df in [dfFronts, dfRefFronts]:
+        mean, std, minn, maxx = df.mean(), df.std(), df.min(), df.max()
+        df.loc['mean'] = mean
+        df.loc['std'] = std
+        df.loc['min'] = minn
+        df.loc['max'] = maxx
+
+    dfRefFronts.to_excel(writer, sheet_name='{}_C'.format(name))
+    dfFronts.to_excel(writer, sheet_name='{}_B'.format(name))
+
+
 fronts2014, fronts2015 = create_raw_dicts()
 
-for key, _fronts in {'2014': fronts2014, '2015': fronts2015}.items():
+inputDict = {'2014': fronts2014, '2015': fronts2015} if len(fronts2015) > 0 else {'2014': fronts2014}
+
+for key, _fronts in inputDict.items():
     print('\r', key, end='\n')
     compute_metrics(key, _fronts)
+    save_front(key, _fronts)
 
 writer.close()

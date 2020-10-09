@@ -14,7 +14,6 @@ class CurrentOperator:
         if KC:
             self.data, self.lo, self.la = current_data.CurrentDataRetriever(self.t0, self.nDays, DIR=DIR).get_kc_data()
             self.get_grid_pt_current = self.get_grid_pt_current_kc
-            self.lala, self.lolo = np.meshgrid(self.la, self.lo)
         else:
             self.data = np.array(current_data.CurrentDataRetriever(self.t0, self.nDays, DIR=DIR).get_data())
 
