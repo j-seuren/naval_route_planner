@@ -45,8 +45,9 @@ def single_experiment(planner, inputDict, parameters, startEnd, depDate, fileStr
                               algorithm=parameters['MOEA'])
         t1 = time.time() - t0
 
-        updateDict = {exp: 1.5593} if exp == 'eca' else {exp: depDate}
-        proc, raw = planner.post_process(rawIn, updateEvaluator=updateDict)
+        # updateDict = {exp: 1.5593} if exp == 'eca' else {exp: depDate}
+        proc, raw = planner.post_process(rawIn)
+        # proc, raw = planner.post_process(rawIn, updateEvaluator=updateDict)
         proc['computationTime'] = t1
         rawList.append(raw)
         procList.append(proc)
@@ -60,8 +61,8 @@ def single_experiment(planner, inputDict, parameters, startEnd, depDate, fileStr
             if current:
                 cData = planner.evaluator.currentOp.data
                 if inputDict['instance'] == 'KC':
-                    lons0 = planner.evaluator.currentOp.lo
-                    lats0 = planner.evaluator.currentOp.la
+                    lons0 = planner.evaluator.currentOp.lons
+                    lats0 = planner.evaluator.currentOp.lats
                     currentDict = {'u': cData[0], 'v': cData[1], 'lons': lons0, 'lats': lats0}
                 else:
                     lons0 = np.linspace(-179.875, 179.875, 1440)

@@ -57,10 +57,8 @@ def compute_metrics(name, rawDict):
         coverageRow, binaryHVRow = {}, {}
         for A_idx, B_idx in perms:
             f1, f2 = fronts[A_idx], fronts[B_idx]
-            biHV = indicators.binary_hypervolume(f1, f2)
-            coverage = indicators.two_sets_coverage(f1, f2)
-            coverageRow[(A_idx, B_idx)] = biHV
-            binaryHVRow[(A_idx, B_idx)] = coverage
+            coverageRow[(A_idx, B_idx)] = indicators.two_sets_coverage(f1, f2)
+            binaryHVRow[(A_idx, B_idx)] = indicators.binary_hypervolume(f1, f2)
         dfBinaryHV = dfBinaryHV.append(binaryHVRow, ignore_index=True)
         dfCoverage = dfCoverage.append(coverageRow, ignore_index=True)
 

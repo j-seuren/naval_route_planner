@@ -80,7 +80,7 @@ from os import path
 
 class CurrentDataRetriever:
     def __init__(self,
-                 t_s,
+                 t0,
                  nDays,
                  host='eftp.ifremer.fr',
                  user='gg1f3e8',
@@ -89,7 +89,7 @@ class CurrentDataRetriever:
                  ):
         # Current data period
         self.nDays = nDays
-        self.tStart = t_s
+        self.tStart = t0
 
         # FTP login details
         self.host = host
@@ -98,7 +98,7 @@ class CurrentDataRetriever:
 
         # Get dataset file path and download and save directories
         d = DIR / 'data/currents/netcdf_OUT/'
-        f = 'Y%d_YDAY%03d_NDAYS%03d.nc' % (t_s.year, t_s.timetuple().tm_yday, nDays)
+        f = 'Y%d_YDAY%03d_NDAYS%03d.nc' % (t0.year, t0.timetuple().tm_yday, nDays)
         self.dataFP = Path(d / f)
         self.dsFTP = Path('/data/globcurrent/v3.0/global_025_deg/total_hs')
         self.dataDir = DIR / 'data/currents/'

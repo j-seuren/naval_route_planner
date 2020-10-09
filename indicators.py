@@ -70,7 +70,9 @@ def two_sets_coverage(A, B):
                 break
         if B_weakly_dominated:
             weakly_dominated_B += 1
-    return weakly_dominated_B / len(B)
+
+    C = weakly_dominated_B / len(B)
+    return C
 
 
 def generational_distance(pop, ref):

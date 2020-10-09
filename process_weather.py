@@ -11,14 +11,14 @@ from pathlib import Path
 
 
 def create_raw_dicts():
-    loadDir = Path('C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/Current results/KC')
-    rawDir = loadDir / 'raws_8_10'
+    loadDir = Path('D:/output/weather/WTH/NSGA2_varSP_BFalse_ECA1.0/5')
+    rawDir = loadDir / 'raw'
     os.chdir(loadDir)
 
     refFiles = [file for file in os.listdir(rawDir) if 'R' in file]
     print('refFiles', refFiles)
-    planner = main.RoutePlanner(bathymetry=False, fuelPrice=1., ecaFactor=1, vesselName='Tanaka')
-    planner.evaluator.set_classes(inclCurr=True, inclWeather=False, nDays=7, startDate=datetime(2014, 11, 15))
+    planner = main.RoutePlanner(bathymetry=False, fuelPrice=1., ecaFactor=1)
+    planner.evaluator.set_classes(inclCurr=False, inclWeather=True, nDays=20, startDate=datetime(2014, 11, 15))
     evaluate = planner.evaluator.evaluate
 
     refFrontsDict = {}
@@ -88,40 +88,40 @@ def save_fronts(frontsDict, planner):
         fronts, refFronts = frontTup
         dfPairList, refDFPairList = [], []
         for run, (front, refFront) in enumerate(zip(fronts, refFronts)):
+            dfFronts = pd.DataFrame()
+            dfRefFronts = pd.DataFrame()
+
             dataFrames = []
-            # Do for front and ref front
-            for idx, f in enumerate([front, refFront]):
-                # (Objective) values
+            for idx, (df, f) in enumerate(zip((dfFronts, dfRefFronts), (front, refFront))):
                 days, cost, dist, _, avgSpeed = zip(*map(evaluate2, f.items))
-                cost = np.array(cost) * 1000.
-                hours = np.array(days) * 24.
-                currentSpeed = np.array(dist) / np.array(hours) - np.array(avgSpeed)
-                df0 = pd.DataFrame(np.transpose(np.stack([hours, cost, dist, avgSpeed, currentSpeed])),
-                                   columns=['T', 'C', 'D', 'V', 'S'])
+                speedLoss = np.array(avgSpeed) - (np.array(dist) / np.array(days))
+                df0 = pd.DataFrame(np.transpose(np.stack([days, cost, dist, avgSpeed, speedLoss])),
+                                   columns=['T', 'C', 'D', 'V', 'V_l'])
 
                 # Statistics
-                dfStat = pd.DataFrame([df0.mean(), df0.std(), df0.min(), df0.max()],
-                                      index=['mean', 'std', 'min', 'max'],
-                                      columns=['T', 'C', 'D', 'V', 'S'])
+                mean, std, min, max = df0.mean(), df0.std(), df0.min(), df0.max()
+                dfStat = pd.DataFrame([mean, std, min, max], index=['mean', 'std', 'min', 'max'])
                 dfStatPairList = dfPairList if idx == 0 else refDFPairList
                 dfStatPairList.append(dfStat)
-
-                # Append dataframes
                 df0 = dfStat.append(df0, ignore_index=False)
                 dataFrames.append(df0)
-
-            # Write to Excel sheet
             dfFronts, dfRefFronts = dataFrames
             dfRefFronts.to_excel(writer, sheet_name='{}_R{}'.format(pair, run))
             dfFronts.to_excel(writer, sheet_name='{}_{}'.format(pair, run))
-
         dfPair = pd.concat(dfPairList).groupby(level=0).mean()
         dfRefPair = pd.concat(refDFPairList).groupby(level=0).mean()
-        dfPair.to_excel(writer, sheet_name='S_{}'.format(pair))
-        dfRefPair.to_excel(writer, sheet_name='S_{}_R'.format(pair))
+        dfPair.to_excel(writer, sheet_name='SUMMARY_{}'.format(pair))
+        dfRefPair.to_excel(writer, sheet_name='SUMMARY_{}_R'.format(pair))
 
+    # for df in [dfFronts, dfRefFronts]:
+    #     mean, minn, maxx = df.mean(), df.min(), df.max()
+    #     df.loc['mean'] = mean
+    #     df.loc['min'] = minn
+    #     df.loc['max'] = maxx
+
+frontsDict, _planner = create_raw_dicts()
 
 # compute_metrics(key, _fronts)
-save_fronts(*create_raw_dicts())
+save_fronts(frontsDict, _planner)
 
 writer.close()

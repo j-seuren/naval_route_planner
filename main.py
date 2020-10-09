@@ -717,7 +717,7 @@ if __name__ == "__main__":
     kwargsPlanner = {'inputParameters': {}, 'tb': _tb, 'ecaFactor': 1.0, 'constantSpeedIdx': 2,
                      'criteria': _criteria}
     kwargsCompute = {'startEnd': _startEnd, 'startDate': startDate, 'recompute': True, 'current': False,
-                     'weather': False, 'seed': 1, 'algorithm': 'NSGA2'}
+                     'weather': True, 'algorithm': 'NSGA2'}
     multiprocess = False
 
     if multiprocess:

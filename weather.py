@@ -12,7 +12,7 @@ class CurrentOperator:
         self.t0 = t0.replace(second=0, microsecond=0, minute=0, hour=0)
         self.nDays = nDays
         if KC:
-            self.data, self.lo, self.la = current_data.CurrentDataRetriever(self.t0, self.nDays, DIR=DIR).get_kc_data()
+            self.data, self.lons, self.lats = current_data.CurrentDataRetriever(self.t0, self.nDays, DIR=DIR).get_kc_data()
             self.get_grid_pt_current = self.get_grid_pt_current_kc
         else:
             self.data = np.array(current_data.CurrentDataRetriever(self.t0, self.nDays, DIR=DIR).get_data())
@@ -28,25 +28,26 @@ class CurrentOperator:
         if delta.days < self.nDays:
             dayIdx = int(delta.seconds / 3600 // hourPeriod)
             vals = self.data[:, dayIdx, latIdx, lonIdx]
-            u_pt, v_pt = vals[0], vals[1]
+            u, v = vals[0], vals[1]
 
-            if math.isnan(u_pt) or math.isnan(v_pt):
-                u_pt = v_pt = 0.0
+            if math.isnan(u) or math.isnan(v):
+                u = v = 0.0
         else:
-            u_pt = v_pt = 0.0
+            u = v = 0.0
 
-        return u_pt, v_pt
+        return u, v
 
     def get_grid_pt_current_kc(self, _, lon, lat):
-        lonIdx = find_nearest_idx(self.lo, lon)
-        latIdx = find_nearest_idx(self.la, lat)
-        return self.data[0, latIdx, lonIdx], self.data[1, latIdx, lonIdx]
+        lonIdx = find_nearest_idx(self.lons, lon)
+        latIdx = find_nearest_idx(self.lats, lat)
+        u, v = self.data[0, latIdx, lonIdx], self.data[1, latIdx, lonIdx]
+
+        return u, v
 
 
 def find_nearest_idx(array, value):
     array = np.asarray(array)
-    idx = (np.abs(array - value)).argmin()
-    return idx
+    return (np.abs(array - value)).argmin()
 
 
 def plot_current_field(uin, vin, lons, lats):

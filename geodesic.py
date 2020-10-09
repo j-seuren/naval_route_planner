@@ -106,7 +106,7 @@ class Geodesic:
             return haversine.haversine(reversed(p1), reversed(p2), unit='nmi')  # nautical miles
 
     @lru_cache(maxsize=None)
-    def points(self, p1, p2, dist, del_s):
+    def points(self, p1, p2, dist, delS):
         """
         Get great circle points from the longitude-latitude
         pair ``lon1,lat1`` to ``lon2,lat2``
@@ -114,15 +114,15 @@ class Geodesic:
         ==============   =======================================================
         Keyword          Description
         ==============   =======================================================
-        del_s            points on great circle computed every del_s kilometers
+        del_s            points on great circle computed every del_s nautical miles
         ==============   =======================================================
         Returns two lists of lons, lats points on great circle
         """
         (lon1, lat1), (lon2, lat2) = p1, p2
-        n_points = int((dist + 0.5 * del_s) / del_s)
-        lon_lats = self.ref_sys.npts(lon1, lat1, lon2, lat2, n_points)
+        nPoints = int(dist / delS + 0.5)
+        lonLats = self.ref_sys.npts(lon1, lat1, lon2, lat2, nPoints)
         lons, lats = [lon1], [lat1]
-        for lon, lat in lon_lats:
+        for lon, lat in lonLats:
             lons.append(lon)
             lats.append(lat)
         lons.append(lon2)

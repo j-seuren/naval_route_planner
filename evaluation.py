@@ -45,9 +45,9 @@ class Evaluator:
         self.inclCurrent = None
         self.bathymetry = False if bathRtree is None else True
         self.criteria = criteria
+        self.includePenalty = False
         self.revertOutput = not criteria['minimalTime']
         self.penaltyValue = parameters['penaltyValue']
-        self.includePenalty = False
         self.delta = (1e+20,) * len(criteria)
         self.DIR = DIR
 
@@ -66,7 +66,9 @@ class Evaluator:
     @delta_penalty
     def evaluate(self, ind, revert=None, includePenalty=None):
         self.includePenalty = self.bathymetry if includePenalty is None else includePenalty
-        revert = self.revertOutput if revert is None else revert
+        if revert is None:
+            revert = self.revertOutput
+
         hours = cost = dist = ecaDist = 0.
 
         for wp1, wp2 in zip(ind[:-1], ind[1:]):
@@ -175,17 +177,15 @@ class Evaluator:
     def leg_hours(self, p1, p2, startHours, speedKnots):
         nauticalMiles = self.geod.distance(p1, p2)
         if self.inclCurrent or self.inclWeather:
-            # Split leg in segments (seg) of segLengthC in nautical miles
+            # Split leg in equally spaces segments of 'segLengthC' nautical miles
             lons, lats = self.geod.points(p1, p2, nauticalMiles, self.segLengthC)
             segPoints = list(zip(lons, lats))
             legHours = 0.
-            for segment in zip(segPoints[:-1], segPoints[1:]):
-                q1, q2 = segment
-                segmentTT = self.calc_seg_hours(q1, q2, speedKnots, startHours + legHours)
-                legHours += segmentTT
+            for q1, q2 in zip(segPoints[:-1], segPoints[1:]):
+                legHours += self.calc_seg_hours(q1, q2, speedKnots, startHours + legHours)
         else:
             legHours = nauticalMiles / speedKnots
-        return legHours, nauticalMiles  # Travel time in days
+        return legHours, nauticalMiles
 
     def calc_seg_hours(self, p1, p2, speedKnots, currentHours):
         try:
@@ -204,11 +204,11 @@ class Evaluator:
             speedKnots = self.vessel.reduced_speed(windDeg, headingDeg, BN, speedKnots)
 
         if self.inclCurrent:
-            # Eastward and northward current velocities at (lon, lat)
-            uKnots, vKnots = self.currentOp.get_grid_pt_current(now, lon, lat)
+            # Eastward (Se) and northward (Sn) current velocities at (lon, lat) in knots
+            Se, Sn = self.currentOp.get_grid_pt_current(now, lon, lat)
 
             # Calculate speed over ground (actualSpeed)
-            actualSpeedKnots = calc_sog(radians(bearingDeg), uKnots, vKnots, speedKnots)
+            actualSpeedKnots = calc_sog(radians(bearingDeg), Se, Sn, speedKnots)
         else:
             actualSpeedKnots = speedKnots
 
@@ -339,6 +339,7 @@ def calc_sog(bearingRad, Se, Sn, V):
     try:
         result = Se * sinB + Sn * cosB + sqrt(V * V - (Se * cosB - Sn * sinB) ** 2)
     except ValueError:
+        print('ValueError')
         result = V
     return result
 
@@ -460,22 +461,3 @@ if __name__ == '__main__':
         plt.scatter(np.degrees(bearingRads), output2)
 
         plt.show()
-
-if __name__ == '__main__':
-    import pickle
-
-    from main import RoutePlanner
-    from pathlib import Path
-
-    fp = Path('C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/eca results/Flo/0_FloSa')
-
-    evaluate = RoutePlanner().evaluator.evaluate
-
-    with open(fp, 'rb') as fh:
-        rawList = pickle.load(fh)
-
-    front = rawList[0]['fronts'][0][0]
-    for _ind in front:
-        T, FC = evaluate(_ind, includePenalty=False)
-        print(T, FC)
-
