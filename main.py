@@ -464,11 +464,10 @@ class RoutePlanner:
             newParameters['avoidArctic'] = avoidArctic
         self.update_parameters(newParameters)
 
-        key = tuple(sorted(startEnd))
         # Get initial paths
         initRoutes = None
         for initRouteDict in self.initRoutesList:
-            if initRouteDict['startEndKey'] == key and initRouteDict['avoidAntarctic'] == avoidAntarctic and \
+            if initRouteDict['startEnd'] == startEnd and initRouteDict['avoidAntarctic'] == avoidAntarctic and \
                     initRouteDict['avoidArctic'] == avoidArctic:
                 initRoutes = initRouteDict['paths']
                 break
@@ -477,7 +476,7 @@ class RoutePlanner:
 
             pathOutput = {'avoidAntarctic': avoidAntarctic,
                           'avoidArctic': avoidArctic,
-                          'startEndKey': key,
+                          'startEnd': startEnd,
                           'paths': initRoutes}
 
             self.initRoutesList.append(pathOutput)

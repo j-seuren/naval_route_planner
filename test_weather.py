@@ -19,7 +19,7 @@ parameters = {'DIR': DIR,
 inputWeather = {'instance': 'WTH', 'input': {'from': [
                                                       # ('Ny', locations['New York']),  # Kuhlemann
                                                       ('No', locations['Normandy']),  # Shao2012
-                                                      # ('P', locations['Plymouth']),  # Marie
+                                                      # ('P', locations['Plymouth']),  # Szłapczyńska
                                                       ('K', locations['Keelung']),  # Lin2013
                                                       ('V', locations['Valencia'])  # Vettor2016
                                                       ],
