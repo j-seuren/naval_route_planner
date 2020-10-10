@@ -12,7 +12,7 @@ from pathlib import Path
 
 def create_raw_dicts():
     loadDir = Path('C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/Current results/KC')
-    rawDir = loadDir / 'raws_8_10'
+    rawDir = loadDir / 'raws_10_10'
     os.chdir(loadDir)
 
     refFiles = [file for file in os.listdir(rawDir) if 'R' in file]

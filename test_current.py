@@ -54,7 +54,7 @@ for current in [True, False]:
         res = 'l' if inputDict['instance'] == 'KC' else 'i'
         par = {'mutationOperators': speedOps, 'res': res}
 
-        nSpeeds = [0, -1] if speed == 'constant' else [0]
+        nSpeeds = [0, -1] if speed == 'constant' else [None]
         for speedIdx in nSpeeds:
             planner = main.RoutePlanner(constantSpeedIdx=speedIdx,
                                         inputParameters=par,

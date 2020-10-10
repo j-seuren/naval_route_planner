@@ -44,8 +44,8 @@ inputDict = inputWeather
 criteria = {'minimalTime': True, 'minimalCost': True}
 
 for weather in [True, False]:
-    for speed in ['var', 'constant']:
-        nSpeeds = [0, -1] if speed == 'constant' else [0]
+    for speed in ['constant']:
+        nSpeeds = [0, -1] if speed == 'constant' else [None]
         for speedIdx in nSpeeds:
             speedOps = ['insert', 'move', 'delete'] if speed == 'constant' else ['speed', 'insert', 'move', 'delete']
             par = {'mutationOperators': speedOps}

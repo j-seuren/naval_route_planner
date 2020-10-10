@@ -559,7 +559,7 @@ if __name__ == '__main__':
         mergedPlots = MergedPlots(_directory, datetime(2011, 5, 28), experiment='KC', contains='11_25', idx=_idx)
 
         mergedPlots.merged_pareto(save=False)
-        mergedPlots.merged_routes(zoom=1.2, initial=False, intervalRoutes=None, colorbar=True, alpha=0.5, save=False,
+        mergedPlots.merged_routes(zoom=1.2, initial=True, intervalRoutes=None, colorbar=True, alpha=0.5, save=False,
                                   hull=False)
 
         plt.show()

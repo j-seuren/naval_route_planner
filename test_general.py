@@ -54,9 +54,9 @@ def single_experiment(planner, inputDict, parameters, startEnd, depDate, fileStr
 
         if saveFig:
 
-            statisticsPlotter = plot_results.StatisticsPlotter(raw, DIR=parameters['DIR'])
-            frontFig, _ = statisticsPlotter.plot_fronts()
-            statsFig, _ = statisticsPlotter.plot_stats()
+            # statisticsPlotter = plot_results.StatisticsPlotter(raw, DIR=parameters['DIR'])
+            # frontFig, _ = statisticsPlotter.plot_fronts()
+            # statsFig, _ = statisticsPlotter.plot_stats()
 
             if current:
                 cData = planner.evaluator.currentOp.data
@@ -77,7 +77,8 @@ def single_experiment(planner, inputDict, parameters, startEnd, depDate, fileStr
             routePlotter.results(routeAx, initial=False, ecas=ecas, bathymetry=parameters['bathymetry'], nRoutes=4,
                                  weatherDate=weatherDate, current=currentDict, colorbar=True, KC=inputDict['instance'] == 'KC')
 
-            for figName, fig in {'front': frontFig, 'stats': statsFig, 'routes': routeFig}.items():
+            # for figName, fig in {'front': frontFig, 'stats': statsFig, 'routes': routeFig}.items():
+            for figName, fig in {'routes': routeFig}.items():
                 fp = genDir / 'figures/{}_{}'.format(fileString, itr)
                 fig.savefig(fp.as_posix() + '_{}.png'.format(figName), dpi=300)
                 print('saved', fp)
