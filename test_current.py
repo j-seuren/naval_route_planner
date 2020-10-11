@@ -12,7 +12,7 @@ parameters = {'DIR': DIR,
               'weather': False,
               'ecaFactor': 1.0,
               'exp': 'current',
-              'iterations': 5,
+              'iterations': 2,
               'MOEA': 'NSGA2',
               }
 
@@ -52,7 +52,7 @@ for current in [True, False]:
             continue
         speedOps = ['insert', 'move', 'delete'] if speed == 'constant' else ['speed', 'insert', 'move', 'delete']
         res = 'l' if inputDict['instance'] == 'KC' else 'i'
-        par = {'mutationOperators': speedOps, 'res': res}
+        par = {'mutationOperators': speedOps, 'res': res, 'minVar': 1e-7}
 
         nSpeeds = [0, -1] if speed == 'constant' else [None]
         for speedIdx in nSpeeds:

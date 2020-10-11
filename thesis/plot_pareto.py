@@ -44,8 +44,9 @@ class MergedPlots:
 
         self.date = date
         self.idx = idx
-        self.merged_pareto = self.merged_pareto_kc if experiment == 'KC' else self.merged_pareto
-        self.merged_routes = self.merged_routes_kc if experiment == 'KC' else self.merged_routes
+        if experiment == 'KC':
+            self.merged_pareto = self.merged_pareto_kc
+            self.merged_routes = self.merged_routes_kc
 
         # Fronts and routes
         self.outFiles = []
@@ -336,7 +337,6 @@ class MergedPlots:
 
 def update(population):
     front = {}
-
     for ID, ind in population:
         nonDominated = True
         for _, otherInd in population:
@@ -553,10 +553,10 @@ if __name__ == '__main__':
     # mergedPlots.merged_pareto(save=False)
     # mergedPlots.merged_routes(zoom=1.2, initial=False, colorbar=True, alpha=0.5, save=False, hull=True)
 
-    _directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/Current results/KC'
-    nRaws = 1
+    _directory = 'D:/output/current/KC/NSGA2_varSP_BFalse_ECA1.0/2/raw'
+    nRaws = 2
     for _idx in range(min(nRaws, 5)):
-        mergedPlots = MergedPlots(_directory, datetime(2011, 5, 28), experiment='KC', contains='11_25', idx=_idx)
+        mergedPlots = MergedPlots(_directory, datetime(2011, 5, 28), experiment='KC', contains='KT', idx=_idx)
 
         mergedPlots.merged_pareto(save=False)
         mergedPlots.merged_routes(zoom=1.2, initial=True, intervalRoutes=None, colorbar=True, alpha=0.5, save=False,

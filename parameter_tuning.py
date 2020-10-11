@@ -4,7 +4,7 @@ import numpy as np
 import os
 import pandas as pd
 import skopt
-import time
+# import time
 
 from datetime import datetime
 from pathlib import Path
@@ -14,7 +14,7 @@ from support import locations
 
 DIR = Path('D:/')
 
-for _ in range(1):
+for run in range(5):
     N_CALLs = 200
     N_POINTS = 10
     DEPART = datetime(2016, 1, 1)
@@ -77,7 +77,8 @@ for _ in range(1):
         excelFP = tuningDir / '{}_best_parameters_{}iterations.xlsx'.format(timestamp, iterations)
         writer = pd.ExcelWriter(excelFP)
         DF = None
-        PLANNER = main.RoutePlanner(bathymetry=BATHYMETRY, inputParameters=inputParameters)
+        seeds = np.array(np.linspace(0, N_CALLs, N_CALLs) + (N_CALLs * run)).astype(int)
+        PLANNER = main.RoutePlanner(bathymetry=BATHYMETRY, inputParameters=inputParameters, seeds=seeds)
 
         for iteration in range(iterations):
             START_END = START_ENDS[iteration]
@@ -99,7 +100,7 @@ for _ in range(1):
                     print('Call', CALLS)
 
                     PLANNER.update_parameters(parameters)
-                    result = PLANNER.compute(START_END, startDate=DEPART, current=CURRENT, recompute=True, seed=None)
+                    result = PLANNER.compute(START_END, startDate=DEPART, current=CURRENT, recompute=True)
 
                     # end_func_time = time.time() - start_func_time
                     avgFitList = [subLog.chapters["fitness"].select("avg") for log in result['logs'] for subLog in log]

@@ -19,7 +19,7 @@ def find_closest(A, target):
 
 def logbook():
     log = tools.Logbook()
-    log.header = "gen", "evals", "fitness", "size"
+    log.header = "gen", "evals", "gd", "fitness", "size"
     log.chapters["fitness"].header = "min", "avg", "max"
     log.chapters["size"].header = "min", "avg", "max"
     return log

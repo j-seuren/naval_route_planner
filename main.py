@@ -96,7 +96,7 @@ class RoutePlanner:
                              # Stopping parameters
                              'maxEvaluations': None,
                              'gen': 400,           # Minimal number of generations
-                             'maxGDs': 33,         # Max length of generational distance list
+                             'maxGDs': 40,         # Max length of generational distance list
                              'minVar': 5e-6,       # Minimal variance of generational distance list
 
                              # Mutation parameters
@@ -188,7 +188,7 @@ class RoutePlanner:
                     if np.var(gds) < self.minVar:
                         print('STOPPING: Generational distance')
                         return True
-                return False
+                return gd
 
     class MPAES:
         def __init__(self, tb, evaluator, p, terminator):
@@ -255,7 +255,7 @@ class RoutePlanner:
             front = tools.ParetoFront()  # Initialize ParetoFront class
             self.evals = len(pop)
             gds = []  # Initialize generational distance list
-            gen = totalEvals = 0
+            gen = totalEvals = gd = 0
             while True:
                 # Step 3: Update global Pareto front
                 prevFront = front.items[:]
@@ -263,7 +263,7 @@ class RoutePlanner:
 
                 # Record statistics
                 record = mstats.compile(front)
-                log.record(gen=gen, evals=self.evals, **record)
+                log.record(gen=gen, evals=self.evals, gd=gd, **record)
                 print('\r', end='')
                 print(log.stream)
 
@@ -316,7 +316,8 @@ class RoutePlanner:
                     popInter.extend(childAsList)
 
                 # Step 4: Termination
-                if self.termination(prevFront, front, gen, gds, totalEvals):
+                gd = self.termination(prevFront, front, gen, gds, totalEvals)
+                if not isinstance(gd, float):
                     return front, log
 
                 pop = popInter
@@ -340,7 +341,7 @@ class RoutePlanner:
             front = tools.ParetoFront()  # Initialize ParetoFront class
             evals = len(pop)
             offspring, gds = [], []  # Initialize offspring and generational distance list
-            gen = totalEvals = 0
+            gen = totalEvals = gd = 0
             while True:
                 # Step 3: Environmental selection (and update HoF)
                 pop = self.tb.select(pop + offspring, self.sizePop)
@@ -349,13 +350,14 @@ class RoutePlanner:
 
                 # Record statistics
                 record = mstats.compile(front)
-                log.record(gen=gen, evals=evals, **record)
+                log.record(gen=gen, evals=evals, gd=gd, **record)
                 print('\r', end='')
                 print(log.stream)
 
                 totalEvals += evals
                 # Step 4: Termination
-                if self.termination(prevFront, front, gen, gds, totalEvals):
+                gd = self.termination(prevFront, front, gen, gds, totalEvals)
+                if not isinstance(gd, float):
                     return front, log
 
                 # Step 5: Variation
@@ -390,7 +392,7 @@ class RoutePlanner:
             front = tools.ParetoFront()  # Initialize ParetoFront class
             evals = len(pop)
             archive, gds = [], []  # Initialize offspring and generational distance list
-            gen = totalEvals = 0
+            gen = totalEvals = gd = 0
             while True:
                 # Step 3: Environmental selection
                 archive = self.tb.select(pop + archive, k=self.sizeArchive)
@@ -399,13 +401,14 @@ class RoutePlanner:
 
                 # Record statistics
                 record = mstats.compile(front)
-                log.record(gen=gen, evals=evals, **record)
+                log.record(gen=gen, evals=evals, gd=gd, **record)
                 print('\r', end='')
                 print(log.stream)
 
                 totalEvals += evals
                 # Step 4: Termination
-                if self.termination(prevFront, front, gen, gds, totalEvals):
+                gd = self.termination(prevFront, front, gen, gds, totalEvals)
+                if not isinstance(gd, float):
                     return front, log
 
                 # Step 5: Mating Selection
