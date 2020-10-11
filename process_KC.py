@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as cl
 import numpy as np
 import pandas as pd
-import tikzplotlib
+# import tikzplotlib
 
 from data_config.current_data import CurrentDataRetriever
 from datetime import datetime
@@ -142,6 +142,7 @@ def plot_fronts(frontsDict, planner, save=False):
             ax2.set_xlabel('Travel time [h]', fontproperties=fontProp)
             ax2.set_ylabel('Fuel consumption [t]', fontproperties=fontProp)
             ax1.set_ylabel('Average speed increase [knots]', fontproperties=fontProp)
+            # noinspection PyProtectedMember
             cycleFront = ax2._get_lines.prop_cycler
             labels = ['Incl. current', 'Reference']
 
@@ -259,4 +260,3 @@ _frontsDict, _planner = create_raw_dicts()
 plot_fronts(_frontsDict, _planner, save=True)
 # plot_routes(_frontsDict, save=True)
 plt.show()
-

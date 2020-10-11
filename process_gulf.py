@@ -3,83 +3,108 @@ import os
 import pickle
 import main
 import matplotlib.pyplot as plt
+import matplotlib.colors as cl
 import numpy as np
 import pandas as pd
+# import tikzplotlib
 
+from data_config.current_data import CurrentDataRetriever
 from datetime import datetime
 from deap import tools
 from matplotlib import font_manager as fm
+from matplotlib import cm, rcParams
+from mpl_toolkits.basemap import Basemap
 from pathlib import Path
 
+rcParams['text.usetex'] = True
 fontPropFP = "C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/tex-gyre-pagella.regular.otf"
 fontProp = fm.FontProperties(fname=fontPropFP)
 
+dates = [datetime(2014, 11, 25), datetime(2015, 5, 4)]
+loadDir = Path('D:/output/current/Gulf')
+rawDir = loadDir / 'raws'
+os.chdir(loadDir)
+planner = main.RoutePlanner(bathymetry=False, ecaFactor=1)
+
+
+def evaluate_new_fronts(fronts):
+    evaluate = planner.evaluator.evaluate
+    newFronts = []
+    for front in fronts:
+        fits = [evaluate(ind, revert=False, includePenalty=False) for ind in front]
+        for fit, ind in zip(fits, front.items):
+            ind.fitness.values = fit
+        newFront = tools.ParetoFront()
+        newFront.update(front.items)
+        newFronts.append(newFront)
+    return newFronts
+
 
 def create_raw_dicts():
-    planner = main.RoutePlanner(bathymetry=False, ecaFactor=1)
+    frontsDictFP = loadDir / 'frontsDict'
 
-    loadDir = Path('D:/output/current/Gulf')
-    rawsDir = loadDir / 'raws'
-    varDir = rawsDir / 'var'
-    maxDir = rawsDir / 'max'
-    minDir = rawsDir / 'min'
-    os.chdir(loadDir)
+    if os.path.exists(frontsDictFP):
+        with open(frontsDictFP, 'rb') as fh:
+            frontsDict = pickle.load(fh)
+            print('loaded', frontsDictFP)
+        return frontsDict
 
-    refFilesVar = [file for file in os.listdir(varDir) if 'R' in file]
-    refFilesMax = [file for file in os.listdir(maxDir) if 'R' in file]
-    refFilesMin = [file for file in os.listdir(minDir) if 'R' in file]
-    print('refFiles', '\n', 'var', refFilesVar, '\n', 'max', refFilesMax, '\n', 'min', refFilesMin)
-    refFrontsDict = {'2014': {}, '2015': {}}
-    for d, date in enumerate([datetime(2014, 11, 15), datetime(2015, 5, 15)]):
-        dateKey = '2014' if d == 0 else '2015'
+    refFrontsDict, frontsDict = {}, {}
+    for d, date in enumerate(dates):
+        year = date.year
+        refFrontsDict[year], frontsDict[year] = {}, {}
 
         # Initialize planner
         planner.evaluator.set_classes(inclCurr=True, inclWeather=False, nDays=7, startDate=date)
-        evaluate = planner.evaluator.evaluate
 
-        for speed, refFiles in {'var': refFilesVar, 'max': refFilesMax, 'min': refFilesMin}.items():
-            refFrontsDict[dateKey][speed] = {}
-            for refFile in refFilesVar:
+        for speed in ['var', 'min', 'max']:
+            speedDir = rawDir / speed
+            refFilesSpeed = [file for file in os.listdir(speedDir) if 'R' in file and str(year) in file]
+            print('refFiles', year, speed, refFilesSpeed)
+
+            refFrontsDict[year][speed] = {}
+            for refFile in refFilesSpeed:
                 split = refFile.split('_')
                 pair = split[-1]
-                with open(rawsDir / speed / refFile, 'rb') as fh:
+                with open(speedDir / refFile, 'rb') as fh:
                     refRawList = pickle.load(fh)
                 refFronts = [refRaw['fronts'][0][0] for refRaw in refRawList]
-                newRefFronts = []
-                for oldFront in refFronts:
-                    fits = [evaluate(ind, revert=False, includePenalty=False) for ind in oldFront]
-                    for fit, ind in zip(fits, oldFront.items):
-                        ind.fitness.values = fit
-                    newFront = tools.ParetoFront()
-                    newFront.update(oldFront.items)
-                    newRefFronts.append(newFront)
-                refFrontsDict[dateKey][speed][pair] = newRefFronts
+                refFrontsDict[year][speed][pair] = evaluate_new_fronts(refFronts)
 
-    filesVar = [file for file in os.listdir(varDir) if 'R' not in file]
-    filesMax = [file for file in os.listdir(maxDir) if 'R' not in file]
-    filesMin = [file for file in os.listdir(minDir) if 'R' not in file]
+            files = [file for file in os.listdir(speedDir) if 'R' not in file and str(year) in file]
+            print('files', year, speed, files)
 
-    frontsDict = {'2014': {}, '2015': {}}
-    for speed, files in {'var': filesVar, 'max': filesMax, 'min': filesMin}.items():
-        frontsDict['2014'][speed] = {}
-        frontsDict['2015'][speed] = {}
-        for file in files:
-            split = file.split('_')
-            pair = split[-1]
-            with open(rawsDir / file, 'rb') as fh:
-                rawList = pickle.load(fh)
-            fronts = [raw['fronts'][0][0] for raw in rawList]
-            if '2014' in file:
-                frontsDict['2014'][speed][pair] = (fronts, refFrontsDict['2015'][speed][pair])
-            else:
-                frontsDict['2015'][speed][pair] = (fronts, refFrontsDict['2015'][speed][pair])
+            frontsDict[year][speed] = {}
+            for file in files:
+                split = file.split('_')
+                pair = split[-1]
+                with open(speedDir / file, 'rb') as fh:
+                    rawList = pickle.load(fh)
+                fronts = [raw['fronts'][0][0] for raw in rawList]
+                if speed != 'var':
+                    fronts = evaluate_new_fronts(fronts)
+                frontsDict[year][speed][pair] = (fronts, refFrontsDict[year][speed][pair])
 
-    return frontsDict, planner
+    with open(frontsDictFP, 'wb') as fh:
+        pickle.dump(frontsDict, fh)
+
+    return frontsDict
 
 
-def metrics_plot(frontsDict, planner, plot=False, savePlot=False):
+def metrics_plot(frontsDict, plotFront=False, plotRoute=False, savePlot=False):
     years = list(frontsDict.keys())
-    for year in years:
+    for y, year in enumerate(years):
+        date = dates[y]
+        planner.evaluator.set_classes(inclCurr=True, inclWeather=False, nDays=7, startDate=date)
+
+        if plotRoute:
+            u, v = CurrentDataRetriever(date, nDays=7, DIR=Path('D:/')).get_data()
+            lons = np.linspace(-179.875, 179.875, 1440)
+            lats = np.linspace(-89.875, 89.875, 72)
+            print('current shapes', u.shape, lons.shape, lats.shape)
+        else:
+            u = v = lons = lats = None
+
         writer = pd.ExcelWriter('output_{}_metrics.xlsx'.format(year))
         speeds = frontsDict[year].keys()
         for speed in speeds:
@@ -90,12 +115,11 @@ def metrics_plot(frontsDict, planner, plot=False, savePlot=False):
                 dfBinaryHV = pd.DataFrame(columns=pairs, index=range(5))
                 dfCoverage = pd.DataFrame(columns=pairs, index=range(5))
 
+                cSpeeds = ['max', 'min']
+
                 for pair in pairs:
                     print('\r', pair, end='')
                     fronts, refFronts = frontsDict[year][speed][pair]
-
-                    minFronts, minRefFronts = frontsDict[year]['min'][pair]
-                    maxFronts, maxRefFronts = frontsDict[year]['max'][pair]
 
                     for run, (front, refFront) in enumerate(zip(fronts, refFronts)):
                         biHV = indicators.binary_hypervolume(front, refFront)
@@ -103,19 +127,27 @@ def metrics_plot(frontsDict, planner, plot=False, savePlot=False):
                         dfBinaryHV.iloc[run][pair] = biHV
                         dfCoverage.iloc[run][pair] = coverage
 
-                        minFrontSpeed = minFronts[run]
-                        minFrontSpeedRef = minRefFronts[run]
-                        maxFrontSpeed = minFronts[run]
-                        maxFrontSpeedRef = minRefFronts[run]
-                        speedFronts = [(minFrontSpeed, minFrontSpeedRef), (maxFrontSpeed,maxFrontSpeedRef )]
-
-                        if plot:
-                            fig = plot_front(front, refFront, speedFronts, planner)
-                            plt.show()
+                        if plotFront:
+                            # Get 'fronts' of constant speed simulations for plotting
+                            cSpeedFrontsList = [
+                                [frontsDict[year][cSpeed][pair][refIdx][run] for refIdx in range(2)]
+                                for cSpeed in cSpeeds]
+                            fig = plot_front(front, refFront, cSpeedFrontsList)
+                            # plt.show()
                             if savePlot:
-                                fig.savefig('{}_frontM_{}'.format(pair, run), dpi=300)
-                                fig.savefig('{}_frontM_{}.pdf'.format(pair, run), bbox_inches='tight', pad_inches=.01)
+                                fig.savefig('front_plots/{}_frontM_{}'.format(pair, run), dpi=300)
+                                fig.savefig('front_plots/{}_frontM_{}.pdf'.format(pair, run),
+                                            bbox_inches='tight', pad_inches=.01)
                                 # tikzplotlib.save("{}_frontM_{}.tex".format(pair, run))
+                            plt.close('all')
+
+                        if plotRoute:
+                            fig = plot_routes(front, refFront, u, v, lons, lats)
+                            # plt.show()
+                            if savePlot:
+                                fig.savefig('route_plots/{}_routeM_{}'.format(pair, run), dpi=300)
+                                fig.savefig('route_plots/{}_routeM_{}.pdf'.format(pair, run),
+                                            bbox_inches='tight', pad_inches=.02)
 
                 for df in [dfBinaryHV, dfCoverage]:
                     mean, std, minn, maxx = df.mean(), df.std(), df.min(), df.max()
@@ -130,15 +162,16 @@ def metrics_plot(frontsDict, planner, plot=False, savePlot=False):
         writer.close()
 
 
-def plot_front(front, refFront, speedFronts, planner):
+def plot_front(front, refFront, cSpeedsFrontsList):
     evaluate2 = planner.evaluator.evaluate2
 
     fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(8, 16))
-    ax2.set_xlabel('Travel time [h]', fontproperties=fontProp)
-    ax2.set_ylabel('Fuel consumption [t]', fontproperties=fontProp)
+    ax2.set_xlabel('Travel time [d]', fontproperties=fontProp)
+    ax2.set_ylabel(r'Fuel cost [$\times 10^3$  USD]', fontproperties=fontProp)
     ax1.set_ylabel('Average speed increase [knots]', fontproperties=fontProp)
+    # noinspection PyProtectedMember
     cycleFront = ax2._get_lines.prop_cycler
-    labels = ['Incl. current', 'Reference']
+    labels = ['', 'R']
 
     # Do for front and ref front
     for idx, f in enumerate([front, refFront]):
@@ -150,21 +183,22 @@ def plot_front(front, refFront, speedFronts, planner):
 
         # Plot front
         marker, s, zorder = 'o', 1, 2
-        ax2.scatter(days, cost, color=color, marker=marker, s=s, label=labels[idx], zorder=zorder)
+        label = 'V' + labels[idx]
+        ax2.scatter(days, cost, color=color, marker=marker, s=s, label=label, zorder=zorder)
         ax1.scatter(days, currentSpeed, color=color, marker=marker, s=s, zorder=zorder)
 
     # Plot constant speeds
     colors = [next(cycleFront)['color'], next(cycleFront)['color']]
+    for cSpeedIdx, cSpeedFrontTup in enumerate(cSpeedsFrontsList):
+        for refIdx, front in enumerate(cSpeedFrontTup):
+            days, cost, dist, _, avgSpeed = zip(*map(evaluate2, front.items))
+            currentSpeed = np.array(dist) / (np.array(days) * 24.) - np.array(avgSpeed)
 
-    for spdTup in speedFronts:
-        for spdIdx, spd in enumerate(spdTup):
-            days, cost, dist, _, avgSpeed = zip(*map(evaluate2, spd.items))
-            hours = np.array(days) * 24.
-            currentSpeed = np.array(dist) / np.array(hours) - np.array(avgSpeed)
-
-            marker, s, zorder = 's', 5, 3
-            ax2.scatter(days, cost, color=colors[spdIdx], marker=marker, s=s, label=labels[spdIdx], zorder=zorder)
-            ax1.scatter(days, currentSpeed, color=colors[spdIdx], marker=marker, s=s, zorder=zorder)
+            zorder = 3
+            (marker, s) = ('+', 50) if refIdx == 1 else ('x', 35)
+            label = 'C' + labels[refIdx] if cSpeedIdx == 0 else None
+            ax2.scatter(days, cost, color=colors[refIdx], marker=marker, s=s, label=label, zorder=zorder)
+            ax1.scatter(days, currentSpeed, color=colors[refIdx], marker=marker, s=s, zorder=zorder)
 
     ax2.legend(prop=fontProp)
     ax2.grid()
@@ -175,6 +209,78 @@ def plot_front(front, refFront, speedFronts, planner):
     return fig
 
 
-_frontsDict, _planner = create_raw_dicts()
+def navigation_area(ax, u, v, lons, lats):
+    dateIdx = len(u) // 2
+    u, v = u[dateIdx], v[dateIdx]
 
-metrics_plot(_frontsDict, _planner, plot=True, savePlot=False)
+    mrg = 1
+    extent = (-74 - mrg, 32 - mrg, -50 + mrg, 46 + mrg)
+    left, bottom, right, top = extent
+    m = Basemap(projection='merc', resolution='i', ax=ax,
+                llcrnrlat=bottom, urcrnrlat=top, llcrnrlon=left, urcrnrlon=right)
+    m.drawmapboundary()
+    m.fillcontinents(zorder=2)
+    m.drawcoastlines()
+
+    # Currents
+    dLon = extent[2] - extent[0]
+    dLat = extent[3] - extent[1]
+    vLon = int(dLon * 4)
+    vLat = int(dLat * 4)
+    uRot, vRot, x, y = m.transform_vector(u, v, lons, lats, vLon, vLat, returnxy=True)
+    Q = m.quiver(x, y, uRot, vRot, np.hypot(uRot, vRot),
+                 pivot='mid', width=0.002, headlength=4, cmap='Blues', scale=90, ax=ax)
+    ax.quiverkey(Q, 0.4, 1.1, 2, r'$2$ knots', labelpos='E')
+
+    return m
+
+
+def colorbar(m):
+    cmap = cm.get_cmap('jet', 12)
+    cmapList = [cmap(i) for i in range(cmap.N)][1:-1]
+    cmap = cl.LinearSegmentedColormap.from_list('Custom cmap', cmapList, cmap.N - 2)
+
+    vMin, dV = 8.8, 15.2 - 8.8
+
+    sm = plt.cm.ScalarMappable(cmap=cmap)
+    cb = m.colorbar(sm, norm=plt.Normalize(vmin=vMin, vmax=vMin + dV),
+                    size=0.2, pad=0.05, location='right')
+    nTicks = 6
+    cb.ax.set_yticklabels(['%.1f' % round(vMin + i * dV / (nTicks - 1), 1) for i in range(nTicks)],
+                          fontproperties=fontProp)
+    cb.set_label('Nominal vessel speed [knots]', rotation=270, labelpad=15, fontproperties=fontProp)
+
+    return cmap
+
+
+def plot_routes(front, refFront, u, v, lons, lats):
+    fig, ax = plt.subplots()
+    m = navigation_area(ax, u, v, lons, lats)
+    labels = [None, 'Reference']
+    vMin, dV = 8.8, 15.2 - 8.8
+
+    # Do for front and ref front
+    for idx, f in enumerate([front, refFront]):
+        label = labels[idx]
+        cmap = 'k' if idx == 1 else colorbar(m)
+        for j, ind in enumerate(f.items):
+            if idx == 1 and j > 0:
+                continue
+
+            alpha = 1 if idx == 1 else 0.9
+            waypoints, speeds = zip(*ind)
+            for i, leg in enumerate(zip(waypoints[:-1], waypoints[1:])):
+                color = cmap((speeds[i] - vMin) / dV) if cmap != 'k' else cmap
+                label = None if i > 0 else label
+                m.drawgreatcircle(leg[0][0], leg[0][1], leg[1][0], leg[1][1], label=label, linewidth=1,
+                                  alpha=alpha, color=color, zorder=3)
+
+    ax.legend(loc='upper right', prop=fontProp)
+    plt.grid()
+    plt.xticks(fontproperties=fontProp)
+    plt.yticks(fontproperties=fontProp)
+    return fig
+
+
+_frontsDict = create_raw_dicts()
+metrics_plot(_frontsDict, plotFront=True, savePlot=True)

@@ -33,7 +33,7 @@ inputMOEA = {'instance': 'MOEA', 'input': {'from': [('C', locations['Cape Town']
 inputDict = inputMOEA
 
 speedOps = ['insert', 'move', 'delete'] if parameters['speed'] == 'constant' else ['speed', 'insert', 'move', 'delete']
-par = {'mutationOperators': speedOps, 'n': 100, 'maxEvaluations': 25000}
+par = {'mutationOperators': speedOps, 'n': 100, 'maxEvaluations': 21000}
 
 for MOEA in ['NSGA2', 'SPEA2', 'MPAES']:
     parameters['MOEA'] = MOEA

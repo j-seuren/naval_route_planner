@@ -398,7 +398,6 @@ def get_front(frontIn, planner, experiment, date):
         ind.fitness.values = fit
         inds.append(ind)
 
-
     # front = frontIn[0]
     # newFits = [planner.evaluator.evaluate(ind, revert=False, includePenalty=False) for ind in front]
     # for ind, fit in zip(front.items, newFits):
@@ -491,8 +490,8 @@ def weather_contour(m, dateTime, travelDays, lonStart, lonEnd):
         xx, yy = x[:, lon0:lon1], y[:, lon0:lon1]
         Cs[i] = m.contourf(xx, yy, BNarr, vmin=0, vmax=12, cmap=cm.get_cmap('jet', 12))
 
-    ncolors = 12
-    sm = plt.cm.ScalarMappable(norm=plt.Normalize(vmin=0, vmax=12), cmap=cm.get_cmap('jet', 12))
+    nColors = 12
+    sm = plt.cm.ScalarMappable(norm=plt.Normalize(vmin=0, vmax=12), cmap=cm.get_cmap('jet', nColors))
     cb = m.colorbar(sm, norm=plt.Normalize(vmin=0, vmax=12), size=0.2, pad=0.2, location='bottom')
     cb.set_label('Wind [BFT]', fontproperties=fontProp)
 

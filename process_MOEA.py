@@ -74,7 +74,7 @@ def compute_metrics(name, frontsDict):
         else:
             label = 'Binary hypervolume' if ID == 'B' else 'Two sets coverage'
         ax.set_ylabel(label, fontproperties=fontProp)
-        ax.xticks(fontproperties=fontProp)
+        plt.xticks(fontproperties=fontProp)
         with open('{}_{}ax'.format(name, ID), 'wb') as fh:
             pickle.dump(ax, fh)
         plt.savefig('{}_{}.png'.format(name, ID))
@@ -93,5 +93,20 @@ def compute_metrics(name, frontsDict):
     writer.close()
 
 
-rDict, _planner = create_raw_dicts()
-compute_metrics('WTH', rDict)
+def load_axes(name):
+    loadDir = Path('C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/MOEA results/WTH')
+    os.chdir(loadDir)
+
+    for i, ID in enumerate(['T', 'B', 'C']):
+        with open('{}_{}ax'.format(name, ID), 'rb') as fh:
+            pickle.load(fh)
+        plt.savefig('{}_{}.pdf'.format(name, ID), bbox_inches='tight', pad_inches=.02)
+        plt.close('all')
+    # tikzplotlib.save('{}.tex'.format(name))
+
+# rDict, _planner = create_raw_dicts()
+# compute_metrics('WTH', rDict)
+
+load_axes('WTH')
+
+

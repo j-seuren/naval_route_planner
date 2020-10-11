@@ -176,12 +176,14 @@ class RoutePlanner:
             self.maxStops = p['maxGDs']
 
         def termination(self, prevFront, front, gen, gds, evals):
+            gd = indicators.generational_distance(prevFront, front)
+            gds.append(gd)
+
             if self.maxEvaluations:
                 if evals > self.maxEvaluations:
                     return True
+                return gd
             else:
-                gd = indicators.generational_distance(prevFront, front)
-                gds.append(gd)
                 if len(gds) > self.maxStops:
                     gds.pop(0)
                 if gen >= self.minGen:
@@ -719,7 +721,7 @@ if __name__ == "__main__":
     kwargsPlanner = {'inputParameters': {}, 'tb': _tb, 'ecaFactor': 1.0, 'constantSpeedIdx': 2,
                      'criteria': _criteria}
     kwargsCompute = {'startEnd': _startEnd, 'startDate': startDate, 'recompute': True, 'current': False,
-                     'weather': True, 'algorithm': 'NSGA2'}
+                     'weather': False, 'algorithm': 'NSGA2'}
     multiprocess = False
 
     if multiprocess:
