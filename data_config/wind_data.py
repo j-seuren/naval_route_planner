@@ -165,7 +165,7 @@ if __name__ == '__main__':
 
         # # Add a coastline and axis values.
         m.drawcoastlines()
-        m.fillcontinents()
+        m.fillcontinents(color='lightgray')
         m.drawmapboundary()
         # m.drawparallels(np.arange(-90., 90., 30.), labels=[1, 0, 0, 0])
         # m.drawmeridians(np.arange(-180., 180., 60.), labels=[0, 0, 0, 1])

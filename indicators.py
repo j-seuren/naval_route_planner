@@ -11,38 +11,35 @@ def hypervolume(front):
     return hv.hypervolume(obj, ref)
 
 
-def binary_hypervolume(A, B):
-    frontAB = ParetoFront()
-    frontAB.update(A.items)
-    frontAB.update(B.items)
+def binary_hypervolume_ratio(A, B):
+    AB = ParetoFront()
+    AB.update(A.items)
+    AB.update(B.items)
 
-    objAB = np.array([ind.fitness.values for ind in frontAB])
-    objB = np.array([ind.fitness.values for ind in B])
-    ref = np.max(objAB, axis=0) + 1
+    fitAB = np.array([fit.values for fit in AB.keys])
+    fitA = np.array([fit.values for fit in A.keys])
+    ref = np.max(fitAB, axis=0) + 1
 
-    hvAB = hv.hypervolume(objAB, ref)
-    hvB = hv.hypervolume(objB, ref)
+    hvAB = hv.hypervolume(fitAB, ref)
+    hvA = hv.hypervolume(fitA, ref)
 
-    return hvAB - hvB
+    return hvA / hvAB
 
 
-def triple_hypervolume(A, B, C):
-    frontBC = ParetoFront()
-    frontBC.update(B.items)
-    frontBC.update(C.items)
+def triple_hypervolume_ratio(A, B, C):
+    ABC = ParetoFront()
+    ABC.update(A.items)
+    ABC.update(B.items)
+    ABC.update(C.items)
 
-    frontABC = ParetoFront()
-    frontABC.update(A.items)
-    frontABC.update(frontBC.items)
+    fitABC = np.array([fit.values for fit in ABC.keys])
+    fitA = np.array([fit.values for fit in A.keys])
+    ref = np.max(fitABC, axis=0) + 1
 
-    objABC = np.array([ind.fitness.values for ind in frontABC])
-    objBC = np.array([ind.fitness.values for ind in frontBC])
-    ref = np.max(objABC, axis=0) + 1
+    hvABC = hv.hypervolume(fitABC, ref)
+    hvA = hv.hypervolume(fitA, ref)
 
-    hvABC = hv.hypervolume(objABC, ref)
-    hvBC = hv.hypervolume(objBC, ref)
-
-    return hvABC - hvBC
+    return hvA / hvABC
 
 
 def two_sets_coverage(A, B):

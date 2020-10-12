@@ -24,14 +24,12 @@ dates = [datetime(2014, 11, 25), datetime(2015, 5, 4)]
 loadDir = Path('D:/output/current/Gulf')
 rawDir = loadDir / 'raws'
 os.chdir(loadDir)
-planner = main.RoutePlanner(bathymetry=False, ecaFactor=1)
 
 
-def evaluate_new_fronts(fronts):
-    evaluate = planner.evaluator.evaluate
+def evaluate_new_fronts(fronts, evaluate):
     newFronts = []
     for front in fronts:
-        fits = [evaluate(ind, revert=False, includePenalty=False) for ind in front]
+        fits = map(evaluate, front.items)
         for fit, ind in zip(fits, front.items):
             ind.fitness.values = fit
         newFront = tools.ParetoFront()
@@ -40,10 +38,10 @@ def evaluate_new_fronts(fronts):
     return newFronts
 
 
-def create_raw_dicts():
+def get_front_dicts():
     frontsDictFP = loadDir / 'frontsDict'
 
-    if os.path.exists(frontsDictFP):
+    if os.path.exists(frontsDictFP) and False:
         with open(frontsDictFP, 'rb') as fh:
             frontsDict = pickle.load(fh)
             print('loaded', frontsDictFP)
@@ -55,7 +53,9 @@ def create_raw_dicts():
         refFrontsDict[year], frontsDict[year] = {}, {}
 
         # Initialize planner
+        planner = main.RoutePlanner(bathymetry=False, ecaFactor=1)
         planner.evaluator.set_classes(inclCurr=True, inclWeather=False, nDays=7, startDate=date)
+        evaluate = planner.evaluator.evaluate
 
         for speed in ['var', 'min', 'max']:
             speedDir = rawDir / speed
@@ -64,26 +64,28 @@ def create_raw_dicts():
 
             refFrontsDict[year][speed] = {}
             for refFile in refFilesSpeed:
+                print('\r', refFile, end='')
                 split = refFile.split('_')
                 pair = split[-1]
                 with open(speedDir / refFile, 'rb') as fh:
                     refRawList = pickle.load(fh)
-                refFronts = [refRaw['fronts'][0][0] for refRaw in refRawList]
-                refFrontsDict[year][speed][pair] = evaluate_new_fronts(refFronts)
-
+                fronts = [refRaw['fronts'][0][0] for refRaw in refRawList]
+                refFrontsDict[year][speed][pair] = evaluate_new_fronts(fronts, evaluate)
+            print('')
             files = [file for file in os.listdir(speedDir) if 'R' not in file and str(year) in file]
             print('files', year, speed, files)
 
             frontsDict[year][speed] = {}
             for file in files:
+                print('\r', file, end='')
                 split = file.split('_')
                 pair = split[-1]
                 with open(speedDir / file, 'rb') as fh:
                     rawList = pickle.load(fh)
                 fronts = [raw['fronts'][0][0] for raw in rawList]
-                if speed != 'var':
-                    fronts = evaluate_new_fronts(fronts)
+                fronts = evaluate_new_fronts(fronts, evaluate)
                 frontsDict[year][speed][pair] = (fronts, refFrontsDict[year][speed][pair])
+            print('')
 
     with open(frontsDictFP, 'wb') as fh:
         pickle.dump(frontsDict, fh)
@@ -95,6 +97,7 @@ def metrics_plot(frontsDict, plotFront=False, plotRoute=False, savePlot=False):
     years = list(frontsDict.keys())
     for y, year in enumerate(years):
         date = dates[y]
+        planner = main.RoutePlanner(bathymetry=False, ecaFactor=1)
         planner.evaluator.set_classes(inclCurr=True, inclWeather=False, nDays=7, startDate=date)
 
         if plotRoute:
@@ -122,7 +125,7 @@ def metrics_plot(frontsDict, plotFront=False, plotRoute=False, savePlot=False):
                     fronts, refFronts = frontsDict[year][speed][pair]
 
                     for run, (front, refFront) in enumerate(zip(fronts, refFronts)):
-                        biHV = indicators.binary_hypervolume(front, refFront)
+                        biHV = indicators.binary_hypervolume_ratio(front, refFront)
                         coverage = indicators.two_sets_coverage(front, refFront)
                         dfBinaryHV.iloc[run][pair] = biHV
                         dfCoverage.iloc[run][pair] = coverage
@@ -135,8 +138,8 @@ def metrics_plot(frontsDict, plotFront=False, plotRoute=False, savePlot=False):
                             fig = plot_front(front, refFront, cSpeedFrontsList)
                             # plt.show()
                             if savePlot:
-                                fig.savefig('front_plots/{}_frontM_{}'.format(pair, run), dpi=300)
-                                fig.savefig('front_plots/{}_frontM_{}.pdf'.format(pair, run),
+                                fig.savefig('front_plots/{}_frontM_{}_{}'.format(pair, year, run), dpi=300)
+                                fig.savefig('front_plots/{}_frontM_{}_{}.pdf'.format(pair, year, run),
                                             bbox_inches='tight', pad_inches=.01)
                                 # tikzplotlib.save("{}_frontM_{}.tex".format(pair, run))
                             plt.close('all')
@@ -145,8 +148,8 @@ def metrics_plot(frontsDict, plotFront=False, plotRoute=False, savePlot=False):
                             fig = plot_routes(front, refFront, u, v, lons, lats)
                             # plt.show()
                             if savePlot:
-                                fig.savefig('route_plots/{}_routeM_{}'.format(pair, run), dpi=300)
-                                fig.savefig('route_plots/{}_routeM_{}.pdf'.format(pair, run),
+                                fig.savefig('route_plots/{}_routeM_{}_{}'.format(pair, year, run), dpi=300)
+                                fig.savefig('route_plots/{}_routeM_{}_{}.pdf'.format(pair, year, run),
                                             bbox_inches='tight', pad_inches=.02)
 
                 for df in [dfBinaryHV, dfCoverage]:
@@ -163,12 +166,13 @@ def metrics_plot(frontsDict, plotFront=False, plotRoute=False, savePlot=False):
 
 
 def plot_front(front, refFront, cSpeedsFrontsList):
+    planner = main.RoutePlanner(bathymetry=False, ecaFactor=1)
     evaluate2 = planner.evaluator.evaluate2
 
     fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(8, 16))
     ax2.set_xlabel('Travel time [d]', fontproperties=fontProp)
     ax2.set_ylabel(r'Fuel cost [$\times 10^3$  USD]', fontproperties=fontProp)
-    ax1.set_ylabel('Average speed increase [knots]', fontproperties=fontProp)
+    ax1.set_ylabel('Average speed increase [kn]', fontproperties=fontProp)
     # noinspection PyProtectedMember
     cycleFront = ax2._get_lines.prop_cycler
     labels = ['', 'R']
@@ -211,10 +215,15 @@ def plot_front(front, refFront, cSpeedsFrontsList):
 
 def navigation_area(ax, u, v, lons, lats):
     dateIdx = len(u) // 2
-    u, v = u[dateIdx], v[dateIdx]
 
     mrg = 1
     extent = (-74 - mrg, 32 - mrg, -50 + mrg, 46 + mrg)
+
+    lonSlice = slice(find_nearest_idx(lons, extent[0]), find_nearest_idx(lons, extent[2]))
+    latSlice = slice(find_nearest_idx(lats, extent[1]), find_nearest_idx(lats, extent[3]))
+    lons, lats = lons[lonSlice], lats[latSlice]
+    u, v = u[dateIdx, latSlice, lonSlice], v[dateIdx, latSlice, lonSlice]
+
     left, bottom, right, top = extent
     m = Basemap(projection='merc', resolution='i', ax=ax,
                 llcrnrlat=bottom, urcrnrlat=top, llcrnrlon=left, urcrnrlon=right)
@@ -227,6 +236,7 @@ def navigation_area(ax, u, v, lons, lats):
     dLat = extent[3] - extent[1]
     vLon = int(dLon * 4)
     vLat = int(dLat * 4)
+    print(np.max(np.hypot(u, v)))
     uRot, vRot, x, y = m.transform_vector(u, v, lons, lats, vLon, vLat, returnxy=True)
     Q = m.quiver(x, y, uRot, vRot, np.hypot(uRot, vRot),
                  pivot='mid', width=0.002, headlength=4, cmap='Blues', scale=90, ax=ax)
@@ -235,10 +245,15 @@ def navigation_area(ax, u, v, lons, lats):
     return m
 
 
+def find_nearest_idx(array, value):
+    array = np.asarray(array)
+    return (np.abs(array - value)).argmin()
+
+
 def colorbar(m):
-    cmap = cm.get_cmap('jet', 12)
-    cmapList = [cmap(i) for i in range(cmap.N)][1:-1]
-    cmap = cl.LinearSegmentedColormap.from_list('Custom cmap', cmapList, cmap.N - 2)
+    cmap = cm.get_cmap('viridis', 12)
+    # cmapList = [cmap(i) for i in range(cmap.N)][1:-1]
+    # cmap = cl.LinearSegmentedColormap.from_list('Custom cmap', cmapList, cmap.N - 2)
 
     vMin, dV = 8.8, 15.2 - 8.8
 
@@ -248,7 +263,7 @@ def colorbar(m):
     nTicks = 6
     cb.ax.set_yticklabels(['%.1f' % round(vMin + i * dV / (nTicks - 1), 1) for i in range(nTicks)],
                           fontproperties=fontProp)
-    cb.set_label('Nominal vessel speed [knots]', rotation=270, labelpad=15, fontproperties=fontProp)
+    cb.set_label('Nominal vessel speed [kn]', rotation=270, labelpad=15, fontproperties=fontProp)
 
     return cmap
 
@@ -282,5 +297,4 @@ def plot_routes(front, refFront, u, v, lons, lats):
     return fig
 
 
-_frontsDict = create_raw_dicts()
-metrics_plot(_frontsDict, plotFront=True, savePlot=True)
+metrics_plot(get_front_dicts(), plotFront=True, plotRoute=True, savePlot=True)

@@ -19,11 +19,12 @@ from pathlib import Path
 fontPropFP = "C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/tex-gyre-pagella.regular.otf"
 fontProp = fm.FontProperties(fname=fontPropFP)
 
+loadDir = Path('D:/output/current/KC/NSGA2_varSP_BFalse_ECA1.0/2/')
+rawDir = loadDir / 'raw'
+os.chdir(loadDir)
 
-def create_raw_dicts():
-    loadDir = Path('D:/output/current/KC/NSGA2_varSP_BFalse_ECA1.0/2/')
-    rawDir = loadDir / 'raw'
-    os.chdir(loadDir)
+
+def get_fronts_dict():
 
     refFiles = [file for file in os.listdir(rawDir) if 'R' in file]
     print('refFiles', refFiles)
@@ -73,7 +74,7 @@ def compute_metrics(name, frontsDict):
         print('\r', pair, end='')
 
         for front, refFront in zip(fronts, refFronts):
-            biHV = indicators.binary_hypervolume(front, refFront)
+            biHV = indicators.binary_hypervolume_ratio(front, refFront)
             coverage = indicators.two_sets_coverage(front, refFront)
             dfBinaryHV = dfBinaryHV.append({pair: biHV}, ignore_index=True)
             dfCoverage = dfCoverage.append({pair: coverage}, ignore_index=True)
@@ -141,7 +142,7 @@ def plot_fronts(frontsDict, planner, save=False):
             fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(8, 16))
             ax2.set_xlabel('Travel time [h]', fontproperties=fontProp)
             ax2.set_ylabel('Fuel consumption [t]', fontproperties=fontProp)
-            ax1.set_ylabel('Average speed increase [knots]', fontproperties=fontProp)
+            ax1.set_ylabel('Average speed increase [kn]', fontproperties=fontProp)
             # noinspection PyProtectedMember
             cycleFront = ax2._get_lines.prop_cycler
             labels = ['Incl. current', 'Reference']
@@ -194,9 +195,9 @@ def navigation_area(ax, uin, vin, lons, lats):
 
 
 def colorbar(m):
-    cmap = cm.get_cmap('jet', 12)
-    cmapList = [cmap(i) for i in range(cmap.N)][1:-1]
-    cmap = cl.LinearSegmentedColormap.from_list('Custom cmap', cmapList, cmap.N - 2)
+    cmap = cm.get_cmap('viridis', 12)
+    # cmapList = [cmap(i) for i in range(cmap.N)][1:-1]
+    # cmap = cl.LinearSegmentedColormap.from_list('Custom cmap', cmapList, cmap.N - 2)
 
     vMin, dV = 8, 6
 
@@ -206,7 +207,7 @@ def colorbar(m):
     nTicks = 6
     cb.ax.set_yticklabels(['%.1f' % round(vMin + i * dV / (nTicks - 1), 1) for i in range(nTicks)],
                           fontproperties=fontProp)
-    cb.set_label('Nominal speed [knots]', rotation=270, labelpad=15, fontproperties=fontProp)
+    cb.set_label('Nominal speed [kn]', rotation=270, labelpad=15, fontproperties=fontProp)
 
     return cmap
 
@@ -252,7 +253,7 @@ def plot_routes(frontsDict, save=False):
                 fig.savefig('{}_routeM_{}.pdf'.format(pair, run), bbox_inches='tight', pad_inches=.02)
 
 
-_frontsDict, _planner = create_raw_dicts()
+_frontsDict, _planner = get_fronts_dict()
 
 
 # compute_metrics(key, _fronts)

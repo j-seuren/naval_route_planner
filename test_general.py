@@ -98,7 +98,7 @@ def multiple_experiments(inputDict, planner, parameters, genDir, seed=None):
 
     origins, destinations = [], []
     for d in range(len(depDates)):
-        if parameters['exp'] == 'weather':
+        if 'weather' in parameters['exp']:
             origins.append([inputDict['input']['from'][d]])
             destinations.append([inputDict['input']['to'][d]])
         else:

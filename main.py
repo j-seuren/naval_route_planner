@@ -42,7 +42,7 @@ def crowding_distance(pop):
 
 class RoutePlanner:
     def __init__(self,
-                 constantSpeedIdx=None,
+                 constantSpeedIdx=0,
                  vesselName='Fairmaster_2',
                  shipLoading='normal',
                  ecaFactor=1.5593,
@@ -59,18 +59,16 @@ class RoutePlanner:
         np.random.seed(seed)
         random.seed(seed)
 
-        if criteria is None and constantSpeedIdx is None:
+        if criteria is None:
             criteria = _criteria
         else:
-            if constantSpeedIdx is None and (criteria['minimalTime'] and criteria['minimalCost']):
+            if criteria['minimalTime'] and criteria['minimalCost']:
                 weights = (-1, -1)
             else:
                 weights = (-1,)
 
             creator.create("FitnessMin", base.Fitness, weights=weights)
             creator.create("Individual", list, fitness=creator.FitnessMin)
-
-        constantSpeedIdx = 0 if constantSpeedIdx is None else constantSpeedIdx
 
         # Set parameters
         defaultParameters = {
@@ -97,7 +95,7 @@ class RoutePlanner:
                              'maxEvaluations': None,
                              'gen': 400,           # Minimal number of generations
                              'maxGDs': 40,         # Max length of generational distance list
-                             'minVar': 5e-6,       # Minimal variance of generational distance list
+                             'minVar': 1e-6,       # Minimal variance of generational distance list
 
                              # Mutation parameters
                              'mutationOperators': ['speed', 'insert', 'move', 'delete'],  # Operators to be included
@@ -593,7 +591,7 @@ class RoutePlanner:
             return processedResults, result
         elif result == 'equal_start_end':
             processedResults = {'routeResponse': [],
-                                'units': {'travelTime': 'days', 'fuelCost': 'euros', 'distance': 'nautical miles'}}
+                                'units': {'travelTime': 'days', 'fuelCost': 'USD', 'distance': 'nautical miles'}}
 
             for obj in [obj for obj, included in self.criteria.items() if included]:
                 processedResults['routeResponse'].append({'optimizationCriterion': obj,

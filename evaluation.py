@@ -105,17 +105,17 @@ class Evaluator:
     def evaluate2(self, ind):
         hours = cost = dist = ecaDist = speedDist = 0.
 
-        for e in range(len(ind) - 1):
+        for wp1, wp2 in zip(ind[:-1], ind[1:]):
             # Leg endpoints and boat speed
-            p1, speedKnots = ind[e]
-            p2 = ind[e+1][0]
+            p1, speedKnots = wp1
+            p2 = wp2[0]
 
             # Leg travel time and fuel cost
             legHours, nauticalMiles = self.leg_hours(p1, p2, hours, speedKnots)
             legCost = self.vessel.fuelCostPerDay[speedKnots] * legHours / 24.  # x1000 EUR or USD
 
             # If leg intersects ECA increase fuel consumption by ecaFactor
-            if geo_x_geos(self.ecaRtree, p1, p2):
+            if self.ecaFactor != 1.0 and geo_x_geos(self.ecaRtree, p1, p2):
                 legCost *= self.ecaFactor
                 ecaDist += nauticalMiles
 

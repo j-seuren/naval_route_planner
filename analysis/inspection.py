@@ -24,14 +24,14 @@ def plot_stats(path_logs, name):
 
             fig, ax1 = plt.subplots()
             fig.suptitle(name)
-            line1 = ax1.plot(_gen, fit_mins, "b-", label="Minimum Fitness")
+            line1 = ax1.save_metrics(_gen, fit_mins, "b-", label="Minimum Fitness")
             ax1.set_xlabel("Generation")
             ax1.set_ylabel("Fitness", color="b")
             for tl in ax1.get_yticklabels():
                 tl.set_color("b")
 
             ax2 = ax1.twinx()
-            line2 = ax2.plot(_gen, size_avgs, "r-", label="Average Size")
+            line2 = ax2.save_metrics(_gen, size_avgs, "r-", label="Average Size")
             ax2.set_ylabel("Size", color="r")
             for tl in ax2.get_yticklabels():
                 tl.set_color("r")
@@ -165,7 +165,7 @@ class RoutePlotter:
                      '%.1f' % round((2 / 5) * (max_s - min_s) + min_s, 1),
                      '%.1f' % round((3 / 5) * (max_s - min_s) + min_s, 1),
                      '%.1f' % round((4 / 5) * (max_s - min_s) + min_s, 1), '%.1f' % round(max_s, 1)], fontsize=8)
-                col_bar.set_label('Calm water speed [knots]', rotation=270, labelpad=15, fontsize=10)
+                col_bar.set_label('Calm water speed [kn]', rotation=270, labelpad=15, fontsize=10)
 
 
 def plot_fronts(front):
@@ -177,8 +177,8 @@ def plot_fronts(front):
     ax.set_title('P{} - SP{}'.format(_p, sp_key))
     ax.axis("tight")
     ax.grid()
-    ax.set_xlabel('Travel time [days]')
-    ax.set_ylabel('Fuel costs [x1000 USD per tonne]')
+    ax.set_xlabel('Travel time [d]')
+    ax.set_ylabel(r'Fuel cost [$\times 10^3$ USD]')
 
 
 def plot_interactive_route(path, path_key, obj_key):

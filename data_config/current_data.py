@@ -250,7 +250,7 @@ if __name__ == '__main__':
         uRot, vRot, x, y = m.transform_vector(uin, vin, lons, lats, vLon, vLat, returnxy=True)
         C = m.contourf(x, y, np.hypot(uRot, vRot), cmap='Blues')
         cb = m.colorbar(C, size=0.2, pad=0.05, location='right')
-        cb.set_label('Current velocity [knots]', rotation=270, labelpad=15)
+        cb.set_label('Current velocity [kn]', rotation=270, labelpad=15)
         Q = m.quiver(x, y, uRot, vRot, np.hypot(uRot, vRot), cmap='Greys', pivot='mid', width=0.002, headlength=4,
                      scale=90)
         # plt.quiverkey(Q, 0.45, -0.1, 2, r'$2$ knots', labelpos='E')

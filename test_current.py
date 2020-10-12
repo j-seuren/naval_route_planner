@@ -42,7 +42,7 @@ inputGulf0 = {'instance': 'Gulf0', 'input': {'from': [('3', (-73.2, 36.2))],
                                              'to': [('1', (-51., 39.6))],
                                              'departureDates': [datetime(2014, 11, 25)]}}
 
-inputDict = inputKC
+inputDict = inputGulf
 TEST_SPEED = False if inputDict['instance'] == 'KC' else TEST_SPEED
 criteria = {'minimalTime': True, 'minimalCost': True}
 
