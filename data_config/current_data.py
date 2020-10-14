@@ -229,7 +229,6 @@ def ms_to_knots(ds):
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
 
-    from datetime import datetime
     from mpl_toolkits.basemap import Basemap
     from pathlib import Path
     DIR = Path('D:/')
@@ -258,13 +257,40 @@ if __name__ == '__main__':
         # plt.savefig(DIR / 'output/figures' / 'KC_data.pdf', bbox_inches='tight', pad_inches=0.3)
         plt.show()
 
-    data, lons0, lats0 = CurrentDataRetriever(datetime(2014, 10, 28), nDays=6, DIR=DIR).get_kc_data(itp=False)
-    _uin, _vin = data[0], data[1]
-    lonSlice, latSlice = slice(12, 121), slice(12, 71)
-    # lons = np.arange(122, 140, step)
-    # lats = np.arange(25, 35, step)
+    def plot_kc_current():
+        data, lons0, lats0 = CurrentDataRetriever(datetime.datetime(2014, 10, 28),
+                                                  nDays=6, DIR=DIR).get_kc_data(itp=False)
+        _uin, _vin = data[0], data[1]
+        lonSlice, latSlice = slice(12, 121), slice(12, 71)
+        # lons = np.arange(122, 140, step)
+        # lats = np.arange(25, 35, step)
 
-    _extent = (120, 25, 142, 37)
+        _extent = (120, 25, 142, 37)
 
-    currents(_uin[latSlice, lonSlice], _vin[latSlice, lonSlice], lons0[lonSlice], lats0[latSlice], _extent)
-    currents(_uin, _vin, lons0, lats0, _extent)
+        currents(_uin[latSlice, lonSlice], _vin[latSlice, lonSlice], lons0[lonSlice], lats0[latSlice], _extent)
+        currents(_uin, _vin, lons0, lats0, _extent)
+
+    def plot_gulf_current():
+        dates = [datetime.datetime(2014, 11, 25), datetime.datetime(2015, 5, 4)]
+        mrg = 1
+        extent = (-74 - mrg, 32 - mrg, -50 + mrg, 46 + mrg)
+
+        lons = np.linspace(-179.875, 179.875, 1440)
+        lats = np.linspace(-89.875, 89.875, 720)
+        lonSlice = slice(find_nearest_idx(lons, extent[0]), find_nearest_idx(lons, extent[2]))
+        latSlice = slice(find_nearest_idx(lats, extent[1]), find_nearest_idx(lats, extent[3]))
+        lons, lats = lons[lonSlice], lats[latSlice]
+
+        for date in dates:
+            data = CurrentDataRetriever(date, nDays=6, DIR=DIR).get_data()
+            u, v = data[0], data[1]
+            dateIdx = len(u) // 2
+            u, v = u[dateIdx, latSlice, lonSlice], v[dateIdx, latSlice, lonSlice]
+            currents(u, v, lons, lats, extent)
+
+
+    def find_nearest_idx(array, value):
+        array = np.asarray(array)
+        return (np.abs(array - value)).argmin()
+
+    plot_gulf_current()

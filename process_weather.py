@@ -13,20 +13,23 @@ from deap import tools
 from matplotlib import font_manager as fm
 from matplotlib import cm, rcParams
 from mpl_toolkits.basemap import Basemap
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from pathlib import Path
 
 rcParams['text.usetex'] = True
 fontPropFP = "C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/tex-gyre-pagella.regular.otf"
-fontProp = fm.FontProperties(fname=fontPropFP)
+fontProp = fm.FontProperties(fname=fontPropFP, size=9)
 
 
-locationsDates = {'NyP': datetime(2017, 9, 4),
-                  'NoNy': datetime(2011, 1, 25, 15),
-                  'PH': datetime(2013, 9, 24, 12),
-                  'KS': datetime(2011, 5, 28),
-                  'VMa': datetime(2015, 6, 21)}
+locationsDates = {
+    # 'NyP': datetime(2017, 9, 4),
+    'NoNy': datetime(2011, 1, 25, 15),
+    'PH': datetime(2013, 9, 24, 12),
+    'KS': datetime(2011, 5, 28),
+    # 'VMa': datetime(2015, 6, 21)
+}
 
-loadDir = Path('D:/output/weather')
+loadDir = Path('D:/output/weather/WTH')
 rawDir = loadDir / 'raws'
 os.chdir(loadDir)
 
@@ -89,13 +92,12 @@ def get_fronts_dict():
 def compute_metrics(frontsDict):
     writer = pd.ExcelWriter('output_metrics.xlsx')
 
-    pairs = list(locationsDates.keys)
+    pairs = list(locationsDates.keys())
     dfBinaryHV = pd.DataFrame(columns=pairs)
     dfCoverage = pd.DataFrame(columns=pairs)
 
     for pair in locationsDates:
-        (fronts, refFronts) = frontsDict['var'][pair]
-        print('\r', pair, end='')
+        (fronts, refFronts) = frontsDict[pair]['var']
 
         for front, refFront in zip(fronts, refFronts):
             biHV = indicators.binary_hypervolume_ratio(front, refFront)
@@ -127,7 +129,6 @@ def save_metrics(frontsDict):
         planner = main.RoutePlanner(bathymetry=False, ecaFactor=1)
         planner.evaluator.set_classes(inclCurr=False, inclWeather=True, nDays=30, startDate=date)
         evaluate2 = planner.evaluator.evaluate2
-        print('\r', pair, end='')
 
         fronts, refFronts = frontsDict[pair][speed]
 
@@ -166,7 +167,7 @@ def save_metrics(frontsDict):
     writer.close()
 
 
-def plot_fronts(frontsDict, save=False):
+def plot_all_fronts(frontsDict, save=False):
     speed = 'var'
     cSpeeds = ['max', 'min']
 
@@ -174,7 +175,6 @@ def plot_fronts(frontsDict, save=False):
         planner = main.RoutePlanner(bathymetry=False, ecaFactor=1)
         planner.evaluator.set_classes(inclCurr=False, inclWeather=True, nDays=30, startDate=date)
         evaluate2 = planner.evaluator.evaluate2
-        print('\r', pair, end='')
 
         fronts, refFronts = frontsDict[pair][speed]
 
@@ -197,32 +197,33 @@ def plot_fronts(frontsDict, save=False):
 def plot_all_routes(frontsDict, save=False):
     speed = 'var'
     for pair, date in locationsDates.items():
-        print('\r', pair, end='')
         fronts, refFronts = frontsDict[pair][speed]
 
         # Compute Pareto metrics for variable speed only
         for run, (front, refFront) in enumerate(zip(fronts, refFronts)):
             lon0, lon1 = front.items[0][0][0][0], front.items[0][-1][0][0]
-
             avgDays = np.average([fit.values[0] for fit in front.keys])
-            fig = plot_front_routes(front, refFront, date, avgDays, lon0, lon1)
-            plt.show()
-            if save:
-                fn = 'route_plots/{}_routeM_{}'.format(pair, run)
-                print('saved route plot', fn)
-                fig.savefig(fn, dpi=300)
-                fig.savefig(fn + '.pdf', bbox_inches='tight', pad_inches=.02)
-            plt.clf()
+            minDays = np.min([fit.values[0] for fit in front.keys])
+            maxDays = np.max([fit.values[0] for fit in front.keys])
+            for daysKey, travelDays in {'avgDays': avgDays, 'minDays': minDays, 'maxDays': maxDays}.items():
+                fig = plot_front_routes(front, refFront, date, travelDays, lon0, lon1)
+                # plt.show()
+                if save:
+                    fn = 'route_plots/{}_routeM_{}_{}'.format(pair, run, daysKey)
+                    print('saved route plot', fn)
+                    fig.savefig(fn, dpi=300)
+                    fig.savefig(fn + '.pdf', bbox_inches='tight', pad_inches=.02)
+                plt.clf()
 
 
 def plot_front(front, refFront, evaluate2, cSpeedFrontsList):
     fig, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(8, 16))
     ax2.set_xlabel('Travel time [d]', fontproperties=fontProp)
-    ax2.set_ylabel(r'Fuel cost [$\times 10^3$  USD]', fontproperties=fontProp)
+    ax2.set_ylabel(r'Fuel cost [USD, $\times 1000$]', fontproperties=fontProp)
     ax1.set_ylabel('Average speed loss [kn]', fontproperties=fontProp)
     # noinspection PyProtectedMember
     cycleFront = ax2._get_lines.prop_cycler
-    labels = ['Incl. wind', 'Reference']
+    labels = ['', 'R']
 
     # Do for front and ref front
     for idx, f in enumerate([front, refFront]):
@@ -234,7 +235,7 @@ def plot_front(front, refFront, evaluate2, cSpeedFrontsList):
 
         # Plot front
         marker, s, zorder = 'o', 1, 2
-        label = labels[idx]
+        label = 'V' + labels[idx]
         ax2.scatter(days, cost, color=color, marker=marker, s=s, label=label, zorder=zorder)
         ax1.scatter(days, speedLoss, color=color, marker=marker, s=s, zorder=zorder)
 
@@ -260,36 +261,26 @@ def plot_front(front, refFront, evaluate2, cSpeedFrontsList):
     return fig
 
 
-def navigation_area(ax, date, travelDays, lon0, lon1, extent):
+def navigation_area(fig, ax, date, travelDays, lon0, lon1, extent):
     left, bottom, right, top = extent
-    m = Basemap(projection='merc', resolution='i', ax=ax,
-                llcrnrlat=bottom, urcrnrlat=top, llcrnrlon=left, urcrnrlon=right)
+    if date.year == 2011 and date.month == 5:
+        dLon2 = (180 - lon0 + lon1 + 180) / 2
+        lon_0 = lon0 + dLon2 if lon0 + dLon2 < 180 else lon0 + dLon2 - 360
+        width = 13000000
+        height = 5500000
+        m = Basemap(projection='stere', resolution='i', ax=ax, lon_0=lon_0 - 4, lat_0=46, width=width, height=height)
+    else:
+        m = Basemap(projection='merc', resolution='i', ax=ax,
+                    llcrnrlat=bottom, urcrnrlat=top, llcrnrlon=left, urcrnrlon=right)
     m.drawmapboundary()
     m.fillcontinents(zorder=2, lake_color='lightgray')
     m.drawcoastlines()
 
     # Weather
-    plot_weather(m, date, travelDays, lon0, lon1)
+    cmap = plot_weather(fig, ax, m, date, travelDays, lon0, lon1)
 
-    return m
+    return m, cmap
 
-
-def colorbar(m):
-    cmap = cm.get_cmap('viridis', 12)
-    # cmapList = [cmap(i) for i in range(cmap.N)][1:-1]
-    # cmap = cl.LinearSegmentedColormap.from_list('Custom cmap', cmapList, cmap.N - 2)
-
-    vMin, dV = 8.8, 15.2 - 8.8
-
-    sm = plt.cm.ScalarMappable(cmap=cmap)
-    cb = m.colorbar(sm, norm=plt.Normalize(vmin=vMin, vmax=vMin + dV),
-                    size=0.2, pad=0.05, location='right')
-    nTicks = 6
-    cb.ax.set_yticklabels(['%.1f' % round(vMin + i * dV / (nTicks - 1), 1) for i in range(nTicks)],
-                          fontproperties=fontProp)
-    cb.set_label('Nominal vessel speed [kn]', rotation=270, labelpad=15, fontproperties=fontProp)
-
-    return cmap
 
 
 def plot_front_routes(front, refFront, date, travelDays, lon0, lon1):
@@ -303,14 +294,14 @@ def plot_front_routes(front, refFront, date, travelDays, lon0, lon1):
     extent = (minx - margin, miny - margin, maxx + margin, maxy + margin)
 
     fig, ax = plt.subplots()
-    m = navigation_area(ax, date, travelDays, lon0, lon1, extent)
+    m, cmap0 = navigation_area(fig, ax, date, travelDays, lon0, lon1, extent)
     labels = [None, 'Reference']
     vMin, dV = 8.8, 15.2 - 8.8
 
     # Do for front and ref front
     for idx, f in enumerate([front, refFront]):
         label = labels[idx]
-        cmap = 'k' if idx == 1 else colorbar(m)
+        cmap = 'k' if idx == 1 else cmap0
         for j, ind in enumerate(f.items):
             if idx == 1 and j > 0:
                 continue
@@ -330,7 +321,7 @@ def plot_front_routes(front, refFront, date, travelDays, lon0, lon1):
     return fig
 
 
-def plot_weather(m, dateTime, travelDays, lon0, lon1):
+def plot_weather(fig, ax, m, dateTime, travelDays, lonStart, lonDest):
     hourPeriod = 24 // 6
     maxTravelDays = int(np.ceil(travelDays))
     print('weather travel days', travelDays)
@@ -341,39 +332,75 @@ def plot_weather(m, dateTime, travelDays, lon0, lon1):
 
     # Create lon indices
     res = 0.5
-    startEndIndex = [int(round((lon + 180) / res)) for lon in [lon0, lon1]]
-    (lonS, lonT) = sorted([0 if idx == 720 else idx for idx in startEndIndex])
-    lonIndices = np.linspace(lonS, lonT, maxTravelDays * 4 + 1).astype(int)
-    print('weather lon indices', len(lonIndices), ':', lonIndices)
-
-    lonPairs = zip(lonIndices[:-1], lonIndices[1:])
+    startEndIndex = [int(round((lon + 180) / res)) for lon in [lonStart, lonDest]]
+    lon0, lon1 = [0 if idx == 720 else idx for idx in startEndIndex]
+    if dateTime.year == 2011 and dateTime.month == 5:
+        nSlices = maxTravelDays * hourPeriod + 1
+        slicesLeft = int(round(nSlices * (180 - lonStart) / ((180 - lonStart) + abs(lonDest + 180))))
+        slicesRight = nSlices - slicesLeft
+        lonIndicesLeft = np.round(np.linspace(lon0, 719, slicesLeft)).astype(int)
+        lonIndicesRight = np.round(np.linspace(0, lon1, slicesRight)).astype(int)
+        lonPairs = list(zip(lonIndicesLeft[:-1], lonIndicesLeft[1:])) + list(zip(lonIndicesRight[:-1], lonIndicesRight[1:]))
+        print(lonPairs)
+    else:
+        lonIndices = np.linspace(lon0, lon1, maxTravelDays * hourPeriod + 1).astype(int)
+        lonPairs = list(zip(lonIndices[:-1], lonIndices[1:]))
 
     # Create date indices
-    dateIndices = np.linspace(0, travelDays * hourPeriod, maxTravelDays * 4).astype(int)
-    print('weather date indices', len(dateIndices), ':', dateIndices)
+    dateIndices = np.round(np.linspace(0, travelDays * hourPeriod - 1, maxTravelDays * hourPeriod)).astype(int)
 
     # Initialize variables for contour
-    lons, lats = np.linspace(-180, 179.5, 720), np.linspace(-90, 89.5, 360)
+    lons, lats = np.linspace(-180, 179.5, 720), np.linspace(-90, 90, 361)
     x, y = m(*np.meshgrid(lons, lats))
 
     for i, (dateInd, lonPair) in enumerate(zip(dateIndices, lonPairs)):
-        lon0, lon1 = min(lonPair), max(lonPair) + 1
-        if i == 0:
-            lon0 = 0
-        elif i == len(dateIndices) - 1:
-            lon1 = -1
-        BN = ds[0, dateInd, :-1, lon0:lon1]
-        xSlice, ySlice = x[:, lon0:lon1], y[:, lon0:lon1]
-        m.contourf(xSlice, ySlice, BN, vmin=0, vmax=12, cmap=cm.get_cmap('jet', 12))
+        lonMin, lonMax = min(lonPair), max(lonPair) + 1
+        if lonPairs[0][0] < lonPairs[1][1]:
+            if i == 0:
+                lonMin = 0
+            elif i == len(dateIndices) - 1:
+                lonMax = -1
+        elif lonPair[0] > lonPair[1]:
+            if i == len(dateIndices) - 1:
+                lonMin = 0
+            elif i == 0:
+                lonMax = -1
+        lonSlice = slice(lonMin, lonMax)
+        BN = ds[0, dateInd, :, lonSlice]
+        xSlice, ySlice = x[:, lonSlice], y[:, lonSlice]
+        try:
+            m.contourf(xSlice, ySlice, BN, vmin=0, vmax=12, cmap=cm.get_cmap('rainbow', 12))
+        except ValueError:
+            print('something wrong')
 
     vmin, vmax = 0, 12
     nColors = 12
-    sm = plt.cm.ScalarMappable(norm=plt.Normalize(vmin=vmin, vmax=vmax), cmap=cm.get_cmap('jet', nColors))
-    cb = m.colorbar(sm, norm=plt.Normalize(vmin=vmin, vmax=vmax), size=0.2, pad=0.2, location='bottom')
-    cb.set_label('Wind [BFT]', fontproperties=fontProp)
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    sm = plt.cm.ScalarMappable(norm=plt.Normalize(vmin=vmin, vmax=vmax), cmap=cm.get_cmap('rainbow', nColors))
+    cb = fig.colorbar(sm, norm=plt.Normalize(vmin=vmin, vmax=vmax), cax=cax)
+    cb.set_label('Wind [BFT]', rotation=270, labelpad=15, fontproperties=fontProp)
+
+    # Speed colorbar
+    cmap = cm.get_cmap('jet', 12)
+    cmapList = [cmap(i) for i in range(cmap.N)][1:-1]
+    cmap = cl.LinearSegmentedColormap.from_list('Custom cmap', cmapList, cmap.N - 2)
+
+    vMin, dV = 8.8, 15.2 - 8.8
+
+    smS = plt.cm.ScalarMappable(cmap=cmap)
+    cax = divider.append_axes("right", size="5%", pad=0.75)
+    cbS = fig.colorbar(smS, norm=plt.Normalize(vmin=vMin, vmax=vMin + dV), cax=cax)
+    nTicks = 6
+    cbS.ax.set_yticklabels(['%.1f' % round(vMin + i * dV / (nTicks - 1), 1) for i in range(nTicks)],
+                          fontproperties=fontProp)
+    cbS.set_label('Nominal vessel speed [kn]', rotation=270, labelpad=15, fontproperties=fontProp)
+
+    return cmap
 
 
 _frontsDict = get_fronts_dict()
 
-# compute_metrics(key, _fronts)
-plot_all_routes(_frontsDict)
+# compute_metrics(_frontsDict)
+plot_all_routes(_frontsDict, save=True)
+plot_all_fronts(_frontsDict, save=True)

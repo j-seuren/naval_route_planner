@@ -20,7 +20,7 @@ from matplotlib import cm, patches
 from matplotlib.collections import PatchCollection
 from scipy import spatial
 fontPropFP = "C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/tex-gyre-pagella.regular.otf"
-fontProp = fm.FontProperties(fname=fontPropFP)
+fontProp = fm.FontProperties(fname=fontPropFP, size=9)
 
 DIR = Path('D:/')
 
@@ -70,7 +70,7 @@ class MergedPlots:
     def merged_pareto_kc(self, hull=False, save=False):
         fig, ax1 = plt.subplots()
         ax1.set_xlabel('Travel time [d]', fontproperties=fontProp)
-        ax1.set_ylabel(r'Fuel cost [$\times 10^3$ USD]', fontproperties=fontProp)
+        ax1.set_ylabel(r'Fuel cost [USD, $\times 1000$]', fontproperties=fontProp)
         cycleFront = ax1._get_lines.prop_cycler
 
         labels = ['Incl. current', 'Reference (R)']
@@ -109,7 +109,7 @@ class MergedPlots:
     def merged_pareto(self, save=False):
         fig, ax1 = plt.subplots()
         ax1.set_xlabel('Travel time [d]', fontproperties=fontProp)
-        ax1.set_ylabel(r'Fuel cost [$\times 10^3$ USD]', fontproperties=fontProp)
+        ax1.set_ylabel(r'Fuel cost [USD, $\times 1000$]', fontproperties=fontProp)
         cycleFront = ax1._get_lines.prop_cycler
 
         if self.experiment == 'eca':
@@ -177,9 +177,9 @@ class MergedPlots:
             tikzplotlib.save("{}_frontM_{}.tex".format(self.fn, self.idx))
 
     def colorbar(self, m):
-        cmap = cm.get_cmap('viridis', 12)
-        # cmapList = [cmap(i) for i in range(cmap.N)][1:-1]
-        # cmap = cl.LinearSegmentedColormap.from_list('Custom cmap', cmapList, cmap.N - 2)
+        cmap = cm.get_cmap('jet', 12)
+        cmapList = [cmap(i) for i in range(cmap.N)][1:-1]
+        cmap = cl.LinearSegmentedColormap.from_list('Custom cmap', cmapList, cmap.N - 2)
 
         sm = plt.cm.ScalarMappable(cmap=cmap)
         cb = m.colorbar(sm, norm=plt.Normalize(vmin=self.vMin, vmax=self.vMin + self.dV),

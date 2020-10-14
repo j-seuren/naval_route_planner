@@ -17,20 +17,27 @@ from mpl_toolkits.basemap import Basemap
 from pathlib import Path
 
 fontPropFP = "C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/tex-gyre-pagella.regular.otf"
-fontProp = fm.FontProperties(fname=fontPropFP)
+fontProp = fm.FontProperties(fname=fontPropFP, size=9)
 
-loadDir = Path('D:/output/current/KC/NSGA2_varSP_BFalse_ECA1.0/2/')
+loadDir = Path('D:/output/current_13_10/KC/NSGA2_varSP_BFalse_ECA1.0/5/')
 rawDir = loadDir / 'raw'
 os.chdir(loadDir)
 
 
 def get_fronts_dict():
-
-    refFiles = [file for file in os.listdir(rawDir) if 'R' in file]
-    print('refFiles', refFiles)
+    frontsDictFP = loadDir / 'frontsDict'
     planner = main.RoutePlanner(bathymetry=False, fuelPrice=1., ecaFactor=1, vesselName='Tanaka')
     planner.evaluator.set_classes(inclCurr=True, inclWeather=False, nDays=7, startDate=datetime(2014, 11, 15))
     evaluate = planner.evaluator.evaluate
+
+    if os.path.exists(frontsDictFP):
+        with open(frontsDictFP, 'rb') as fh:
+            frontsDict = pickle.load(fh)
+            print('loaded', frontsDictFP)
+        return frontsDict, planner
+
+    refFiles = [file for file in os.listdir(rawDir) if 'R' in file]
+    print('refFiles', refFiles)
 
     refFrontsDict = {}
     for refFile in refFiles:
@@ -61,11 +68,14 @@ def get_fronts_dict():
         fronts = [raw['fronts'][0][0] for raw in rawList]
         frontsDict[pair] = (fronts, refFrontsDict[pair])
 
+    with open(frontsDictFP, 'wb') as fh:
+        pickle.dump(frontsDict, fh)
+
     return frontsDict, planner
 
 
-def compute_metrics(name, frontsDict):
-    writer = pd.ExcelWriter('output_{}_metrics.xlsx'.format(name))
+def compute_metrics(frontsDict):
+    writer = pd.ExcelWriter('output_metrics.xlsx')
     pairs = list(frontsDict.keys())
     dfBinaryHV = pd.DataFrame(columns=pairs)
     dfCoverage = pd.DataFrame(columns=pairs)
@@ -86,15 +96,16 @@ def compute_metrics(name, frontsDict):
         df.loc['min'] = minn
         df.loc['max'] = maxx
 
-    dfCoverage.to_excel(writer, sheet_name='{}_C'.format(name))
-    dfBinaryHV.to_excel(writer, sheet_name='{}_B'.format(name))
+    dfCoverage.to_excel(writer, sheet_name='C')
+    dfBinaryHV.to_excel(writer, sheet_name='B')
     writer.close()
 
 
 def save_fronts(frontsDict, planner):
-    writer = pd.ExcelWriter('output_fronts.xlsx')
+
     evaluate2 = planner.evaluator.evaluate2
     for pair, frontTup in frontsDict.items():
+        writer = pd.ExcelWriter('output_{}_fronts.xlsx'.format(pair))
         print('\r', pair, end='')
         fronts, refFronts = frontTup
         dfPairList, refDFPairList = [], []
@@ -180,6 +191,8 @@ def navigation_area(ax, uin, vin, lons, lats):
     m.drawmapboundary()
     m.fillcontinents(zorder=2)
     m.drawcoastlines()
+    m.drawparallels(np.arange(24., 38, 2.), labels=[1, 0, 0, 0], fontsize=8)
+    m.drawmeridians(np.arange(120., 144, 2.), labels=[0, 0, 0, 1], fontsize=8)
 
     # Currents
     dLon = extent[2] - extent[0]
@@ -195,9 +208,9 @@ def navigation_area(ax, uin, vin, lons, lats):
 
 
 def colorbar(m):
-    cmap = cm.get_cmap('viridis', 12)
-    # cmapList = [cmap(i) for i in range(cmap.N)][1:-1]
-    # cmap = cl.LinearSegmentedColormap.from_list('Custom cmap', cmapList, cmap.N - 2)
+    cmap = cm.get_cmap('jet', 12)
+    cmapList = [cmap(i) for i in range(cmap.N)][1:-1]
+    cmap = cl.LinearSegmentedColormap.from_list('Custom cmap', cmapList, cmap.N - 2)
 
     vMin, dV = 8, 6
 
@@ -256,8 +269,8 @@ def plot_routes(frontsDict, save=False):
 _frontsDict, _planner = get_fronts_dict()
 
 
-# compute_metrics(key, _fronts)
-# save_fronts(*create_raw_dicts())
-plot_fronts(_frontsDict, _planner, save=True)
-# plot_routes(_frontsDict, save=True)
+# compute_metrics(_frontsDict)
+# save_fronts(_frontsDict, _planner)
+# plot_fronts(_frontsDict, _planner, save=True)
+plot_routes(_frontsDict, save=True)
 plt.show()

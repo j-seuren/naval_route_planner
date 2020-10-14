@@ -42,7 +42,7 @@ def crowding_distance(pop):
 
 class RoutePlanner:
     def __init__(self,
-                 constantSpeedIdx=0,
+                 constantSpeedIdx=None,
                  vesselName='Fairmaster_2',
                  shipLoading='normal',
                  ecaFactor=1.5593,
@@ -59,10 +59,10 @@ class RoutePlanner:
         np.random.seed(seed)
         random.seed(seed)
 
-        if criteria is None:
+        if criteria is None and constantSpeedIdx is None:
             criteria = _criteria
         else:
-            if criteria['minimalTime'] and criteria['minimalCost']:
+            if constantSpeedIdx is None and (criteria['minimalTime'] and criteria['minimalCost']):
                 weights = (-1, -1)
             else:
                 weights = (-1,)
@@ -591,7 +591,7 @@ class RoutePlanner:
             return processedResults, result
         elif result == 'equal_start_end':
             processedResults = {'routeResponse': [],
-                                'units': {'travelTime': 'days', 'fuelCost': 'USD', 'distance': 'nautical miles'}}
+                                'units': {'travelTime': 'days', 'fuelCost': 'USD, x1000', 'distance': 'nautical miles'}}
 
             for obj in [obj for obj, included in self.criteria.items() if included]:
                 processedResults['routeResponse'].append({'optimizationCriterion': obj,
@@ -619,7 +619,7 @@ class RoutePlanner:
         processedResults = {'routeResponse': [],
                             'initialRoutes': result['initialRoutes'],
                             'units': {'travelTime': 'days',
-                                      'fuelCost': 'euros',
+                                      'fuelCost': 'USD, x1000',
                                       'distance': 'nautical miles'}}
         if ID:
             processedResults['id'] = ID

@@ -42,6 +42,55 @@ def triple_hypervolume_ratio(A, B, C):
     return hvA / hvABC
 
 
+def binary_ternary_hv_ratio(A, B, C):
+    AB = ParetoFront()
+    AB.update(A.items)
+    AB.update(B.items)
+    fitAB = np.array([fit.values for fit in AB.keys])
+
+    ABC = ParetoFront()
+    ABC.update(AB.items)
+    ABC.update(C.items)
+    fitABC = np.array([fit.values for fit in ABC.keys])
+
+    AC = ParetoFront()
+    AC.update(A.items)
+    AC.update(C.items)
+    fitAC = np.array([fit.values for fit in AC.keys])
+
+    BC = ParetoFront()
+    BC.update(B.items)
+    BC.update(C.items)
+    fitBC = np.array([fit.values for fit in BC.keys])
+
+    fitA = np.array([fit.values for fit in A.keys])
+    fitB = np.array([fit.values for fit in B.keys])
+    fitC = np.array([fit.values for fit in C.keys])
+
+    refABC = np.max(fitABC, axis=0) + 1
+    refAB = np.max(fitAB, axis=0) + 1
+    refAC = np.max(fitAC, axis=0) + 1
+    refBC = np.max(fitBC, axis=0) + 1
+
+    hvABC = hv.hypervolume(fitABC, refABC)
+    hvAB = hv.hypervolume(fitAB, refAB)
+    hvAC = hv.hypervolume(fitAC, refAC)
+    hvBC = hv.hypervolume(fitBC, refBC)
+
+    bHV_AB = hv.hypervolume(fitA, refAB) / hvAB
+    bHV_AC = hv.hypervolume(fitA, refAC) / hvAC
+    bHV_BA = hv.hypervolume(fitB, refAB) / hvAB
+    bHV_BC = hv.hypervolume(fitB, refBC) / hvBC
+    bHV_CA = hv.hypervolume(fitC, refAC) / hvAC
+    bHV_CB = hv.hypervolume(fitC, refBC) / hvBC
+
+    tHV_A = hv.hypervolume(fitA, refABC) / hvABC
+    tHV_B = hv.hypervolume(fitB, refABC) / hvABC
+    tHV_C = hv.hypervolume(fitC, refABC) / hvABC
+
+    return [tHV_A, tHV_B, tHV_C], [bHV_AB, bHV_AC, bHV_BA, bHV_BC, bHV_CA, bHV_CB]
+
+
 def two_sets_coverage(A, B):
     """
     Input DEAP ParetoFronts

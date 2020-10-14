@@ -178,7 +178,7 @@ def plot_fronts(front):
     ax.axis("tight")
     ax.grid()
     ax.set_xlabel('Travel time [d]')
-    ax.set_ylabel(r'Fuel cost [$\times 10^3$ USD]')
+    ax.set_ylabel(r'Fuel cost [USD, $\times 1000$]')
 
 
 def plot_interactive_route(path, path_key, obj_key):

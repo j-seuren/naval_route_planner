@@ -106,8 +106,8 @@ def multiple_experiments(inputDict, planner, parameters, genDir, seed=None):
             destinations.append(inputDict['input']['to'])
 
     for d, depDate in enumerate(depDates):
-        # if d > 0 and parameters['ref'] == 'R_':
-        #     continue
+        if d > 0 and parameters['ref'] == 'R_' and parameters['exp'] != 'weather':
+            continue
         print('date {} of {}'.format(d+1, len(depDates)))
         depS = '' if depDate is None else depDate.strftime('%Y_%m_%d')
         fileString = '{}{}'.format(parameters['ref'], depS)

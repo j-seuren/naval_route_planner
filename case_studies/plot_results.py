@@ -11,7 +11,7 @@ from mpl_toolkits.basemap import Basemap
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from pathlib import Path
 # fontPropFP = "C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/tex-gyre-pagella.regular.otf"
-# fontProp = font_manager.FontProperties(fname=fontPropFP)
+# fontProp = font_manager.FontProperties(fname=fontPropFP, size=9)
 
 
 def update(population):
@@ -70,7 +70,7 @@ class StatisticsPlotter:
                 # ax.set_xlabel('Travel time [d]', fontproperties=fontProp)
                 # ax.set_ylabel(r'Fuel costs [$/times$ 1000 UDS]', fontproperties=fontProp)
                 ax.set_xlabel('Travel time [d]')
-                ax.set_ylabel(r'Fuel cost [$/times 10^3$ USD]')
+                ax.set_ylabel(r'Fuel cost [USD, $\times 1000$]')
 
                 if adjustKC:
                     ax.set_xlabel('Travel time [h]')
@@ -90,7 +90,7 @@ def statistics(log, ax, title=None):
         ax.title.set_text(title)
         # Plot minimum Fitness
         line1_0 = ax.save_metrics(genNumber, fitMin[:, 0], "b-", label="Min. travel time [d]")
-        line1_1 = ax.save_metrics(genNumber, fitMin[:, 1], "b--", label=r"Min. fuel cost [$ /times 10^4$ USD]")
+        line1_1 = ax.save_metrics(genNumber, fitMin[:, 1], "b--", label=r"Min. fuel cost [USD, $/times 10^4$]")
         ax.set_xlabel("Generation")
         ax.set_ylabel("Fitness", color="b")
         # ax.set_xlabel("Generation", fontproperties=fontProp)
@@ -132,10 +132,9 @@ class RoutePlotter:
             vessel = evaluation.Vessel(fuelPrice=0.3)
         self.vMin, self.vMax = min(vessel.speeds), max(vessel.speeds)
 
-        cmap = cm.get_cmap('viridis', 12)
+        cmap = cm.get_cmap('jet', 12)
         cmapList = [cmap(i) for i in range(cmap.N)][1:-1]
-        self.cmap = cmap
-        # self.cmap = cl.LinearSegmentedColormap.from_list('Custom cmap', cmapList, cmap.N-2)
+        self.cmap = cl.LinearSegmentedColormap.from_list('Custom cmap', cmapList, cmap.N-2)
         # bounds = np.linspace(self.vMin, self.vMax, 9)
         # self.norm = cl.BoundaryNorm(bounds, self.cmap.N)
 
