@@ -45,5 +45,22 @@ def create_wind(plot=False):
 
 
 if __name__ == '__main__':
-    create_currents(plot=True)
-    plt.show()
+    import main
+    import pickle
+
+    def test_demo():
+        par = {'delFactor': 1.2,
+               'graphDens': 8,       # Recursion level graph
+               'graphVarDens': 2}    # Variable recursion level graph
+
+        planner = main.RoutePlanner(inputParameters=par, criteria={'minimalTime': True, 'minimalCost': True})
+
+        rawIn = planner.compute(((-10, 0), (10, 0)), startDate=None, recompute=True, current=True)
+        proc, raw = planner.post_process(rawIn)
+
+        with open('D:/output/demoRaw', 'wb') as fh:
+            pickle.dump((proc, raw), fh)
+
+
+    test_demo()
+    # plt.show()

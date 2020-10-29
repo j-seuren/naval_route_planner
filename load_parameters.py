@@ -35,7 +35,7 @@ for iteration in range(4):
         # skopt.space.Integer(50, 100, name='gen'),  # Minimal nr. generations
         skopt.space.Integer(5, 45, name='maxGDs'), skopt.space.Real(1e-6, 1e-4, name='minVar'),
         # Minimal variance generational distance
-        skopt.space.Integer(2, 15, name='nMutations'),
+        skopt.space.Integer(2, 15, name='maxMoves'),
         skopt.space.Categorical([4 * i for i in range(1, 101)], name='n'), skopt.space.Real(0.5, 1.0, name='cxpb'),
         skopt.space.Real(0.2, 0.7, name='mutpb'), # skopt.space.Integer(5, 500, name='nBar', prior='log-uniform'),
         # skopt.space.Integer(1, 10, name='recomb'),

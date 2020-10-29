@@ -178,8 +178,8 @@ class MergedPlots:
 
     def colorbar(self, m):
         cmap = cm.get_cmap('jet', 12)
-        cmapList = [cmap(i) for i in range(cmap.N)][1:-1]
-        cmap = cl.LinearSegmentedColormap.from_list('Custom cmap', cmapList, cmap.N - 2)
+        # cmapList = [cmap(i) for i in range(cmap.N)][1:-1]
+        # cmap = cl.LinearSegmentedColormap.from_list('Custom cmap', cmapList, cmap.N - 2)
 
         sm = plt.cm.ScalarMappable(cmap=cmap)
         cb = m.colorbar(sm, norm=plt.Normalize(vmin=self.vMin, vmax=self.vMin + self.dV),

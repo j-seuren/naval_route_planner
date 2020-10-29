@@ -78,11 +78,11 @@ class CaseStudy:
     def plot_polys(self, m):
         for obstacle in self.obstacles:
             x, y = obstacle.exterior.coords.xy
-            m.save_metrics(x, y, latlon=True)
+            m.save_fronts(x, y, latlon=True)
 
         for eca in self.ecas:
             x, y = eca.exterior.coords.xy
-            m.save_metrics(x, y, latlon=True)
+            m.save_fronts(x, y, latlon=True)
 
     def construct_graph(self, step=1):
         dim = ((self.extent[1] - self.extent[0]) // step).astype(int)

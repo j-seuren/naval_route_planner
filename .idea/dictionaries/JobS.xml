@@ -99,6 +99,8 @@
       <w>verts</w>
       <w>vivification</w>
       <w>vlsfo</w>
+      <w>vmax</w>
+      <w>vmin</w>
       <w>waypoint</w>
       <w>waypoints</w>
       <w>wobj</w>
@@ -106,6 +108,7 @@
       <w>xlsx</w>
       <w>yday</w>
       <w>yformatter</w>
+      <w>zorder</w>
     </words>
   </dictionary>
 </component>

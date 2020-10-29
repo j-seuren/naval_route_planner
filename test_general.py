@@ -33,7 +33,7 @@ def single_experiment(planner, inputDict, parameters, startEnd, depDate, fileStr
     exp = parameters['exp']
 
     current = True if (exp == 'current' or exp == 'MOEA') and parameters['current'] else False
-    weather = True if exp == 'weather' else False
+    weather = True if exp == 'weather' and parameters['weather'] else False
     ecas = True if parameters['ecaFactor'] != 1.0 or exp == 'eca' else False
 
     rawList, procList = [], []

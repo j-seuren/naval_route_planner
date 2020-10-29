@@ -53,9 +53,10 @@ class RoutePlanner:
                  criteria=None,
                  seed=None,
                  seeds=None):
+
+        # Set pseudo-random generator seed for testing
         self.seeds = iter(seeds) if seeds is not None else None
         seed = None if self.seeds else seed
-
         np.random.seed(seed)
         random.seed(seed)
 
@@ -84,9 +85,9 @@ class RoutePlanner:
                              # MOEA parameters
                              'n': 336,             # Population size
                              'nBar': 100,          # Local archive size (M-PAES)
-                             'cxpb': 0.81,          # Crossover probability (NSGAII, SPEA2)
+                             'cxpb': 0.81,         # Crossover probability (NSGAII, SPEA2)
                              'mutpb': 0.28,        # Mutation probability (NSGAII, SPEA2)
-                             'nMutations': 9,      # Max. number of mutations per selected individual
+                             'maxMoves': 9,      # Max. number of mutations per selected individual
                              'cr_trials': 5,       # Max recombination trials (M-PAES)
                              'l_fails': 3,         # Max fails (M-PAES)
                              'l_opt': 5,           # Max moves (M-PAES)
@@ -155,7 +156,7 @@ class RoutePlanner:
         if not os.path.exists(self.initPathsDir):
             os.mkdir(self.initPathsDir)
         self.initRoutesList = []
-        if constantSpeedIdx == 0:  # Initial paths are computed for speedIdx = 0
+        if constantSpeedIdx is None:  # Initial paths are computed for speedIdx = None
             for fp in os.listdir(self.initPathsDir):
                 with open(self.initPathsDir / fp, 'rb') as file:
                     self.initRoutesList.append(pickle.load(file))
@@ -167,6 +168,8 @@ class RoutePlanner:
         self.tb.register("population", initialization.init_repeat_list)
 
     class Terminator:
+        """ Class for MOEA termination.
+        """
         def __init__(self, p):
             self.maxEvaluations = p['maxEvaluations']
             self.minGen = p['gen']
@@ -174,18 +177,23 @@ class RoutePlanner:
             self.maxStops = p['maxGDs']
 
         def termination(self, prevFront, front, gen, gds, evals):
+            # Compute generational distance between current and previous population.
             gd = indicators.generational_distance(prevFront, front)
             gds.append(gd)
 
             if self.maxEvaluations:
                 if evals > self.maxEvaluations:
+                    fn = str(uuid.uuid4()) + '_{}'.format(evals)
+                    with open(DIR / 'evals' / fn, 'wb') as fh:
+                        pickle.dump(evals, fh)
+                    print(evals)
                     return True
                 return gd
             else:
-                if len(gds) > self.maxStops:
+                if len(gds) > self.maxStops:  # Remove oldest value if gds length is above threshold
                     gds.pop(0)
-                if gen >= self.minGen:
-                    if np.var(gds) < self.minVar:
+                if gen >= self.minGen:  # Do not terminate before minimum nr. of generations
+                    if np.var(gds) < self.minVar:  # Terminate if variance is smaller than threshold
                         print('STOPPING: Generational distance')
                         return True
                 return gd
@@ -338,12 +346,12 @@ class RoutePlanner:
 
         def optimize(self, pop):
             mstats, log = support.statistics(), support.logbook()  # DEAP statistics and logbook
-            front = tools.ParetoFront()  # Initialize ParetoFront class
-            evals = len(pop)
-            offspring, gds = [], []  # Initialize offspring and generational distance list
+            front = tools.ParetoFront()  # Initialize DEAP ParetoFront
+            evals = len(pop)  # Number of evaluations
+            offspring, gds = [], []
             gen = totalEvals = gd = 0
             while True:
-                # Step 3: Environmental selection (and update HoF)
+                # Step 3: Environmental selection (and update Pareto front)
                 pop = self.tb.select(pop + offspring, self.sizePop)
                 prevFront = deepcopy(front)
                 front.update(pop)
@@ -716,7 +724,7 @@ if __name__ == "__main__":
     # parameters = {'gen': 200,  # Min number of generations
     #               'n': 100}    # Population size
     startDate = datetime(2017, 9, 4)
-    kwargsPlanner = {'inputParameters': {}, 'tb': _tb, 'ecaFactor': 1.0, 'constantSpeedIdx': 2,
+    kwargsPlanner = {'inputParameters': {}, 'tb': _tb, 'ecaFactor': 1.0, 'constantSpeedIdx': None,
                      'criteria': _criteria}
     kwargsCompute = {'startEnd': _startEnd, 'startDate': startDate, 'recompute': True, 'current': False,
                      'weather': False, 'algorithm': 'NSGA2'}

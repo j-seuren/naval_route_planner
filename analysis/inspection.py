@@ -24,14 +24,14 @@ def plot_stats(path_logs, name):
 
             fig, ax1 = plt.subplots()
             fig.suptitle(name)
-            line1 = ax1.save_metrics(_gen, fit_mins, "b-", label="Minimum Fitness")
+            line1 = ax1.save_fronts(_gen, fit_mins, "b-", label="Minimum Fitness")
             ax1.set_xlabel("Generation")
             ax1.set_ylabel("Fitness", color="b")
             for tl in ax1.get_yticklabels():
                 tl.set_color("b")
 
             ax2 = ax1.twinx()
-            line2 = ax2.save_metrics(_gen, size_avgs, "r-", label="Average Size")
+            line2 = ax2.save_fronts(_gen, size_avgs, "r-", label="Average Size")
             ax2.set_ylabel("Size", color="r")
             for tl in ax2.get_yticklabels():
                 tl.set_color("r")

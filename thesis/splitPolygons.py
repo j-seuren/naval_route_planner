@@ -48,7 +48,7 @@ for ax in [ax1, ax2]:
     ax.axis('equal')
     ax.axis('off')
     ax.fill(*geo.exterior.xy, alpha=0.2, facecolor='gray')
-    ax.save_metrics(*geo.exterior.xy, color='gray', linewidth=1)
+    ax.save_fronts(*geo.exterior.xy, color='gray', linewidth=1)
     ax.margins(0, 0)
     # Plot points in USA
     xs = [point.x for point in ptsInUSA]
@@ -56,7 +56,7 @@ for ax in [ax1, ax2]:
     ax.scatter(xs, ys, c='blue', s=2)
 
 # Plot MBR USA
-ax1.save_metrics(*geo.envelope.exterior.xy, color='black', linewidth=1)
+ax1.save_fronts(*geo.envelope.exterior.xy, color='black', linewidth=1)
 
 xs = [point.x for point in envPts]
 ys = [point.y for point in envPts]
@@ -82,7 +82,7 @@ xs, ys = [point.x for point in ptsOutsideSplitMBRs], [point.y for point in ptsOu
 ax2.scatter(xs, ys, c='gray', s=2)
 
 for splGeo in split_polys:
-    ax2.save_metrics(*splGeo.envelope.exterior.xy, color='black', linewidth=1)
+    ax2.save_fronts(*splGeo.envelope.exterior.xy, color='black', linewidth=1)
 
 for i, fig in enumerate([fig1, fig2]):
     fig.savefig("filename.pdf", bbox_inches='tight', pad_inches=0)

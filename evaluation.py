@@ -9,7 +9,7 @@ from functools import lru_cache, wraps
 from math import cos, sin, sqrt, radians, pow
 from pathlib import Path
 from shapely.geometry import LineString, Point
-
+from case_studies.demos import create_currents
 
 def delta_penalty(func):
     @wraps(func)
@@ -56,9 +56,10 @@ class Evaluator:
         self.inclWeather = inclWeather
         self.inclCurrent = inclCurr
         if inclCurr:
-            assert isinstance(startDate, datetime.date), 'Set start date'
+            # assert isinstance(startDate, datetime.date), 'Set start date'
+            self.startDate = startDate = datetime.datetime(2016, 1, 1)
             self.currentOp = weather.CurrentOperator(startDate, nDays, DIR=self.DIR, KC=self.vessel.name == 'Tanaka')
-            # self.currentOperator.da = create_currents(nDays)
+            self.currentOp.da = create_currents(nDays)
         if inclWeather:
             assert isinstance(startDate, datetime.date), 'Set start date'
             self.weatherOp = weather.WindOperator(startDate, nDays, DIR=self.DIR)
@@ -409,7 +410,7 @@ if __name__ == '__main__':
         'nBar': 100,  # Local archive size (M-PAES)
         'cxpb': 0.81,  # Crossover probability (NSGAII, SPEA2)
         'mutpb': 0.28,  # Mutation probability (NSGAII, SPEA2)
-        'nMutations': 9,  # Max. number of mutations per selected individual
+        'maxMoves': 9,  # Max. number of mutations per selected individual
         'cr_trials': 5,  # Max recombination trials (M-PAES)
         'l_fails': 3,  # Max fails (M-PAES)
         'l_opt': 5,  # Max moves (M-PAES)

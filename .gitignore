@@ -9,6 +9,10 @@ bath_test.py
 *.pdf
 *.pkl
 thesis/
+process*
+test*
+parameter_tuning.py
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

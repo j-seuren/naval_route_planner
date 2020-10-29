@@ -168,7 +168,10 @@ class Initializer:
                 for obj, objPath in subPath.items():
                     # Set initial boat speed to max boat speed
                     wps = [graph.nodes[n]['deg'] for n in objPath]
-                    speeds = [self.vessel.speeds[next(speedIdxCycle)]] * (len(objPath) - 1) + [None]
+                    nextSpeedIdx = next(speedIdxCycle)
+                    nextSpeed = self.vessel.speeds[nextSpeedIdx]
+                    print('selected speed', nextSpeedIdx, nextSpeed)
+                    speeds = [nextSpeed] * (len(objPath) - 1) + [None]
 
                     ind = [list(tup) for tup in zip(wps, speeds)]
                     subRoute[obj] = self.container(ind)

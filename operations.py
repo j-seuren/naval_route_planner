@@ -22,29 +22,30 @@ class Operators:
                  par,
                  seed
                  ):
+        # Set pseudo-random generator seed
         self.seed = seed
         random.seed(seed)
         np.random.seed(seed)
-        self.e_feasible = e_feasible
-        self.vessel = vessel                    # Vessel class instance
-        self.geod = geod                        # GreatCircle class instance
-        self.radius = par['radius']             # Move radius
-        self.widthRatio = par['widthRatio']     # Insert width ratio
-        self.scaleFactor = par['scaleFactor']
-        self.delFactor = par['delFactor']
+
+        self.e_feasible = e_feasible            # Edge feasibility function
+        self.vessel = vessel                    # Vessel class
+        self.geod = geod                        # Geodesic class
+        self.radius = par['radius']             # Waypoint translate radius
+        self.widthRatio = par['widthRatio']     # Waypoint insert width ratio
+        self.scaleFactor = par['scaleFactor']   # Exp. distribution scale factor, used to select mutated legs
+        self.delFactor = par['delFactor']       # Selection weight for deletion operator (1 indicates equal probability)
         self.ops = par['mutationOperators']     # Mutation operators list
-        self.gauss = par['gauss']
-        self.nMutations = par['nMutations']
-        self.moves = np.zeros(len(self.ops))
+        self.gauss = par['gauss']               # Boolean for usage of Gaussian mutation
+        self.nMoves = par['maxMoves']           # Maximum nr. performed moves
+        self.moves = np.zeros(len(self.ops))    # Initialize moves count
 
     def mutate(self, ind, initializing=False, k=None):
-        inverseWeights = np.round(self.moves / np.linalg.norm(self.moves), 2)
-        weights = 1 - inverseWeights
-        weights[-1] = weights[-1] * self.delFactor
-        if initializing:
-            weights[-1] = min(self.nMutations, 5)
-        if k is None:
-            k = random.randint(1, self.nMutations)
+        # Ensure desired distribution of selected moves using weights based on the inverse number of moves.
+        weights = 1 - np.round(self.moves / np.linalg.norm(self.moves), 2)
+        weights[-1] = weights[-1] * self.delFactor if not initializing else min(self.nMoves, 5)
+
+        # Weighted selection of k moves
+        k = random.randint(1, self.nMoves) if k is None else k
         sample_ops = random.choices(self.ops, weights=weights, k=k)
         while sample_ops:
             op = sample_ops.pop()
@@ -56,26 +57,27 @@ class Operators:
                 self.change_speeds(ind)
             elif op == 'insert':
                 self.insert_wps(ind, initializing)
-        del ind.fitness.values
+        del ind.fitness.values  # Delete old fitness values
         return ind,
 
     def insert_wps(self, ind, initializing=False, shape='rhombus'):
-        weights = [self.geod.distance(ind[i][0], ind[i+1][0]) for i, leg in enumerate(ind[:-1])]
-        # Draw gamma int for number of inserted waypoints
-        edges = self.sample_sequence(stop=len(ind)-1, weights=weights)
+        distances = [self.geod.distance(ind[i][0], ind[i+1][0]) for i, leg in enumerate(ind[:-1])]
 
+        # Draw Exponential distributed number of edges weighted according to edge distance
+        edges = self.sample_sequence(stop=len(ind)-1, weights=distances)
         for i in edges:
             p1, p2 = np.asarray(ind[i][0]), np.asarray(ind[i+1][0])
             assert not np.array_equal(p1, p2) != 0, 'p1 and p2 are equal: {}{}'.format(p1, p2)
 
             ctr = (p1 + p2) / 2.  # Edge centre
-            major = np.linalg.norm(p1 - p2) / 2.  # Ellipse width
-            minor = major * self.widthRatio / 2.  # Ellipse height
+            major = np.linalg.norm(p1 - p2) / 2.  # Major axis length
+            minor = major * self.widthRatio / 2.  # Minor axis length
 
             trials = 0
             while trials < 100:
                 if self.gauss or shape == 'ellipse':
                     if self.gauss:
+                        # Generate multivariate normal distributed points with 95% CI represented by the unit circle
                         mu, cov = np.zeros(2), np.identity(2) * 0.16691704223  # 95% CI = unit circle
                         xy = np.random.multivariate_normal(mu, cov, 1).squeeze()
                     else:

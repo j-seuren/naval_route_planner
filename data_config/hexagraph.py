@@ -118,7 +118,7 @@ class Hexagraph:
             lines[idx] = [np.asarray(xyz[e1]), np.asarray(xyz[e2])]
         fig = plt.figure(figsize=[6, 6])
         ax = fig.gca(projection='3d')
-        ax.save_metrics([], [], [], 'k.', markersize=5, alpha=0.9)
+        ax.save_fronts([], [], [], 'k.', markersize=5, alpha=0.9)
         ax.view_init(azim=azimuthAngle, elev=elevationAngle)
         ax.add_collection(Line3DCollection(lines, colors='black', linewidths=1))
         minmax = [-.6, .6]

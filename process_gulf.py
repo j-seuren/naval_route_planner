@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as cl
 import numpy as np
 import pandas as pd
-# import tikzplotlib
+import tikzplotlib
 
 from data_config.current_data import CurrentDataRetriever
 from datetime import datetime
@@ -21,7 +21,7 @@ fontPropFP = "C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/tex-gyre-pagell
 fontProp = fm.FontProperties(fname=fontPropFP, size=9)
 
 dates = [datetime(2014, 11, 25), datetime(2015, 5, 4)]
-loadDir = Path('D:/output/current/Gulf')
+loadDir = Path('D:/output/GULF_28_10')
 rawDir = loadDir / 'raws'
 os.chdir(loadDir)
 
@@ -59,7 +59,7 @@ def get_front_dicts():
 
         for speed in ['var', 'min', 'max']:
             speedDir = rawDir / speed
-            refFilesSpeed = [file for file in os.listdir(speedDir) if 'R' in file and str(year) in file and 'W1E' in file]
+            refFilesSpeed = [file for file in os.listdir(speedDir) if 'R' in file and str(year) in file]
             print('refFiles', year, speed, refFilesSpeed)
 
             refFrontsDict[year][speed] = {}
@@ -75,7 +75,7 @@ def get_front_dicts():
                 if speed == 'var':
                     print(pair, lenBefore, len(refFrontsDict[year][speed][pair][0]))
             print('')
-            files = [file for file in os.listdir(speedDir) if 'R' not in file and str(year) in file and 'W1E' in file]
+            files = [file for file in os.listdir(speedDir) if 'R' not in file and str(year) in file]
             print('files', year, speed, files)
 
             frontsDict[year][speed] = {}
@@ -220,40 +220,53 @@ def plot_front(front, refFront, cSpeedsFrontsList, evaluate2):
     cycleFront = ax2._get_lines.prop_cycler
     labels = ['', 'R']
 
-    # Do for front and ref front
-    for idx, f in enumerate([front, refFront]):
-        print(idx, len(front), len(refFront))
-        # (Objective) values
-        days, cost, dist, _, avgSpeed = zip(*map(evaluate2, f.items))
-        hours = np.array(days) * 24.
-        currentSpeed = np.array(dist) / np.array(hours) - np.array(avgSpeed)
-        color = next(cycleFront)['color']
-
-        # Plot front
-        marker, s, zorder = 'o', 1, 2
-        label = 'V' + labels[idx]
-        ax2.scatter(days, cost, color=color, marker=marker, s=s, label=label, zorder=zorder)
-        ax1.scatter(days, currentSpeed, color=color, marker=marker, s=s, zorder=zorder)
+    # # Do for front and ref front:
+    # print('fronts: front_members', len(front), 'ref_front_members', len(refFront))
+    # for idx, f in enumerate([front, refFront]):
+    #     # (Objective) values
+    #     days, cost, dist, _, avgSpeed = zip(*map(evaluate2, f.items))
+    #     currentSpeed = np.array(dist) / (np.array(days) * 24.) - np.array(avgSpeed)
+    #     color = next(cycleFront)['color']
+    #
+    #     # Plot front
+    #     marker, s, zorder = 'o', 1, 2
+    #     label = 'V' + labels[idx]
+    #     ax2.scatter(days, cost, color=color, marker=marker, s=s, label=label, zorder=zorder)
+    #     ax1.scatter(days, currentSpeed, color=color, marker=marker, s=s, zorder=zorder)
 
     # Plot constant speeds
-    colors = [next(cycleFront)['color'], next(cycleFront)['color']]
+    speedArray = np.empty([2, 2, 2])
+    frontArray = np.empty([2, 2, 2])
+
+    # colors = [next(cycleFront)['color'], next(cycleFront)['color']]
     for cSpeedIdx, cSpeedFrontTup in enumerate(cSpeedsFrontsList):
-        for refIdx, front in enumerate(cSpeedFrontTup):
-            days, cost, dist, _, avgSpeed = zip(*map(evaluate2, front.items))
+        for refIdx, f in enumerate(cSpeedFrontTup):
+            days, cost, dist, _, avgSpeed = zip(*map(evaluate2, f.items))
             currentSpeed = np.array(dist) / (np.array(days) * 24.) - np.array(avgSpeed)
 
-            zorder = 3
-            (marker, s) = ('+', 50) if refIdx == 1 else ('x', 35)
-            label = 'C' + labels[refIdx] if cSpeedIdx == 0 else None
-            ax2.scatter(days, cost, color=colors[refIdx], marker=marker, s=s, label=label, zorder=zorder)
-            ax1.scatter(days, currentSpeed, color=colors[refIdx], marker=marker, s=s, zorder=zorder)
+            speedArray[cSpeedIdx, refIdx] = np.array([days[0], currentSpeed[0]])
+            frontArray[cSpeedIdx, refIdx] = np.array([days[0], cost[0]])
+
+    # no-ref
+    for re in range(2):
+        color = next(cycleFront)['color']
+        marker, s, zorder = 'o', 1, 3
+        ax2.scatter(frontArray[:, re, 0], frontArray[:, re, 1], color=color, marker=marker, s=s)
+        ax1.scatter(speedArray[:, re, 0], speedArray[:, re, 1], color=color, marker=marker, s=s)
+
+    # zorder = 3
+    # marker, s, zorder = 'o', 1, 3
+    # # (marker, s) = ('+', 50) if refIdx == 1 else ('x', 35)
+    # label = 'C' + labels[refIdx] if cSpeedIdx == 0 else None
+    # ax2.scatter(days, cost, color=colors[refIdx], marker=marker, s=s)
+    # ax1.scatter(days, currentSpeed, color=colors[refIdx], marker=marker, s=s)
 
     ax2.legend(prop=fontProp)
     ax2.grid()
     ax1.grid()
     plt.xticks(fontproperties=fontProp)
     plt.yticks(fontproperties=fontProp)
-
+    print('plotted front')
     return fig
 
 
@@ -301,8 +314,6 @@ def find_nearest_idx(array, value):
 
 def colorbar(m):
     cmap = cm.get_cmap('jet', 12)
-    cmapList = [cmap(i) for i in range(cmap.N)][1:-1]
-    cmap = cl.LinearSegmentedColormap.from_list('Custom cmap', cmapList, cmap.N - 2)
 
     vMin, dV = 8.8, 15.2 - 8.8
 
@@ -405,6 +416,7 @@ def plot_selected_routes(frontsDict, routeCombinations, savePlot=False):
 
 
 def plot_selected_fronts(frontsDict, routeCombinations, savePlot=False):
+    print('start plot_selected_fronts')
     for year, routeSelection in routeCombinations.items():
         date = dates[0 if year == 2014 else 1]
         planner = main.RoutePlanner(bathymetry=False, ecaFactor=1)
@@ -433,7 +445,7 @@ def plot_selected_fronts(frontsDict, routeCombinations, savePlot=False):
                 fig.savefig('front_plots/selection/{}_frontM_{}_{}'.format(pair, year, run), dpi=300)
                 fig.savefig('front_plots/selection/{}_frontM_{}_{}.pdf'.format(pair, year, run),
                             bbox_inches='tight', pad_inches=.01)
-            # tikzplotlib.save("{}_frontM_{}.tex".format(pair, run))
+                tikzplotlib.save('front_plots/selection/{}_frontM_{}_{}.tex'.format(pair, year, run))
             plt.close('all')
 
 

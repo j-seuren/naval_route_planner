@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as cl
 import numpy as np
 import pandas as pd
-# import tikzplotlib
+import tikzplotlib
 
 from data_config.current_data import CurrentDataRetriever
 from datetime import datetime
@@ -180,7 +180,7 @@ def plot_fronts(frontsDict, planner, save=False):
             if save:
                 fig.savefig('{}_frontM_{}'.format(pair, run), dpi=300)
                 fig.savefig('{}_frontM_{}.pdf'.format(pair, run), bbox_inches='tight', pad_inches=.01)
-                # tikzplotlib.save("{}_frontM_{}.tex".format(pair, run))
+                tikzplotlib.save("{}_frontM_{}.tex".format(pair, run), encoding='utf-8')
 
 
 def navigation_area(ax, uin, vin, lons, lats):
@@ -191,8 +191,8 @@ def navigation_area(ax, uin, vin, lons, lats):
     m.drawmapboundary()
     m.fillcontinents(zorder=2)
     m.drawcoastlines()
-    m.drawparallels(np.arange(24., 38, 2.), labels=[1, 0, 0, 0], fontsize=8)
-    m.drawmeridians(np.arange(120., 144, 2.), labels=[0, 0, 0, 1], fontsize=8)
+    m.drawparallels(np.arange(24., 38, 2.), color='#7f7f7f', linewidth=0.5, labels=[1, 0, 0, 0], fontproperties=fontProp)
+    m.drawmeridians(np.arange(120., 144, 2.), color='#7f7f7f', linewidth=0.5, labels=[0, 0, 0, 1], fontproperties=fontProp)
 
     # Currents
     dLon = extent[2] - extent[0]
@@ -200,29 +200,24 @@ def navigation_area(ax, uin, vin, lons, lats):
     vLon = int(dLon * 4)
     vLat = int(dLat * 4)
     uRot, vRot, x, y = m.transform_vector(uin, vin, lons, lats, vLon, vLat, returnxy=True)
-    Q = m.quiver(x, y, uRot, vRot, np.hypot(uRot, vRot),
-                 pivot='mid', width=0.002, headlength=4, cmap='Blues', scale=90, ax=ax)
-    ax.quiverkey(Q, 0.4, 1.1, 2, r'$2$ knots', labelpos='E')
+    m.quiver(x, y, uRot, vRot, np.hypot(uRot, vRot),
+             pivot='mid', width=0.002, headlength=4, cmap='Blues', scale=90, ax=ax)
+
+    lon = 123
+    lat = 26
+
+    x, y = m(lon, lat)
+
+    plt.text(x, y, 'K', fontproperties=fontProp, fontweight='bold', fontsize=12, ha='right', va='top', color='k')
+
+    lon = 139
+    lat = 34
+
+    x, y = m(lon, lat)
+
+    plt.text(x, y, 'T', fontproperties=fontProp, fontweight='bold', fontsize=12, ha='left', va='bottom', color='k')
 
     return m
-
-
-def colorbar(m):
-    cmap = cm.get_cmap('jet', 12)
-    cmapList = [cmap(i) for i in range(cmap.N)][1:-1]
-    cmap = cl.LinearSegmentedColormap.from_list('Custom cmap', cmapList, cmap.N - 2)
-
-    vMin, dV = 8, 6
-
-    sm = plt.cm.ScalarMappable(cmap=cmap)
-    cb = m.colorbar(sm, norm=plt.Normalize(vmin=vMin, vmax=vMin + dV),
-                    size=0.2, pad=0.05, location='right')
-    nTicks = 6
-    cb.ax.set_yticklabels(['%.1f' % round(vMin + i * dV / (nTicks - 1), 1) for i in range(nTicks)],
-                          fontproperties=fontProp)
-    cb.set_label('Nominal speed [kn]', rotation=270, labelpad=15, fontproperties=fontProp)
-
-    return cmap
 
 
 def plot_ind(ind, m, label, cmap, alpha):
@@ -230,7 +225,7 @@ def plot_ind(ind, m, label, cmap, alpha):
 
     waypoints, speeds = zip(*ind)
     for i, leg in enumerate(zip(waypoints[:-1], waypoints[1:])):
-        color = cmap((speeds[i] - vMin) / dV) if cmap != 'k' else cmap
+        color = cmap((speeds[i] - vMin) / dV) if not isinstance(cmap, str) else cmap
         label = None if i > 0 else label
         m.drawgreatcircle(leg[0][0], leg[0][1], leg[1][0], leg[1][1], label=label, linewidth=1,
                           alpha=alpha, color=color, zorder=3)
@@ -266,11 +261,51 @@ def plot_routes(frontsDict, save=False):
                 fig.savefig('{}_routeM_{}.pdf'.format(pair, run), bbox_inches='tight', pad_inches=.02)
 
 
+def plot_subplot_routes(frontsDict, save=False):
+    (u, v), lons, lats = CurrentDataRetriever(datetime(2014, 10, 28), nDays=6, DIR=Path('D:/')).get_kc_data()
+    run = 2
+    fig, ax = plt.subplots()
+    m = navigation_area(ax, u, v, lons, lats)
+    labels = [['KT', 'Reference'], ['TK', 'Reference']]
+    colors = [['#2ca02c', 'k'], ['#d62728', 'k']]
+
+    for plotIdx, (pair, frontTup) in enumerate(frontsDict.items()):
+        print('\r', pair, end='')
+        fronts, refFronts = frontTup
+        front = fronts[run]
+        refFront = refFronts[run]
+        # Do for front and ref front
+        for idx, f in enumerate([front, refFront]):
+            if idx == 1 and plotIdx == 1:
+                continue
+            label = labels[plotIdx][idx]
+            color = colors[plotIdx][idx]
+            for j, ind in enumerate(f.items):
+                if idx == 1 and j > 0:
+                    continue
+                if j > 0:
+                    label = None
+                plot_ind(ind, m, label=label, cmap=color, alpha=1 if idx == 1 else 0.9)
+
+    ax.legend()
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend([handles[0], handles[2], handles[1]], [labels[0], labels[2], labels[1]], loc='lower right', prop=fontProp,
+              fancybox=False, framealpha=1, edgecolor='k')
+    plt.grid()
+    plt.xticks(fontproperties=fontProp)
+    plt.yticks(fontproperties=fontProp)
+
+    if save:
+        fig.savefig('bi_routeM_{}'.format(run), dpi=300)
+        fig.savefig('bi_routeM_{}.pdf'.format(run), bbox_inches='tight', pad_inches=.02)
+
+
 _frontsDict, _planner = get_fronts_dict()
 
 
 # compute_metrics(_frontsDict)
 # save_fronts(_frontsDict, _planner)
 # plot_fronts(_frontsDict, _planner, save=True)
-plot_routes(_frontsDict, save=True)
+# plot_routes(_frontsDict, save=True)
+plot_subplot_routes(_frontsDict, save=True)
 plt.show()

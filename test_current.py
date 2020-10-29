@@ -20,11 +20,11 @@ TEST_SPEED = True
 
 eastLocations = [
     ('E1', (-50.0, 38.0)),
-    ('E2', (-55.0, 46.0))
+    # ('E2', (-55.0, 46.0))
 ]
 westLocations = [
-    ('W1', (-72.67, 34.33)),
-    # ('W2', (-73.33, 36.67))
+    # ('W1', (-72.67, 34.33)),
+    ('W2', (-73.33, 36.67))
 ]
 inputGulf = {'instance': 'Gulf', 'input': {'from': [], 'to': []}}
 for west in westLocations:
@@ -34,8 +34,9 @@ for west in westLocations:
         # inputGulf['input']['from'].append(east)
         # inputGulf['input']['to'].append(west)
 
-inputGulf['input']['departureDates'] = [datetime(2014, 11, 25),
-                                        # datetime(2015, 5, 4)
+inputGulf['input']['departureDates'] = [
+                                        #datetime(2014, 11, 25),
+                                        datetime(2015, 5, 4)
                                         ]
 
 inputKC = {'instance': 'KC', 'input': {'from': [('K', locations['KeelungC']),
@@ -50,7 +51,7 @@ inputGulf0 = {'instance': 'Gulf0', 'input': {'from': [('3', (-73.2, 36.2))],
                                              'to': [('1', (-51., 39.6))],
                                              'departureDates': [datetime(2014, 11, 25)]}}
 
-inputDict = inputKC
+inputDict = inputGulf
 TEST_SPEED = False if inputDict['instance'] == 'KC' else TEST_SPEED
 criteria = {'minimalTime': True, 'minimalCost': True}
 
@@ -59,7 +60,7 @@ for current in [True, False]:
         if not TEST_SPEED and speed == 'constant':
             continue
         speedOps = ['insert', 'move', 'delete'] if speed == 'constant' else ['speed', 'insert', 'move', 'delete']
-        res = 'l' if inputDict['instance'] == 'KC' else 'i'
+        res = 'l' if inputDict['instance'] == 'KC' else 'c'
         par = {'mutationOperators': speedOps, 'res': res, 'minVar': 1e-7, 'n': 500, 'gen': 1000, 'delFactor': 1.}
 
         nSpeeds = [0, -1] if speed == 'constant' else [None]
@@ -75,7 +76,7 @@ for current in [True, False]:
             parameters['current'] = current
             speedStr = speed + str(speedIdx) if speed == 'constant' else speed
             # Create directories
-            _dir = DIR / 'output' / (parameters['exp'] + '_13_10') / inputDict['instance']
+            _dir = DIR / 'output' / (parameters['exp'] + '_21_10') / inputDict['instance']
             genDir = _dir / '{}_{}SP_B{}_ECA{}/{}'.format(parameters['MOEA'],
                                                           speedStr,
                                                           parameters['bathymetry'],

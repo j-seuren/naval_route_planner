@@ -89,8 +89,8 @@ def statistics(log, ax, title=None):
 
         ax.title.set_text(title)
         # Plot minimum Fitness
-        line1_0 = ax.save_metrics(genNumber, fitMin[:, 0], "b-", label="Min. travel time [d]")
-        line1_1 = ax.save_metrics(genNumber, fitMin[:, 1], "b--", label=r"Min. fuel cost [USD, $/times 10^4$]")
+        line1_0 = ax.save_fronts(genNumber, fitMin[:, 0], "b-", label="Min. travel time [d]")
+        line1_1 = ax.save_fronts(genNumber, fitMin[:, 1], "b--", label=r"Min. fuel cost [USD, $/times 10^4$]")
         ax.set_xlabel("Generation")
         ax.set_ylabel("Fitness", color="b")
         # ax.set_xlabel("Generation", fontproperties=fontProp)
@@ -100,7 +100,7 @@ def statistics(log, ax, title=None):
 
         # Plot average size
         ax2 = ax.twinx()
-        line2 = ax2.save_metrics(genNumber, avgSize, "r-", label="Average nr. waypoints")
+        line2 = ax2.save_fronts(genNumber, avgSize, "r-", label="Average nr. waypoints")
         ax2.set_ylabel("Size", color="r")
         # plt.yticks(fontproperties=fontProp)
         for tl in ax2.get_yticklabels():
@@ -132,9 +132,9 @@ class RoutePlotter:
             vessel = evaluation.Vessel(fuelPrice=0.3)
         self.vMin, self.vMax = min(vessel.speeds), max(vessel.speeds)
 
-        cmap = cm.get_cmap('jet', 12)
-        cmapList = [cmap(i) for i in range(cmap.N)][1:-1]
-        self.cmap = cl.LinearSegmentedColormap.from_list('Custom cmap', cmapList, cmap.N-2)
+        self.cmap = cm.get_cmap('jet', 12)
+        # cmapList = [cmap(i) for i in range(cmap.N)][1:-1]
+        # self.cmap = cl.LinearSegmentedColormap.from_list('Custom cmap', cmapList, cmap.N-2)
         # bounds = np.linspace(self.vMin, self.vMax, 9)
         # self.norm = cl.BoundaryNorm(bounds, self.cmap.N)
 
