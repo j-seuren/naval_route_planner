@@ -46,8 +46,6 @@ speedOps = ['insert', 'move', 'delete'] if parameters['speed'] == 'constant' els
 par = {'mutationOperators': speedOps, 'n': 100, 'maxEvaluations': 21000}
 
 for MOEA in ['MPAES', 'NSGA2', 'SPEA2']:
-    with open('D:/evals/{}'.format(MOEA), 'wb') as fh:
-        pickle.dump(1, fh)
     parameters['MOEA'] = MOEA
     planner = main.RoutePlanner(inputParameters=par,
                                 bathymetry=parameters['bathymetry'],

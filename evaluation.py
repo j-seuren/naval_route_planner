@@ -58,9 +58,9 @@ class Evaluator:
         self.inclCurrent = inclCurr
         if inclCurr:
             # assert isinstance(startDate, datetime.date), 'Set start date'
-            self.startDate = startDate = datetime.datetime(2016, 1, 1)
+            # self.startDate = startDate = datetime.datetime(2016, 1, 1)
             self.currentOp = weather.CurrentOperator(startDate, nDays, DIR=self.DIR, KC=self.vessel.name == 'Tanaka')
-            self.currentOp.da = create_currents(nDays)
+            # self.currentOp.da = create_currents(nDays)
         if inclWeather:
             assert isinstance(startDate, datetime.date), 'Set start date'
             self.weatherOp = weather.WindOperator(startDate, nDays, DIR=self.DIR)
