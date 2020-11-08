@@ -183,9 +183,6 @@ class RoutePlanner:
 
             if self.maxEvaluations:
                 if evals > self.maxEvaluations:
-                    fn = str(uuid.uuid4()) + '_{}'.format(evals)
-                    with open(DIR / 'evals' / fn, 'wb') as fh:
-                        pickle.dump(evals, fh)
                     print(evals)
                     return True
                 return gd
