@@ -298,6 +298,7 @@ def plot_subplot_routes(frontsDict, save=False):
     if save:
         fig.savefig('bi_routeM_{}'.format(run), dpi=300)
         fig.savefig('bi_routeM_{}.pdf'.format(run), bbox_inches='tight', pad_inches=.02)
+        tikzplotlib.save('bi_routeM_{}.tex'.format(run))
 
 
 _frontsDict, _planner = get_fronts_dict()

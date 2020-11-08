@@ -22,13 +22,23 @@ parameters = {'DIR': DIR,
 
 criteria = {'minimalTime': True, 'minimalCost': True}
 
+inputMOEA_w = {'instance': 'MOEA', 'input': {'from': [('Ply', locations['Plymouth'])
+                                                      ],
+                                             'to': [('Hav', locations['Havana'])
+                                                    ],
+                                             'departureDates': [datetime(2013, 9, 24)]}}
+
+inputMOEA_b = {'instance': 'MOEA', 'input': {'from': [('Rot', locations['Rotterdam'])
+                                                      ],
+                                             'to': [('Hou', locations['Houston'])
+                                                    ],
+                                             'departureDates': [datetime(2016, 1, 1)]}}
 
 inputMOEA_c = {'instance': 'MOEA', 'input': {'from': [('Sal', locations['Salvador'])
                                                       ],
-                                           'to': [('Par', locations['Paramaribo'])
-                                                  ],
-                                           'departureDates': [datetime(2016, 1, 1)]}}
-
+                                             'to': [('Par', locations['Paramaribo'])
+                                                    ],
+                                             'departureDates': [datetime(2014, 11, 25)]}}
 
 inputDict = inputMOEA_c
 
@@ -46,7 +56,7 @@ for MOEA in ['MPAES', 'NSGA2', 'SPEA2']:
                                 seeds=range(parameters['iterations']))
 
     # Create directories
-    _dir = DIR / 'output' / (parameters['exp'] + '_21_10') / inputDict['instance']
+    _dir = DIR / 'output' / (parameters['exp'] + '_08_11') / inputDict['instance']
     genDir = _dir / '{}_{}SP_B{}_ECA{}/{}'.format(parameters['MOEA'],
                                                   parameters['speed'],
                                                   parameters['bathymetry'],

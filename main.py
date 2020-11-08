@@ -326,7 +326,7 @@ class RoutePlanner:
                 # Step 4: Termination
                 gd = self.termination(prevFront, front, gen, gds, totalEvals)
                 if not isinstance(gd, float):
-                    return front, log
+                    return front, log, totalEvals
 
                 pop = popInter
                 gen += 1
@@ -366,7 +366,7 @@ class RoutePlanner:
                 # Step 4: Termination
                 gd = self.termination(prevFront, front, gen, gds, totalEvals)
                 if not isinstance(gd, float):
-                    return front, log
+                    return front, log, totalEvals
 
                 # Step 5: Variation
                 offspring = algorithms.varAnd(pop, self.tb, self.cxpb, self.mutpb)
@@ -417,7 +417,7 @@ class RoutePlanner:
                 # Step 4: Termination
                 gd = self.termination(prevFront, front, gen, gds, totalEvals)
                 if not isinstance(gd, float):
-                    return front, log
+                    return front, log, totalEvals
 
                 # Step 5: Mating Selection
                 matingPool = tools.selTournament(archive, k=self.sizePop, tournsize=2)
@@ -507,6 +507,7 @@ class RoutePlanner:
 
         result = {'startEnd': startEnd, 'initialRoutes': initRoutes, 'indicators': [None] * len(initRoutes),
                   'logs': [None] * len(initRoutes), 'fronts': [None] * len(initRoutes)}
+        totalEvals = []
         for routeIdx, route in enumerate(initRoutes):
             result['indicators'][routeIdx] = [None] * len(route['route'])
             result['logs'][routeIdx] = [None] * len(route['route'])
@@ -533,14 +534,16 @@ class RoutePlanner:
                 self.tb.register("individual", initialization.init_individual, self.tb, subRoute)
 
                 # Begin the generational process
-                front, log = MOEA.optimize(initialPop)
+                front, log, totalEvals0 = MOEA.optimize(initialPop)
                 self.tb.unregister("individual")
-
+                totalEvals.append(totalEvals0)
                 hypervolume = indicators.hypervolume(front)
                 print('hypervolume', hypervolume)
                 result['indicators'][routeIdx][subIdx] = {'hypervolume': deepcopy(hypervolume)}
                 result['logs'][routeIdx][subIdx] = deepcopy(log)
                 result['fronts'][routeIdx][subIdx] = deepcopy(front)
+
+        result['avgEvals'] = np.average(totalEvals)
 
         return result
 
@@ -576,7 +579,7 @@ class RoutePlanner:
                 maxTravelTime = travelTime
         days = min(int(math.ceil(maxTravelTime / 24)), 30)
         print('Number of days:', days)
-        return days
+        return 30
 
     def create_route_response(self, obj, bestWeighted, wps, objValue, fitValue, xCanals):
         return {'optimizationCriterion': obj,

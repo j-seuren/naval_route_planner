@@ -11,6 +11,7 @@ from pathlib import Path
 from shapely.geometry import LineString, Point
 from case_studies.demos import create_currents
 
+
 def delta_penalty(func):
     @wraps(func)
     def wrapper(self, individual, *args, **kwargs):
@@ -105,7 +106,7 @@ class Evaluator:
 
     def evaluate2(self, ind):
         hours = cost = dist = ecaDist = speedDist = 0.
-
+        ecaSpeed, nonEcaSpeed = [], []
         for wp1, wp2 in zip(ind[:-1], ind[1:]):
             # Leg endpoints and boat speed
             p1, speedKnots = wp1
@@ -119,6 +120,9 @@ class Evaluator:
             if self.ecaFactor != 1.0 and geo_x_geos(self.ecaRtree, p1, p2):
                 legCost *= self.ecaFactor
                 ecaDist += nauticalMiles
+                ecaSpeed.append(speedKnots)
+            else:
+                nonEcaSpeed.append(speedKnots)
 
             if self.includePenalty:
                 nSegs = self.e_feasible(p1, p2)
@@ -131,9 +135,10 @@ class Evaluator:
             dist += nauticalMiles
             speedDist += speedKnots * nauticalMiles
 
+        ecaSpeed, nonEcaSpeed = np.average(ecaSpeed), np.average(nonEcaSpeed)
         avgSpeed = speedDist / dist
         days = hours / 24.
-        return days, cost, dist, ecaDist, avgSpeed
+        return days, cost, dist, ecaDist, avgSpeed, ecaSpeed, nonEcaSpeed
 
     def feasible(self, ind):
         for i in range(len(ind)-1):
@@ -283,20 +288,19 @@ class SemiEmpiricalSpeedReduction:
         roundedBlock = blockBins[support.find_closest(blockBins, block)]
         df = pd.read_excel(coefficientTableFP, sheet_name='speed_reduction_coefficient')
         abc = df.loc[(df['block_coefficient'] == roundedBlock) & (df['ship_loading'] == shipLoading)]
-        self.aB, self.bB, cB = float(abc['a']), float(abc['b']), float(abc['c'])
+        self.aB, self.bB, self.cB = float(abc['a']), float(abc['b']), float(abc['c'])
         g = 9.81  # gravitational acceleration [m/s^2]
         knotToMs = 0.514444
         self.FnConstant = knotToMs / sqrt(Lpp * g)
-        self.cB = cB * self.FnConstant ** 2
 
         # Ship coefficient formula coefficients: a, b
         df = pd.read_excel(coefficientTableFP, sheet_name='ship_form_coefficient')
         ab = df.loc[(df['ship_type'] == 'all') & (df['ship_loading'] == shipLoading)]
         self.aU, bU = float(ab['a']), float(ab['b'])
 
-        self.formDenominator = 1 / (bU * pow(volume, (2 / 3)))
+        self.formDenominator = 1 / (bU * pow(volume, 2 / 3))
 
-    def reduced_speed(self, windDeg, headingDeg, BN, speedKnots):
+    def reduced_speed(self, windDeg, headingDeg, BN, nominalSpeedKnots):
         """ The wind effect, presented as speed loss, compares the
         speed of the ship in varying actual sea conditions to the ship's
         expected speed in still water conditions.
@@ -321,12 +325,17 @@ class SemiEmpiricalSpeedReduction:
         directionC = (a + b * pow(BN + c, 2)) / 2
 
         # Correction factor for block coefficient and Froude number
-        Fn = speedKnots * self.FnConstant
-        speedC = self.aB + self.bB * Fn + self.cB * pow(speedKnots, 2)
-        speedLoss = max(min((directionC * speedC * formC) / 100, 0.99), -0.3)
+        Fn = nominalSpeedKnots * self.FnConstant
+        speedC = self.aB + self.bB * Fn + self.cB * pow(Fn, 2)
 
-        reducedSpeedKnots = speedKnots * (1 - speedLoss)
-        return reducedSpeedKnots
+        if directionC == 1.0:
+            print(speedC, formC)
+
+        speedLossPercentage = max(min(directionC * speedC * formC, 99), -30)
+        # speedLoss = max(min((directionC * speedC * formC) / 100, 0.99), -0.3)
+
+        actualSpeedKnots = nominalSpeedKnots * (1 - speedLossPercentage / 100)
+        return actualSpeedKnots
 
 
 def calc_sog(bearingRad, Se, Sn, V):
@@ -396,6 +405,8 @@ if __name__ == '__main__':
         X, Y = np.meshgrid(BNs, windDegs)
         ax.plot_surface(X, Y, newSpeeds)
         plt.show()
+
+    test_kwon()
 
     parameters = {
         # Navigation area parameters

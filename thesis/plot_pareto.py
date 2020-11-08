@@ -498,6 +498,7 @@ def weather_contour(m, dateTime, travelDays, lonStart, lonEnd):
 
 def navigation_area(ax, proc, initial, eca=False, current=None, weather=None, bathymetry=False):
     extent = set_extent(proc, initial)
+    print(extent)
     left, bottom, right, top = extent
     m = Basemap(projection='merc', resolution='i', llcrnrlat=bottom, urcrnrlat=top, llcrnrlon=left,
                 urcrnrlon=right, ax=ax)
@@ -547,18 +548,18 @@ if __name__ == '__main__':
     # mergedPlots.merged_routes(zoom=1.5, initial=True, colorbar=False, alpha=1, save=True, hull=False)
 
     #  ECA
-    # _directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/eca results/Flo'
-    # mergedPlots = MergedPlots(_directory, datetime(2011, 5, 28), experiment='eca', contains='FloSa')
+    _directory = 'C:/Users/JobS/Dropbox/EUR/Afstuderen/Ortec - Jumbo/5. Thesis/eca results/Flo'
+    mergedPlots = MergedPlots(_directory, datetime(2011, 5, 28), experiment='eca', contains='FloSa')
     # mergedPlots.merged_pareto(save=False)
-    # mergedPlots.merged_routes(zoom=1.2, initial=False, colorbar=True, alpha=0.5, save=False, hull=True)
-
-    _directory = 'D:/output/current/KC/NSGA2_varSP_BFalse_ECA1.0/2/raw'
-    nRaws = 2
-    for _idx in range(min(nRaws, 5)):
-        mergedPlots = MergedPlots(_directory, datetime(2011, 5, 28), experiment='KC', contains='KT', idx=_idx)
-
-        mergedPlots.merged_pareto(save=False)
-        mergedPlots.merged_routes(zoom=1.2, initial=True, intervalRoutes=None, colorbar=True, alpha=0.5, save=False,
-                                  hull=False)
-
-        plt.show()
+    mergedPlots.merged_routes(zoom=1.2, initial=False, colorbar=True, alpha=0.5, save=False, hull=False)
+    plt.show()
+    # _directory = 'D:/output/current/KC/NSGA2_varSP_BFalse_ECA1.0/2/raw'
+    # nRaws = 2
+    # for _idx in range(min(nRaws, 5)):
+    #     mergedPlots = MergedPlots(_directory, datetime(2011, 5, 28), experiment='KC', contains='KT', idx=_idx)
+    #
+    #     mergedPlots.merged_pareto(save=False)
+    #     mergedPlots.merged_routes(zoom=1.2, initial=True, intervalRoutes=None, colorbar=True, alpha=0.5, save=False,
+    #                               hull=False)
+    #
+    #     plt.show()

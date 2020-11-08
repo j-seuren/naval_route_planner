@@ -464,7 +464,7 @@ def plot_group_routes(frontsDict, save=False, convexHull=True):
 
     fns = ['KS_route.pdf', 'NoNy_route.pdf', 'PH_route.pdf']
 
-    pairRun = {'KS': 1, 'NoNy': 0, 'PH': 1}
+    pairRun = {'KS': 3, 'NoNy': 0, 'PH': 1}
     titles = ['Keelung - San Francisco (KEE-SF) - stereographic projection',
               'English Channel - New York (EC-NY)',
               'Plymouth - Havana (PLH-HAV)']
