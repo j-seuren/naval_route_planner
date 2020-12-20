@@ -172,6 +172,9 @@ Time period: 1993 to 2016
 Web application for visualization of extreme routes in Pareto front (minimal time, minimal fuel cost).
 See set-up guide for installation instructions.
 
+![Application screenshot](https://github.com/j-seuren/naval_route_planner/blob/images/Route_visualization_app_1.jpg?raw=true)
+![Example voyage](https://github.com/j-seuren/naval_route_planner/blob/images/Route_visualization_app_2.jpg?raw=true)
+
 ### Project location distances
 
 Example application of computing minimal distance routes between multiple locations accross the globe.
