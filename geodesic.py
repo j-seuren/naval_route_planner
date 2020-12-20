@@ -42,7 +42,7 @@ class Geodesic:
     def total_distance(self, ind):
         return sum([self.distance(wp1[0], wp2[0]) for wp1, wp2 in zip(ind[:-1], ind[1:])])
 
-    @lru_cache(maxsize=None)
+    @lru_cache(maxsize=int(1e+6))
     def ellipsoidal(self, p1, p2, bearing=False):
         """
             Get ellipsoidal distance from the longitude-latitude
@@ -57,7 +57,7 @@ class Geodesic:
         else:
             return dist / 1852.0  # To nautical miles
 
-    @lru_cache(maxsize=None)
+    @lru_cache(maxsize=int(1e+6))
     def euclidean(self, p1, p2):
         """
             Get ellipsoidal distance from the longitude-latitude
@@ -67,7 +67,7 @@ class Geodesic:
         p1, p2 = np.asarray(p1), np.asarray(p2)
         return np.linalg.norm(p2 - p1)
 
-    @lru_cache(maxsize=None)
+    @lru_cache(maxsize=int(1e+6))
     def rhumb_line(self, p1, p2, bearing=False):
         """
             Get rhumb line distance from the longitude-latitude
@@ -105,7 +105,7 @@ class Geodesic:
         else:
             return haversine.haversine(reversed(p1), reversed(p2), unit='nmi')  # nautical miles
 
-    @lru_cache(maxsize=None)
+    @lru_cache(maxsize=int(1e+6))
     def points(self, p1, p2, dist, delS):
         """
         Get great circle points from the longitude-latitude

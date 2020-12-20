@@ -1,14 +1,11 @@
 import main
-# import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
 import skopt
-# import time
 
 from datetime import datetime
 from pathlib import Path
-# from skopt import plots
 from skopt.callbacks import CheckpointSaver
 from support import locations
 

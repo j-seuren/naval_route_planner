@@ -3,7 +3,7 @@ import initialization
 import math
 import numpy as np
 import os
-import indicators
+from analysis import performance_indicators
 import pickle
 import pprint
 import random
@@ -94,7 +94,7 @@ class RoutePlanner:
 
                              # Stopping parameters
                              'maxEvaluations': None,
-                             'gen': 400,           # Minimal number of generations
+                             'gen': 150,           # Minimal number of generations
                              'maxGDs': 40,         # Max length of generational distance list
                              'minVar': 1e-6,       # Minimal variance of generational distance list
 
@@ -178,7 +178,7 @@ class RoutePlanner:
 
         def termination(self, prevFront, front, gen, gds, evals):
             # Compute generational distance between current and previous population.
-            gd = indicators.generational_distance(prevFront, front)
+            gd = performance_indicators.generational_distance(prevFront, front)
             gds.append(gd)
 
             if self.maxEvaluations:
@@ -534,7 +534,7 @@ class RoutePlanner:
                 front, log, totalEvals0 = MOEA.optimize(initialPop)
                 self.tb.unregister("individual")
                 totalEvals.append(totalEvals0)
-                hypervolume = indicators.hypervolume(front)
+                hypervolume = performance_indicators.hypervolume(front)
                 print('hypervolume', hypervolume)
                 result['indicators'][routeIdx][subIdx] = {'hypervolume': deepcopy(hypervolume)}
                 result['logs'][routeIdx][subIdx] = deepcopy(log)
@@ -578,17 +578,28 @@ class RoutePlanner:
         print('Number of days:', days)
         return 30
 
-    def create_route_response(self, obj, bestWeighted, wps, objValue, fitValue, xCanals):
-        return {'optimizationCriterion': obj,
-                'bestWeighted': bestWeighted,
-                'distance': self.geod.total_distance(wps),
-                'fuelCost': objValue[1],
-                'travelTime': objValue[0],
-                'fitValues': fitValue.tolist(),
-                'waypoints': [{'lon': wp[0][0],
-                               'lat': wp[0][1],
-                               'speed': wp[1]} for wp in wps],
-                'crossedCanals': xCanals}
+    def create_route_response(self, obj, bestWeighted, wps, objValue, fitValue, xCanals, ID):
+        if ID:
+            return {'optimizationCriterion': obj,
+                    'bestWeighted': bestWeighted,
+                    'distance': round(self.geod.total_distance(wps), 0),
+                    'fuelCost': round(objValue[1]*1000, 0),
+                    'travelTime': round(objValue[0],1),
+                    'fitValues': fitValue.tolist(),
+                    'waypoints': [{'lon': wp[0][0],
+                                   'lat': wp[0][1],
+                                   'speed': wp[1]} for wp in wps],
+                    'crossedCanals': xCanals}
+        else:
+            return {'optimizationCriterion': obj,
+                    'bestWeighted': bestWeighted,
+                    'distance': self.geod.total_distance(wps),
+                    'fuelCost': objValue[1], 'travelTime': objValue[0],
+                    'fitValues': fitValue.tolist(),
+                    'waypoints': [{'lon': wp[0][0],
+                                   'lat': wp[0][1],
+                                   'speed': wp[1]} for wp in wps],
+                    'crossedCanals': xCanals}
 
     def post_process(self, result, updateEvaluator=None, ID=None):
         if result is None:
@@ -651,7 +662,8 @@ class RoutePlanner:
                                                               wps,
                                                               bestWeightedObjValue,
                                                               fitValue,
-                                                              xCanals)
+                                                              xCanals,
+                                                              ID=ID)
 
             for obj in objKeys:
                 i = objIndices[obj]
@@ -686,7 +698,8 @@ class RoutePlanner:
                                                            wps=wps,
                                                            fitValue=fitValue,
                                                            objValue=objValue,
-                                                           xCanals=xCanals)
+                                                           xCanals=xCanals,
+                                                           ID=ID)
 
                 processedResults['routeResponse'].append(routeResponse)
 
@@ -711,7 +724,6 @@ if __name__ == "__main__":
     import pprint
     import time
 
-    from case_studies.plot_results import RoutePlotter
     from datetime import datetime
     from scoop import futures
     from support import locations
@@ -740,12 +752,12 @@ if __name__ == "__main__":
         planner = RoutePlanner(**kwargsPlanner)
         rawResults = planner.compute(**kwargsCompute)
 
-    print("--- %s seconds ---" % (time.time() - startTime))
-    procResults, rawResults = planner.post_process(rawResults)
-    routePlotter = RoutePlotter(DIR, procResults, rawResults=rawResults, vessel=planner.vessel)
-    fig, ax = plt.subplots()
-    ax = routePlotter.results(ax, bathymetry=True, weatherDate=None, initial=True, ecas=True,
-                              nRoutes=5, colorbar=True)
-    pp = pprint.PrettyPrinter(depth=6)
-    pp.pprint(procResults)
+    # print("--- %s seconds ---" % (time.time() - startTime))
+    # procResults, rawResults = planner.post_process(rawResults)
+    # routePlotter = RoutePlotter(DIR, procResults, rawResults=rawResults, vessel=planner.vessel)
+    # fig, ax = plt.subplots()
+    # ax = routePlotter.results(ax, bathymetry=True, weatherDate=None, initial=True, ecas=True,
+    #                           nRoutes=5, colorbar=True)
+    # pp = pprint.PrettyPrinter(depth=6)
+    # pp.pprint(procResults)
     plt.show()

@@ -9,7 +9,6 @@ from functools import lru_cache, wraps
 from math import cos, sin, sqrt, radians, pow
 from pathlib import Path
 from shapely.geometry import LineString, Point
-from case_studies.demos import create_currents
 
 
 def delta_penalty(func):
@@ -57,10 +56,9 @@ class Evaluator:
         self.inclWeather = inclWeather
         self.inclCurrent = inclCurr
         if inclCurr:
-            # assert isinstance(startDate, datetime.date), 'Set start date'
-            # self.startDate = startDate = datetime.datetime(2016, 1, 1)
+            assert isinstance(startDate, datetime.date), 'Set start date'
+            self.startDate = startDate = datetime.datetime(2016, 1, 1)
             self.currentOp = weather.CurrentOperator(startDate, nDays, DIR=self.DIR, KC=self.vessel.name == 'Tanaka')
-            # self.currentOp.da = create_currents(nDays)
         if inclWeather:
             assert isinstance(startDate, datetime.date), 'Set start date'
             self.weatherOp = weather.WindOperator(startDate, nDays, DIR=self.DIR)
@@ -147,7 +145,7 @@ class Evaluator:
                 return False
         return True
 
-    @lru_cache(maxsize=None)
+    @lru_cache(maxsize=int(1e+6))
     def e_feasible(self, p1, p2):
         dist = self.geod.distance(p1, p2)
         lons, lats = self.geod.points(p1, p2, dist, self.segLengthF)
@@ -179,7 +177,7 @@ class Evaluator:
                     nSegs += 1
         return nSegs
 
-    @lru_cache(maxsize=None)
+    @lru_cache(maxsize=int(1e+6))
     def leg_hours(self, p1, p2, startHours, speedKnots):
         nauticalMiles = self.geod.distance(p1, p2)
         if self.inclCurrent or self.inclWeather:
@@ -327,9 +325,6 @@ class SemiEmpiricalSpeedReduction:
         # Correction factor for block coefficient and Froude number
         Fn = nominalSpeedKnots * self.FnConstant
         speedC = self.aB + self.bB * Fn + self.cB * pow(Fn, 2)
-
-        if directionC == 1.0:
-            print(speedC, formC)
 
         speedLossPercentage = max(min(directionC * speedC * formC, 99), -30)
         # speedLoss = max(min((directionC * speedC * formC) / 100, 0.99), -0.3)

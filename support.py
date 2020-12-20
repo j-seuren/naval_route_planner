@@ -2,7 +2,6 @@ import functools
 import gc
 import numpy as np
 
-from datetime import datetime
 from deap import tools
 from shapely.geometry import Polygon
 
@@ -210,15 +209,6 @@ locations = {'Agios Nikolaos': (25.726617, 35.152255),
              'Wellington': (174.814171, -41.486011),
              }
 
-# Test weather
-# Weather locations
-
-# locations['Thessaloniki']
-# locations['Agios Nikolaos']
-
-# Test currents
-inputSalLim = {'instance': 'SalLim', 'input': {'from': [('S', locations['Salvador'])], 'to': [('L', locations['Lima'])],
-                                               'departureDates': [datetime(2014, 11, 11)]}}
 
 def clear_caches():
     gc.collect()
@@ -227,34 +217,3 @@ def clear_caches():
     for wrapper in wrappers:
         if wrapper.cache_info()[1] > 0:
             wrapper.cache_clear()
-
-
-if __name__ == '__main__':
-    # Current locations
-    westBot, westTop, eastBot, eastTop = np.array([-72, 32]), np.array([-74, 39]), np.array([-50, 38]), np.array(
-        [-55, 46])
-
-    west = np.array([westBot, westTop])
-    east = np.array([eastBot, eastTop])
-
-    lenWest = np.linalg.norm(west)
-    lenEast = np.linalg.norm(east)
-
-    westVec = westTop - westBot
-    eastVec = eastTop - eastBot
-
-    westNorm = westVec / lenWest
-    eastNorm = eastVec / lenEast
-
-    locRange = np.linspace(0, 1, 4)
-    westLocations, eastLocations = [], []
-    for f in locRange:
-        eastLocations.append(tuple(f * eastVec + eastBot))
-        westLocations.append(tuple(f * westVec + westBot))
-
-    westLocations = westLocations[1:3]
-    eastLocations = eastLocations[0] + eastLocations[-1]
-
-    print(eastLocations, '\n', westLocations)
-
-
