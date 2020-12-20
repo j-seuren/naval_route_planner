@@ -144,17 +144,3 @@ def calc_bearing(p1, p2):
         dLam = dLam - math.copysign(2 * math.pi, dLam)
 
     return math.degrees(math.atan2(dLam, dPsi))
-
-
-if __name__ == '__main__':
-    import timeit
-    from math import radians
-
-    n = 300000
-    r = 100
-
-    t = timeit.Timer(stmt="pyproj.Geod(ellps='WGS84').inv(-54, 60, 54, 8)", setup='import pyproj')
-    print(1e+6 * np.min((t.repeat(r, n))) / n)
-    t = timeit.Timer(stmt="DistanceMetric.get_metric('haversine').pairwise(np.radians([[lat1, lon1], [lat2, lon2]]))",
-                     setup='from sklearn.neighbors import DistanceMetric; lon1, lat1, lon2, lat2 = -54, 60, 54, 8; import numpy as np')
-    print(1e+6 * np.min((t.repeat(r, n))) / n)

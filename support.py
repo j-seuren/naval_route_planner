@@ -212,6 +212,7 @@ locations = {'Agios Nikolaos': (25.726617, 35.152255),
 
 def clear_caches():
     gc.collect()
+    # noinspection PyProtectedMember
     wrappers = [a for a in gc.get_objects() if isinstance(a, functools._lru_cache_wrapper)]
 
     for wrapper in wrappers:

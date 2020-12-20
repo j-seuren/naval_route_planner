@@ -160,6 +160,7 @@ class RoutePlotter:
                                        norm=plt.Normalize(vmin=min(self.vessel.speeds), vmax=max(self.vessel.speeds)),
                                        cax=cax)
                 min_s, max_s = min(self.vessel.speeds), max(self.vessel.speeds)
+                # noinspection PyProtectedMember
                 col_bar._ax.set_yticklabels(
                     ['%.1f' % round(min_s, 1), '%.1f' % round((1 / 5) * (max_s - min_s) + min_s, 1),
                      '%.1f' % round((2 / 5) * (max_s - min_s) + min_s, 1),

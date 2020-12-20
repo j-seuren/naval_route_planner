@@ -6,15 +6,14 @@ import numpy as np
 from dask.cache import Cache
 from mpl_toolkits import basemap
 
-from datetime import datetime
-
 
 class CurrentOperator:
     def __init__(self, t0, nDays, DIR, KC):
         self.t0 = t0.replace(second=0, microsecond=0, minute=0, hour=0)
         self.nDays = nDays
         if KC:
-            self.data, self.lons, self.lats = current_data.CurrentDataRetriever(self.t0, self.nDays, DIR=DIR).get_kc_data()
+            self.data, self.lons, self.lats = current_data.CurrentDataRetriever(self.t0,
+                                                                                self.nDays, DIR=DIR).get_kc_data()
             self.get_grid_pt_current = self.get_grid_pt_current_kc
         else:
             self.data = np.array(current_data.CurrentDataRetriever(self.t0, self.nDays, DIR=DIR).get_data())
@@ -110,5 +109,3 @@ if __name__ == '__main__':
     nr_days = 28
     windOp = WindOperator(startDate, nr_days, _dir)
     print(windOp.get_grid_pt_wind(startDate, -86.707108, 27.572103))
-
-

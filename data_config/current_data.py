@@ -231,7 +231,7 @@ if __name__ == '__main__':
 
     from mpl_toolkits.basemap import Basemap
     from pathlib import Path
-    DIR = Path('D:/')
+    _DIR = Path('D:/')
 
 
     def currents(uin, vin, lons, lats, extent):
@@ -259,7 +259,7 @@ if __name__ == '__main__':
 
     def plot_kc_current():
         data, lons0, lats0 = CurrentDataRetriever(datetime.datetime(2014, 10, 28),
-                                                  nDays=6, DIR=DIR).get_kc_data(itp=False)
+                                                  nDays=6, DIR=_DIR).get_kc_data(itp=False)
         _uin, _vin = data[0], data[1]
         lonSlice, latSlice = slice(12, 121), slice(12, 71)
         # lons = np.arange(122, 140, step)
@@ -282,7 +282,7 @@ if __name__ == '__main__':
         lons, lats = lons[lonSlice], lats[latSlice]
 
         for date in dates:
-            data = CurrentDataRetriever(date, nDays=6, DIR=DIR).get_data()
+            data = CurrentDataRetriever(date, nDays=6, DIR=_DIR).get_data()
             u, v = data[0], data[1]
             dateIdx = len(u) // 2
             u, v = u[dateIdx, latSlice, lonSlice], v[dateIdx, latSlice, lonSlice]

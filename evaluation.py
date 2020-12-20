@@ -34,7 +34,7 @@ class Evaluator:
         self.landRtree = landRtree      # R-tree spatial index dictionary for shorelines
         self.ecaRtree = ecaRtree        # R-tree spatial index dictionary for ECAs
         self.bathRtree = bathRtree      # R-tree spatial index dictionary for bathymetry
-        self.ecaFactor = float(ecaFactor) # Multiplication factor for ECA fuel
+        self.ecaFactor = float(ecaFactor)  # Multiplication factor for ECA fuel
         self.startDate = startDate      # Start date of voyage
         self.segLengthF = parameters['segLengthF']    # Max segment length (for feasibility)
         self.segLengthC = parameters['segLengthC']    # Max segment length (for currents)
@@ -403,7 +403,7 @@ if __name__ == '__main__':
 
     test_kwon()
 
-    parameters = {
+    _parameters = {
         # Navigation area parameters
         'avoidAntarctic': True, 'avoidArctic': True, 'res': 'i',  # Resolution of shorelines
         'penaltyValue': {'time': -5, 'cost': -1},
@@ -442,14 +442,14 @@ if __name__ == '__main__':
     def test_evaluator(startDate):
         _dir = Path('D:/')
         vessel = Vessel(300)
-        areaGenerator = NavigableAreaGenerator(parameters=parameters, DIR=_dir)
+        areaGenerator = NavigableAreaGenerator(parameters=_parameters, DIR=_dir)
         landRtree = areaGenerator.get_shoreline_rtree()
         ecaRtree = areaGenerator.get_eca_rtree()
         bathRtree = areaGenerator.get_bathymetry_rtree()
         ecaFactor = 1.0
         geod = Geodesic()
         criteria = {'minimalTime': -5, 'minimalCost': -1}
-        evaluator = Evaluator(vessel, landRtree, ecaRtree, bathRtree, ecaFactor, geod, criteria, parameters, _dir,
+        evaluator = Evaluator(vessel, landRtree, ecaRtree, bathRtree, ecaFactor, geod, criteria, _parameters, _dir,
                               startDate=startDate)
 
         return evaluator

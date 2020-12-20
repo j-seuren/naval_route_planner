@@ -319,7 +319,8 @@ class Hexagraph:
                         continue
 
                     # If edge crosses a polygon exterior, refine two adjacent triangles
-                    if geo_x_geos(self.extLand, p1, p2) or geo_x_geos(self.extEca, p1, p2) or geo_x_geos(self.extBath, p1, p2):
+                    if geo_x_geos(self.extLand, p1, p2) or geo_x_geos(self.extEca, p1, p2) or geo_x_geos(self.extBath,
+                                                                                                         p1, p2):
                         # Get adjacent triangles of intersected edge
                         n3s = [e1[1] for e1 in edgesCopy(n1) for e2 in edgesCopy(n2) if e1[1] == e2[1]]
                         adjacentTris = [(n1, n2, n3) for n3 in n3s if tuple(sorted((n1, n2, n3))) not in triCache]

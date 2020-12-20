@@ -172,8 +172,7 @@ if __name__ == '__main__':
         plt.title('GFS wind speed BN')
 
     os.chdir('..')
-    retriever = WindDataRetriever(nDays=1, startDate=datetime(2011, 1, 25))  #27 20
+    retriever = WindDataRetriever(nDays=1, startDate=datetime(2011, 1, 25))  # 27 20
     _ds = retriever.get_data(forecast=False)
     plot_wind(_ds)
     plt.show()
-

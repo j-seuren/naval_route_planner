@@ -1,19 +1,19 @@
 import evaluation
+import geodesic
 import initialization
 import math
 import numpy as np
 import os
-from analysis import performance_indicators
 import pickle
 import pprint
 import random
 import support
 import uuid
 
+from analysis import performance_indicators
 from copy import deepcopy
 from data_config.navigable_area import NavigableAreaGenerator
 from deap import base, creator, tools, algorithms
-import geodesic
 from operations import Operators
 from pathlib import Path
 from shapely.geometry import Point
@@ -584,7 +584,7 @@ class RoutePlanner:
                     'bestWeighted': bestWeighted,
                     'distance': round(self.geod.total_distance(wps), 0),
                     'fuelCost': round(objValue[1]*1000, 0),
-                    'travelTime': round(objValue[0],1),
+                    'travelTime': round(objValue[0], 1),
                     'fitValues': fitValue.tolist(),
                     'waypoints': [{'lon': wp[0][0],
                                    'lat': wp[0][1],
@@ -735,10 +735,10 @@ if __name__ == "__main__":
 
     # parameters = {'gen': 200,  # Min number of generations
     #               'n': 100}    # Population size
-    startDate = datetime(2017, 9, 4)
+    _startDate = datetime(2017, 9, 4)
     kwargsPlanner = {'inputParameters': {}, 'tb': _tb, 'ecaFactor': 1.0, 'constantSpeedIdx': None,
                      'criteria': _criteria}
-    kwargsCompute = {'startEnd': _startEnd, 'startDate': startDate, 'recompute': True, 'current': False,
+    kwargsCompute = {'startEnd': _startEnd, 'startDate': _startDate, 'recompute': True, 'current': False,
                      'weather': False, 'algorithm': 'NSGA2'}
     multiprocess = False
 

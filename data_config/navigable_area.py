@@ -230,10 +230,10 @@ if __name__ == '__main__':
     from matplotlib import patches
     from mpl_toolkits.basemap import Basemap
 
-    DIR = Path('D:/')
+    _DIR = Path('D:/')
     os.chdir('..')
     pars = {'res': 'i', 'splits': 10, 'avoidAntarctic': False, 'avoidArctic': False}
-    generator = NavigableAreaGenerator(parameters=pars, DIR=DIR)
+    generator = NavigableAreaGenerator(parameters=pars, DIR=_DIR)
     bathymetry = generator.get_bathymetry_rtree()
 
     # Plot on Basemap
@@ -242,7 +242,7 @@ if __name__ == '__main__':
     m.drawmapboundary(fill_color='red', zorder=1)
     m.drawcoastlines(color='black')
     m.fillcontinents(color='lightgray', lake_color='lightgray', zorder=2)
-    m.readshapefile(Path(DIR / "data/bathymetry_200m/ne_10m_bathymetry_K_200").as_posix(), 'ne_10m_bathymetry_K_200',
+    m.readshapefile(Path(_DIR / "data/bathymetry_200m/ne_10m_bathymetry_K_200").as_posix(), 'ne_10m_bathymetry_K_200',
                     drawbounds=False)
     ps = [patches.Polygon(np.array(shape), True) for shape in m.ne_10m_bathymetry_K_200]
     _ax.add_collection(PatchCollection(ps, facecolor='white', zorder=2))
